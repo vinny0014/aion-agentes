@@ -1,1 +1,0 @@
-export default function TaskHistory({tasks=[]}){return <section className="panel"><h2>Histórico</h2>{tasks.length===0?<p className="muted">Sem tarefas ainda.</p>:tasks.map(t=><div className="history" key={t.id}><b>#{t.id} {t.title}</b><span>{t.status}</span><p>{t.description}</p></div>)}</section>}
