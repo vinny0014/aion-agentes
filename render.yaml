@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: aion-agentes-api
+    env: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: AION_ALLOWED_ORIGINS
+        value: '*'
+      - key: AION_DB_PATH
+        value: /tmp/aion.db
+
+  - type: web
+    name: aion-agentes-frontend
+    env: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://aion-agentes-api.onrender.com

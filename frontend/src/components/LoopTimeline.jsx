@@ -1,0 +1,1 @@
+export default function LoopTimeline({steps=[]}){return <section className="panel"><h2>Etapas do Loop</h2>{steps.length===0?<p className="muted">Nenhuma etapa executada ainda.</p>:<div className="timeline">{steps.map(s=><div className="step" key={s.id}><b>{s.step_order}. {s.title}</b><span>{s.status}</span><p>{s.details}</p></div>)}</div>}</section>}
