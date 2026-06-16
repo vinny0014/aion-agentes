@@ -1,28 +1,89 @@
-import { useEffect, useState } from 'react'
-import Header from './components/Header.jsx'
-import StatusCard from './components/StatusCard.jsx'
-import TaskForm from './components/TaskForm.jsx'
-import LoopTimeline from './components/LoopTimeline.jsx'
-import ResultPanel from './components/ResultPanel.jsx'
-import TaskHistory from './components/TaskHistory.jsx'
-import SystemPanel from './components/SystemPanel.jsx'
-import { api } from './services/api.js'
+import { useEffect, useMemo, useState } from 'react'
+import { Footer, Sidebar, Topbar } from './components/DashboardShell.jsx'
+import { Hero, Metrics } from './components/DashboardCards.jsx'
+import { HistoryPanel, ResultPanel, SystemPanel, TaskComposer, Timeline } from './components/LoopWorkbench.jsx'
+import { Discovery } from './components/Discovery.jsx'
+import { Roadmap } from './components/Roadmap.jsx'
+import { api, API_URL } from './services/api.js'
 
-export default function App(){
- const [health,setHealth]=useState('verificando')
- const [tasks,setTasks]=useState([])
- const [steps,setSteps]=useState([])
- const [report,setReport]=useState('')
- const [loading,setLoading]=useState(false)
- const [logs,setLogs]=useState([])
- const [memories,setMemories]=useState([])
- async function load(){
-  try{const h=await api.health(); setHealth(h.status); const t=await api.tasks(); setTasks(t); setLogs(await api.logs()); setMemories(await api.memory())}catch(e){setHealth('offline')}
- }
- useEffect(()=>{load()},[])
- async function run(text){
-  setLoading(true)
-  try{const created=await api.createTask(text); const result=await api.runTask(created.id); setSteps(result.steps); setReport(result.report); await load()}catch(e){setReport('Erro ao executar loop: '+e.message)}finally{setLoading(false)}
- }
- return <main><Header/><section className="grid"><StatusCard title="Status do Backend" value={health}/><StatusCard title="Tarefas Executadas" value={tasks.length}/><StatusCard title="Modo" value="Produção pronta" small="FastAPI + React"/></section><TaskForm onRun={run} loading={loading}/><section className="content"><div><LoopTimeline steps={steps}/><ResultPanel report={report}/><SystemPanel logs={logs} memories={memories}/></div><TaskHistory tasks={tasks}/></section></main>
+function isBackendOnline(status) {
+  return ['ok', 'online', 'healthy'].includes(String(status).toLowerCase())
+}
+
+export default function App() {
+  const [health, setHealth] = useState('verificando')
+  const [tasks, setTasks] = useState([])
+  const [steps, setSteps] = useState([])
+  const [report, setReport] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [logs, setLogs] = useState([])
+  const [memories, setMemories] = useState([])
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  const online = isBackendOnline(health)
+  const apiUrl = useMemo(() => API_URL, [])
+
+  async function loadDashboardData() {
+    try {
+      const [healthResponse, taskList, logList, memoryList] = await Promise.all([
+        api.health(),
+        api.tasks(),
+        api.logs(),
+        api.memory(),
+      ])
+
+      setHealth(healthResponse.status)
+      setTasks(Array.isArray(taskList) ? taskList : [])
+      setLogs(Array.isArray(logList) ? logList : [])
+      setMemories(Array.isArray(memoryList) ? memoryList : [])
+    } catch (error) {
+      setHealth('offline')
+    }
+  }
+
+  useEffect(() => {
+    loadDashboardData()
+  }, [])
+
+  async function runLoop(text) {
+    setLoading(true)
+
+    try {
+      const created = await api.createTask(text)
+      const result = await api.runTask(created.id)
+      setSteps(result.steps || [])
+      setReport(result.report || 'Loop finalizado sem relatório detalhado.')
+      await loadDashboardData()
+    } catch (error) {
+      setReport(`Erro ao executar loop: ${error.message}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="appShell">
+      <Sidebar open={menuOpen} />
+      <main className="dashboard">
+        <Topbar menuOpen={menuOpen} onToggleMenu={() => setMenuOpen((current) => !current)} online={online} />
+        <Hero apiUrl={apiUrl} />
+        <Metrics health={health} loading={loading} tasksCount={tasks.length} />
+
+        <section id="loop-online" className="workbench">
+          <TaskComposer onRun={runLoop} loading={loading} />
+          <HistoryPanel tasks={tasks} />
+        </section>
+
+        <section className="contentGrid">
+          <Timeline steps={steps} />
+          <ResultPanel report={report} />
+          <SystemPanel logs={logs} memories={memories} />
+        </section>
+
+        <Discovery />
+        <Roadmap />
+        <Footer />
+      </main>
+    </div>
+  )
 }
