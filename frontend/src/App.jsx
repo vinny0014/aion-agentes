@@ -17,7 +17,7 @@ import {
   Sun,
   Zap,
 } from 'lucide-react'
-import { latestNews, mobileNav, navigation, todayUpdates, toolCards, topicTags, trendingItems } from './data/dashboard.js'
+import { latestNews, mobileNav, navigation, todayUpdates, toolCards, topicTags, trendingItems } from './data/news.js'
 
 function Logo() {
   return (
