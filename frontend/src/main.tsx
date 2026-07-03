@@ -9,6 +9,7 @@ import Cadastro from "./pages/Cadastro";
 import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
 import { Conteudos, Artigo } from "./pages/Blog";
+import Editor from "./pages/Editor";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -22,6 +23,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <Route path="/cadastro" element={<Cadastro />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/admin" element={<Admin />} />
+        <Route path="/admin/editor/:id" element={<Editor />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>

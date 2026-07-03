@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { AppNav } from "./Dashboard";
 
@@ -136,16 +136,32 @@ export default function Admin() {
         </>)}
 
         {aba === "Conteúdo" && (<>
-          <Form rotulo="Criar rascunho" campos={[
-            { name: "title", label: "Título" },
-            { name: "slug", label: "Slug", placeholder: "meu-artigo" },
-            { name: "excerpt", label: "Resumo" },
-          ]} onSubmit={async (v) => {
-            await api("/api/contents", { method: "POST", body: JSON.stringify(v) });
-            await carregar();
-          }} />
-          <Tabela cols={["id", "title", "slug", "status", "published_at"]} rows={dados}
-            onDelete={(id) => excluir("/api/contents", id)} />
+          <Link to="/admin/editor/novo" className="btn-primary mt-6 !py-2 text-sm">Novo artigo</Link>
+          {dados.length === 0 ? <p className="mt-4 text-sm text-slateui">Nenhum conteúdo ainda.</p> : (
+            <div className="mt-4 overflow-x-auto rounded-lg border border-ink/10 bg-white">
+              <table className="w-full text-left text-sm">
+                <thead><tr className="border-b border-ink/10">
+                  {["id","title","slug","status","published_at"].map((c) =>
+                    <th key={c} className="px-4 py-2.5 font-mono text-[11px] uppercase tracking-wider text-slateui">{c}</th>)}
+                  <th className="px-4 py-2.5" />
+                </tr></thead>
+                <tbody>{dados.map((r: any) => (
+                  <tr key={r.id} className="border-b border-ink/5 last:border-0">
+                    <td className="px-4 py-2.5">{r.id}</td>
+                    <td className="max-w-[280px] truncate px-4 py-2.5">{r.title}</td>
+                    <td className="max-w-[200px] truncate px-4 py-2.5 font-mono text-xs">{r.slug}</td>
+                    <td className="px-4 py-2.5">{r.status}</td>
+                    <td className="px-4 py-2.5">{r.published_at ?? "—"}</td>
+                    <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                      <Link to={`/admin/editor/${r.id}`} className="mr-3 text-xs font-medium text-ultra hover:underline">Editar</Link>
+                      <button onClick={() => excluir("/api/contents", r.id)}
+                        className="text-xs font-medium text-red-600 hover:underline">Excluir</button>
+                    </td>
+                  </tr>))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </>)}
 
         {aba === "Tarefas" && (<>
