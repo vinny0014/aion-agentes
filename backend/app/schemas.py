@@ -133,3 +133,7 @@ class ContactIn(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     email: EmailStr
     message: str = Field(min_length=5, max_length=3000)
+
+
+class EmailIn(BaseModel):
+    email: EmailStr

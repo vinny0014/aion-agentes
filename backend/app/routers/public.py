@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, status
 
 from ..core import database as db
 from ..agents.discovery import reading_time_minutes, related_articles
-from ..schemas import ContactIn
+from ..schemas import ContactIn, EmailIn
 
 router = APIRouter(prefix="/api/public", tags=["public"])
 
@@ -86,8 +86,8 @@ def contact(data: ContactIn):
 
 
 @router.post("/newsletter", status_code=201)
-def newsletter_subscribe(data: ContactIn):
-    """Inscrição na newsletter (usa name como segmento opcional)."""
+def newsletter_subscribe(data: EmailIn):
+    """Inscrição na newsletter — requer apenas o e-mail."""
     if not db.query_one("SELECT id FROM subscribers WHERE email = ?", (data.email,)):
         db.execute("INSERT INTO subscribers (email, segment) VALUES (?, 'geral')", (data.email,))
     return {"ok": True, "detail": "Inscrição confirmada!"}
