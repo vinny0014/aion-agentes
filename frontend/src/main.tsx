@@ -1,0 +1,25 @@
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import "./index.css";
+import Landing from "./pages/Landing";
+import Sobre from "./pages/Sobre";
+import Login from "./pages/Login";
+import Cadastro from "./pages/Cadastro";
+import Dashboard from "./pages/Dashboard";
+import Admin from "./pages/Admin";
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/sobre" element={<Sobre />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/cadastro" element={<Cadastro />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/admin" element={<Admin />} />
+      </Routes>
+    </BrowserRouter>
+  </React.StrictMode>
+);

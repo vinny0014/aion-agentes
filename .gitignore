@@ -1,0 +1,14 @@
+# Segredos — nunca versionar
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+*.db
+
+# Node
+node_modules/
+dist/
