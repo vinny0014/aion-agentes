@@ -2,6 +2,10 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://aion-agentes.vercel.app/</loc></url>
   <url><loc>https://aion-agentes.vercel.app/sobre</loc></url>
-  <url><loc>https://aion-agentes.vercel.app/login</loc></url>
-  <url><loc>https://aion-agentes.vercel.app/cadastro</loc></url>
+  <url><loc>https://aion-agentes.vercel.app/conteudos</loc></url>
+  <url><loc>https://aion-agentes.vercel.app/categorias</loc></url>
+  <url><loc>https://aion-agentes.vercel.app/tags</loc></url>
+  <url><loc>https://aion-agentes.vercel.app/privacidade</loc></url>
+  <url><loc>https://aion-agentes.vercel.app/termos</loc></url>
+  <url><loc>https://aion-agentes.vercel.app/contato</loc></url>
 </urlset>

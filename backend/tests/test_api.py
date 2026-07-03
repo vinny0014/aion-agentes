@@ -210,3 +210,56 @@ def test_rate_limit_login():
     finally:
         cfg.ENV = "test"
         _BUCKETS.clear()
+
+
+# ====================== MONETIZAÇÃO — Acesso público ======================
+def test_search_categories_tags():
+    h, _ = auth(ADMIN["email"], ADMIN["password"])
+    client.post("/api/contents", headers=h, json={
+        "title": "IA na saúde brasileira", "slug": "ia-na-saude",
+        "body": "Aplicações de diagnóstico assistido.", "excerpt": "IA na medicina.",
+        "status": "published", "category": "Saude", "tags": "IA, Medicina, diagnostico"})
+    # busca sem login
+    r = client.get("/api/public/articles?q=diagnóstico")
+    assert r.status_code == 200 and r.json()["total"] >= 1
+    # filtro por categoria (normalizada p/ minúsculas)
+    r = client.get("/api/public/articles?category=saude")
+    assert r.json()["total"] == 1
+    # filtro por tag
+    r = client.get("/api/public/articles?tag=medicina")
+    assert r.json()["total"] == 1
+    # listas de categorias e tags
+    assert any(c["category"] == "saude" for c in client.get("/api/public/categories").json())
+    assert any(t["tag"] == "ia" for t in client.get("/api/public/tags").json())
+
+
+def test_public_contact():
+    r = client.post("/api/public/contact", json={
+        "name": "Visitante", "email": "v@site.com", "message": "Proposta de parceria."})
+    assert r.status_code == 201
+    ha, _ = auth(ADMIN["email"], ADMIN["password"])
+    logs = client.get("/api/logs?limit=20", headers=ha).json()
+    assert any(l["source"] == "contato" for l in logs)
+
+
+def test_route_access_matrix():
+    """Prova a matriz: rotas públicas respondem sem token; privadas exigem 401."""
+    publicas = ["/api/health", "/api/public/articles", "/api/public/categories",
+                "/api/public/tags", "/robots.txt", "/sitemap.xml"]
+    for rota in publicas:
+        assert client.get(rota).status_code == 200, f"pública falhou: {rota}"
+    privadas = ["/api/users", "/api/agents", "/api/tasks", "/api/contents",
+                "/api/logs", "/api/memory", "/api/settings", "/api/content-queue",
+                "/api/auth/me"]
+    for rota in privadas:
+        assert client.get(rota).status_code == 401, f"privada exposta: {rota}"
+
+
+def test_robots_blocks_private_areas():
+    txt = client.get("/robots.txt").text
+    assert "Disallow: /admin" in txt and "Disallow: /dashboard" in txt
+    assert "Disallow: /api/" in txt and "Allow: /" in txt
+    sm = client.get("/sitemap.xml").text
+    for p in ["/conteudos", "/categorias", "/tags", "/privacidade", "/termos", "/contato"]:
+        assert p in sm, f"faltou no sitemap: {p}"
+    assert "/admin" not in sm and "/dashboard" not in sm

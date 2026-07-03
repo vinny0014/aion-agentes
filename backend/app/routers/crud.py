@@ -114,11 +114,12 @@ def create_content(data: ContentIn, user: dict = Depends(get_current_user)):
     pub = "datetime('now')" if data.status == "published" else "NULL"
     cid = db.execute(
         f"""INSERT INTO contents (title, slug, body, excerpt, status, author_id, agent_id,
-            seo_title, seo_description, published_at)
-            VALUES (?,?,?,?,?,?,?,?,?,{pub})""",
+            seo_title, seo_description, category, tags, published_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,{pub})""",
         (data.title, data.slug, data.body, data.excerpt, data.status,
          user["id"], data.agent_id, data.seo_title or data.title,
-         data.seo_description or data.excerpt),
+         data.seo_description or data.excerpt, data.category.strip().lower(),
+         ",".join(t.strip().lower() for t in data.tags.split(",") if t.strip())),
     )
     return _get_or_404("contents", cid, "Conteúdo")
 

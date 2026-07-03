@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { Nav } from "./Landing";
 
 const BASE = import.meta.env.VITE_API_URL || "";
@@ -17,19 +17,29 @@ function dataBr(iso: string | null) {
 }
 
 export function Conteudos() {
+  const [params, setParams] = useSearchParams();
+  const categoria = params.get("categoria") || "";
+  const tag = params.get("tag") || "";
+  const q = params.get("q") || "";
+  const [busca, setBusca] = useState(q);
   const [artigos, setArtigos] = useState<Artigo[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [carregando, setCarregando] = useState(true);
   const perPage = 10;
 
+  useEffect(() => { setPage(1); }, [categoria, tag, q]);
   useEffect(() => {
     setCarregando(true);
-    fetch(`${BASE}/api/public/articles?page=${page}&per_page=${perPage}`)
+    const u = new URLSearchParams({ page: String(page), per_page: String(perPage) });
+    if (categoria) u.set("category", categoria);
+    if (tag) u.set("tag", tag);
+    if (q) u.set("q", q);
+    fetch(`${BASE}/api/public/articles?${u}`)
       .then((r) => r.json())
       .then((d) => { setArtigos(d.items); setTotal(d.total); })
       .finally(() => setCarregando(false));
-  }, [page]);
+  }, [page, categoria, tag, q]);
 
   const paginas = Math.max(1, Math.ceil(total / perPage));
 
@@ -39,6 +49,20 @@ export function Conteudos() {
       <main className="mx-auto max-w-3xl px-6 py-14">
         <p className="tag mb-2">publicação diária</p>
         <h1 className="font-display text-4xl font-bold tracking-tight">Conteúdos</h1>
+        <form className="mt-6 flex gap-2" onSubmit={(e) => { e.preventDefault();
+          const p = new URLSearchParams(params); busca ? p.set("q", busca) : p.delete("q"); setParams(p); }}>
+          <input className="field max-w-sm" placeholder="Buscar artigos…" value={busca}
+            onChange={(e) => setBusca(e.target.value)} aria-label="Buscar artigos" />
+          <button className="btn-primary !py-2">Buscar</button>
+        </form>
+        {(categoria || tag || q) && (
+          <p className="mt-3 text-sm text-slateui">
+            Filtrando por {categoria && <>categoria <b className="text-ink">{categoria}</b></>}
+            {tag && <>tag <b className="text-ink">{tag}</b></>}
+            {q && <>busca <b className="text-ink">"{q}"</b></>} ·{" "}
+            <button className="text-ultra hover:underline" onClick={() => { setBusca(""); setParams({}); }}>limpar</button>
+          </p>
+        )}
         {carregando ? (
           <p className="mt-8 font-mono text-sm text-slateui">carregando…</p>
         ) : artigos.length === 0 ? (

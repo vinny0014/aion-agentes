@@ -45,6 +45,8 @@ CREATE TABLE IF NOT EXISTS contents (
     agent_id INTEGER REFERENCES agents(id),
     seo_title TEXT NOT NULL DEFAULT '',
     seo_description TEXT NOT NULL DEFAULT '',
+    category TEXT NOT NULL DEFAULT '',
+    tags TEXT NOT NULL DEFAULT '',
     published_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -121,6 +123,12 @@ def get_conn():
 def init_db():
     with get_conn() as conn:
         conn.executescript(SCHEMA)
+        # Migração leve para bancos criados antes de category/tags
+        for col in ("category", "tags"):
+            try:
+                conn.execute(f"ALTER TABLE contents ADD COLUMN {col} TEXT NOT NULL DEFAULT ''")
+            except Exception:
+                pass  # coluna já existe
 
 
 def query(sql: str, params: tuple = ()) -> list[dict]:

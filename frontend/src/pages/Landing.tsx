@@ -108,6 +108,13 @@ export default function Landing() {
       <footer className="border-t border-ink/10">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-8 text-sm text-slateui">
           <span className="font-display font-bold text-ink">AION·AGENTES</span>
+          <div className="flex gap-4 text-xs">
+            <Link to="/categorias" className="hover:text-ink">Categorias</Link>
+            <Link to="/tags" className="hover:text-ink">Tags</Link>
+            <Link to="/privacidade" className="hover:text-ink">Privacidade</Link>
+            <Link to="/termos" className="hover:text-ink">Termos</Link>
+            <Link to="/contato" className="hover:text-ink">Contato</Link>
+          </div>
           <span className="font-mono text-xs">© {new Date().getFullYear()} · feito por agentes, supervisionado por humanos</span>
         </div>
       </footer>

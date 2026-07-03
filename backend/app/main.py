@@ -55,7 +55,8 @@ app.add_middleware(
 
 # ---------------- Middlewares de segurança ----------------
 _BUCKETS: dict[str, list[float]] = defaultdict(list)
-_RATE_LIMITS = {"/api/auth/login": (10, 60), "/api/auth/register": (5, 60)}  # (req, janela s)
+_RATE_LIMITS = {"/api/auth/login": (10, 60), "/api/auth/register": (5, 60),
+                "/api/public/contact": (5, 60)}  # (req, janela s)
 
 
 @app.middleware("http")
@@ -87,13 +88,15 @@ for r in (auth_router, users_router, agents_router, content_router, tasks_router
 # ---------------- Endpoints públicos de SEO ----------------
 @app.get("/robots.txt", response_class=PlainTextResponse, tags=["seo"])
 def robots():
-    return "User-agent: *\nAllow: /\nDisallow: /api/\nSitemap: https://aion-agentes.vercel.app/sitemap.xml\n"
+    return ("User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /admin\nDisallow: /dashboard\n"
+            "Sitemap: https://aion-agentes.vercel.app/sitemap.xml\n")
 
 
 @app.get("/sitemap.xml", tags=["seo"])
 def sitemap():
     base = "https://aion-agentes.vercel.app"
-    static = ["", "/sobre", "/login", "/cadastro"]
+    static = ["", "/sobre", "/conteudos", "/categorias", "/tags",
+              "/privacidade", "/termos", "/contato"]
     urls = [f"<url><loc>{base}{p}</loc></url>" for p in static]
     for c in db.query("SELECT slug, updated_at FROM contents WHERE status = 'published'"):
         urls.append(

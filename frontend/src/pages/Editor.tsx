@@ -14,7 +14,7 @@ export default function Editor() {
   const novo = id === "novo";
   const [user, setUser] = useState<any>(null);
   const [v, setV] = useState({
-    title: "", slug: "", excerpt: "", body: "", seo_title: "", seo_description: "", status: "draft",
+    title: "", slug: "", excerpt: "", body: "", seo_title: "", seo_description: "", status: "draft", category: "", tags: "",
   });
   const [msg, setMsg] = useState("");
   const [erro, setErro] = useState("");
@@ -30,6 +30,7 @@ export default function Editor() {
           setV({
             title: c.title, slug: c.slug, excerpt: c.excerpt, body: c.body,
             seo_title: c.seo_title, seo_description: c.seo_description, status: c.status,
+            category: c.category || "", tags: c.tags || "",
           });
         }
       } catch { nav("/login"); }
@@ -111,6 +112,16 @@ export default function Editor() {
             <textarea className="field mt-1.5 min-h-[320px] font-mono text-sm" value={v.body}
               onChange={(e) => set("body", e.target.value)} />
           </label>
+          <div className="grid gap-5 sm:grid-cols-2">
+            <label className="block text-sm font-medium">
+              Categoria <span className="font-normal text-slateui">(uma, ex.: noticias)</span>
+              <input className="field mt-1.5" value={v.category} onChange={(e) => set("category", e.target.value)} />
+            </label>
+            <label className="block text-sm font-medium">
+              Tags <span className="font-normal text-slateui">(separadas por vírgula)</span>
+              <input className="field mt-1.5" value={v.tags} onChange={(e) => set("tags", e.target.value)} />
+            </label>
+          </div>
           <fieldset className="card">
             <legend className="tag px-1">seo</legend>
             <label className="block text-sm font-medium">

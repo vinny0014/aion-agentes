@@ -63,6 +63,8 @@ class ContentIn(BaseModel):
     agent_id: int | None = None
     seo_title: str = ""
     seo_description: str = ""
+    category: str = ""
+    tags: str = ""  # separadas por vírgula
 
 
 class ContentUpdate(BaseModel):
@@ -72,6 +74,8 @@ class ContentUpdate(BaseModel):
     status: str | None = Field(default=None, pattern="^(draft|queued|published)$")
     seo_title: str | None = None
     seo_description: str | None = None
+    category: str | None = None
+    tags: str | None = None
 
 
 # ---------- Tasks ----------
@@ -122,3 +126,10 @@ class QueueIn(BaseModel):
     provider: str = Field(default="pending", pattern="^(pending|openai|anthropic|openrouter|gemini)$")
     template: str = "artigo_padrao"
     scheduled_for: str | None = None
+
+
+# ---------- Contato (público) ----------
+class ContactIn(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    email: EmailStr
+    message: str = Field(min_length=5, max_length=3000)
