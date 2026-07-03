@@ -2,33 +2,98 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --ultra: #2036c7;
+  --signal: #00b3c6;
+  --grad: linear-gradient(120deg, #2036c7 0%, #0e7fd4 55%, #00b3c6 100%);
+}
+
 body {
   @apply bg-ice text-ink font-body antialiased;
+  background-image:
+    radial-gradient(1100px 500px at 85% -10%, rgba(32, 54, 199, 0.07), transparent 60%),
+    radial-gradient(900px 420px at -10% 20%, rgba(0, 179, 198, 0.06), transparent 55%);
 }
+
+::selection { background: rgba(32, 54, 199, 0.18); }
 
 @layer components {
   .btn-primary {
-    @apply inline-flex items-center justify-center rounded-md bg-ultra px-5 py-2.5 font-medium text-white transition hover:bg-[#1a2ca3] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ultra;
+    @apply relative inline-flex items-center justify-center rounded-lg px-5 py-2.5 font-medium text-white transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ultra;
+    background-image: var(--grad);
+    box-shadow: 0 1px 2px rgba(12, 18, 32, 0.2), 0 8px 24px -8px rgba(32, 54, 199, 0.55);
   }
+  .btn-primary:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(12, 18, 32, 0.2), 0 14px 32px -8px rgba(32, 54, 199, 0.65);
+  }
+  .btn-primary:active:not(:disabled) { transform: translateY(0); }
+  .btn-primary:disabled { @apply opacity-60; }
+
   .btn-ghost {
-    @apply inline-flex items-center justify-center rounded-md border border-ink/15 px-5 py-2.5 font-medium text-ink transition hover:border-ultra hover:text-ultra;
+    @apply inline-flex items-center justify-center rounded-lg border border-ink/15 bg-white/70 px-5 py-2.5 font-medium text-ink backdrop-blur transition-all duration-200 hover:-translate-y-px hover:border-ultra/60 hover:text-ultra hover:shadow-[0_8px_20px_-10px_rgba(32,54,199,0.35)];
   }
+
   .field {
-    @apply w-full rounded-md border border-ink/15 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-ultra focus:ring-2 focus:ring-ultra/20;
+    @apply w-full rounded-lg border border-ink/15 bg-white/90 px-3.5 py-2.5 text-sm shadow-[inset_0_1px_2px_rgba(12,18,32,0.04)] outline-none transition-all duration-200 placeholder:text-slateui/70 focus:border-ultra focus:bg-white focus:ring-4 focus:ring-ultra/15;
   }
+
   .card {
-    @apply rounded-lg border border-ink/10 bg-white p-5;
+    @apply rounded-xl border border-ink/10 bg-white/85 p-5 backdrop-blur-sm transition-all duration-200;
+    box-shadow: 0 1px 2px rgba(12, 18, 32, 0.04), 0 10px 30px -18px rgba(12, 18, 32, 0.18);
   }
-  .tag {
-    @apply font-mono text-[11px] uppercase tracking-widest text-slateui;
+  .card-hover:hover {
+    transform: translateY(-2px);
+    border-color: rgba(32, 54, 199, 0.35);
+    box-shadow: 0 2px 4px rgba(12, 18, 32, 0.05), 0 18px 44px -18px rgba(32, 54, 199, 0.3);
   }
+
+  .tag { @apply font-mono text-[11px] uppercase tracking-widest text-slateui; }
+
+  .grad-text {
+    background-image: var(--grad);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .glass-nav {
+    @apply sticky top-0 z-40 border-b border-ink/10;
+    background: rgba(244, 246, 249, 0.78);
+    backdrop-filter: saturate(160%) blur(12px);
+    -webkit-backdrop-filter: saturate(160%) blur(12px);
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-ink/15 bg-white/80 px-4 py-1.5 text-sm text-ink transition-all duration-200 hover:-translate-y-px hover:border-ultra hover:text-ultra hover:shadow-[0_8px_18px_-10px_rgba(32,54,199,0.4)];
+  }
+
+  .skeleton {
+    @apply rounded-md bg-ink/[0.07];
+    animation: shimmer 1.6s ease-in-out infinite;
+  }
+
+  .empty-state { @apply card flex flex-col items-center gap-2 py-12 text-center text-slateui; }
 }
 
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.25; }
-}
+/* ---------- micro-animações ---------- */
+@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
 .status-dot { animation: pulse-dot 2.4s ease-in-out infinite; }
+
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.rise { animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.rise-1 { animation-delay: 0.05s; } .rise-2 { animation-delay: 0.12s; }
+.rise-3 { animation-delay: 0.19s; } .rise-4 { animation-delay: 0.26s; }
+
+@keyframes shimmer { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+
+@keyframes float-orb { 0%,100% { transform: translate(0,0); } 50% { transform: translate(14px,-16px); } }
+.orb {
+  position: absolute; border-radius: 9999px; filter: blur(48px); will-change: transform; pointer-events: none;
+  animation: float-orb 9s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .status-dot { animation: none; }
+  .status-dot, .rise, .skeleton, .orb { animation: none; }
+  .btn-primary, .btn-ghost, .card, .chip { transition: none; }
 }

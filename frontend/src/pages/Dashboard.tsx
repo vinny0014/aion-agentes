@@ -8,7 +8,7 @@ export function AppNav({ user }: { user: User | null }) {
   const nav = useNavigate();
   function sair() { clearTokens(); nav("/"); }
   return (
-    <nav className="border-b border-ink/10 bg-white">
+    <nav className="glass-nav">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
         <Link to="/dashboard" className="font-display text-lg font-bold">
           AION<span className="text-ultra">·</span>AGENTES
@@ -86,7 +86,7 @@ export default function Dashboard() {
           <h2 className="font-display text-xl font-bold">Equipe de agentes</h2>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {agents.map((a) => (
-              <div key={a.id} className="card !p-4">
+              <div key={a.id} className="card card-hover !p-4">
                 <div className="flex items-center justify-between">
                   <span className="font-medium">{a.name}</span>
                   <span className="tag">{a.status}</span>

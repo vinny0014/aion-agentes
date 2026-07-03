@@ -1,0 +1,11 @@
+# CHECKLIST DE DEPLOY — AION AGENTES
+- [ ] 1. Repositório criado no GitHub e `git push -u origin main` feito
+- [ ] 2. CI (aba Actions) verde
+- [ ] 3. Render: Blueprint aplicado, serviço no ar, `/api/health` = ok
+- [ ] 4. Vercel: projeto importado, Root `frontend`, `VITE_API_URL` definida
+- [ ] 5. Render: `CORS_ORIGINS` = URL da Vercel
+- [ ] 6. Cadastro do 1º usuário (vira admin) e senha guardada
+- [ ] 7. Seed opcional: `python scripts_seed.py` no Shell do Render
+- [ ] 8. Teste do fluxo: publicar artigo → visível em /conteudos
+- [ ] 9. Opcional monetização: `VITE_GA_MEASUREMENT_ID`, `VITE_ADSENSE_CLIENT`, `VITE_CF_ANALYTICS_TOKEN` na Vercel; `ANTHROPIC_API_KEY` (ou similar) no Render
+- [ ] 10. Search Console/Bing: verificar propriedade e enviar sitemap.xml

@@ -33,3 +33,13 @@ Tudo abaixo depende exclusivamente de credenciais/autorização sua. O restante 
 ## 5. Domínio próprio (opcional)
 - **O que fazer:** compre/aponte o domínio na Vercel e atualize as URLs canônicas em
   `frontend/index.html`, `public/robots.txt`, `public/sitemap.xml` e `backend/app/main.py`.
+
+## 6. Integrações do Discovery Growth Agent (opcionais, para monetização)
+- **Etapa parada:** todas exigem contas/credenciais suas.
+- **O que fazer:** criar as contas e definir as variáveis:
+  - Google Analytics 4 → `VITE_GA_MEASUREMENT_ID` (Vercel)
+  - Google AdSense → `VITE_ADSENSE_CLIENT` (Vercel) — sujeito a aprovação do site
+  - Cloudflare Web Analytics → `VITE_CF_ANALYTICS_TOKEN` (Vercel)
+  - Google Search Console e Bing Webmaster → verificar propriedade e enviar o sitemap
+- **O que será liberado:** métricas de tráfego, anúncios e indexação monitorada.
+  Os scripts só são injetados quando a variável existe — sem credencial, nada é carregado.

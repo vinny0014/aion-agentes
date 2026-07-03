@@ -100,7 +100,7 @@ export function Taxonomia({ tipo }: { tipo: "categorias" | "tags" }) {
           <div className="flex flex-wrap gap-2">
             {itens.map((i) => (
               <a key={i[chave]} href={`/conteudos?${tipo === "categorias" ? "categoria" : "tag"}=${encodeURIComponent(i[chave])}`}
-                className="rounded-full border border-ink/15 bg-white px-4 py-1.5 text-sm text-ink transition hover:border-ultra hover:text-ultra">
+                className="chip">
                 {i[chave]} <span className="font-mono text-xs text-slateui">({i.total})</span>
               </a>
             ))}

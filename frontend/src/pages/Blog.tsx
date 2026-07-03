@@ -7,6 +7,7 @@ const BASE = import.meta.env.VITE_API_URL || "";
 type Artigo = {
   id: number; title: string; slug: string; excerpt: string;
   seo_title: string; seo_description: string; published_at: string; body?: string;
+  reading_time?: number; category?: string; tags?: string;
 };
 
 function dataBr(iso: string | null) {
@@ -64,15 +65,25 @@ export function Conteudos() {
           </p>
         )}
         {carregando ? (
-          <p className="mt-8 font-mono text-sm text-slateui">carregando…</p>
+          <div className="mt-8 space-y-6" aria-label="Carregando artigos">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="card space-y-3">
+                <div className="skeleton h-3 w-28" />
+                <div className="skeleton h-6 w-3/4" />
+                <div className="skeleton h-4 w-full" />
+              </div>
+            ))}
+          </div>
         ) : artigos.length === 0 ? (
-          <p className="mt-8 text-slateui">
-            Ainda não há artigos publicados. A equipe de agentes está preparando os primeiros conteúdos.
-          </p>
+          <div className="empty-state mt-8">
+            <span className="font-mono text-2xl text-signal">▸_</span>
+            <p className="font-display font-bold text-ink">Nada por aqui — ainda</p>
+            <p className="max-w-sm text-sm">A equipe de agentes está preparando os primeiros conteúdos. Volte em breve.</p>
+          </div>
         ) : (
           <ul className="mt-8 space-y-6">
             {artigos.map((a) => (
-              <li key={a.id} className="card">
+              <li key={a.id} className="card card-hover">
                 <p className="tag">{dataBr(a.published_at)}</p>
                 <Link to={`/conteudo/${a.slug}`}
                   className="mt-1 block font-display text-xl font-bold hover:text-ultra">
@@ -100,16 +111,42 @@ export function Conteudos() {
 export function Artigo() {
   const { slug } = useParams();
   const [artigo, setArtigo] = useState<Artigo | null>(null);
+  const [relacionados, setRelacionados] = useState<Artigo[]>([]);
   const [erro, setErro] = useState(false);
 
   useEffect(() => {
+    setArtigo(null); setRelacionados([]); setErro(false);
     fetch(`${BASE}/api/public/articles/${slug}`)
       .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
       .then((a: Artigo) => {
         setArtigo(a);
+        // SEO dinâmico: title, description, OG e JSON-LD (Schema.org NewsArticle)
         document.title = `${a.seo_title || a.title} — AION AGENTES`;
-        const m = document.querySelector('meta[name="description"]');
-        if (m) m.setAttribute("content", a.seo_description || a.excerpt || "");
+        const setMeta = (sel: string, attr: string, val: string) => {
+          let el = document.querySelector(sel) as HTMLElement | null;
+          if (el) el.setAttribute(attr, val);
+        };
+        setMeta('meta[name="description"]', "content", a.seo_description || a.excerpt || "");
+        setMeta('meta[property="og:title"]', "content", a.seo_title || a.title);
+        setMeta('meta[property="og:description"]', "content", a.seo_description || a.excerpt || "");
+        setMeta('meta[property="og:url"]', "content", `https://aion-agentes.vercel.app/conteudo/${a.slug}`);
+        setMeta('link[rel="canonical"]', "href", `https://aion-agentes.vercel.app/conteudo/${a.slug}`);
+        const old = document.getElementById("jsonld-artigo");
+        if (old) old.remove();
+        const ld = document.createElement("script");
+        ld.type = "application/ld+json";
+        ld.id = "jsonld-artigo";
+        ld.textContent = JSON.stringify({
+          "@context": "https://schema.org", "@type": "NewsArticle",
+          headline: a.title, description: a.seo_description || a.excerpt,
+          datePublished: a.published_at, inLanguage: "pt-BR",
+          mainEntityOfPage: `https://aion-agentes.vercel.app/conteudo/${a.slug}`,
+          publisher: { "@type": "Organization", name: "AION AGENTES" },
+          author: { "@type": "Organization", name: "AION AGENTES" },
+        });
+        document.head.appendChild(ld);
+        fetch(`${BASE}/api/public/articles/${slug}/related`)
+          .then((r) => r.json()).then(setRelacionados).catch(() => {});
       })
       .catch(() => setErro(true));
   }, [slug]);
@@ -134,7 +171,11 @@ export function Artigo() {
     <div className="min-h-screen">
       <Nav />
       <article className="mx-auto max-w-3xl px-6 py-14">
-        <p className="tag mb-2">{dataBr(artigo.published_at)}</p>
+        <p className="tag mb-2">
+          {dataBr(artigo.published_at)}
+          {artigo.reading_time ? <> · {artigo.reading_time} min de leitura</> : null}
+          {artigo.category ? <> · {artigo.category}</> : null}
+        </p>
         <h1 className="font-display text-4xl font-bold leading-tight tracking-tight">{artigo.title}</h1>
         {artigo.excerpt && <p className="mt-4 text-lg text-slateui">{artigo.excerpt}</p>}
         <div className="mt-8 space-y-4 leading-relaxed text-ink/90">
@@ -144,6 +185,26 @@ export function Artigo() {
             return <p key={i}>{p}</p>;
           })}
         </div>
+        {artigo.tags && (
+          <div className="mt-8 flex flex-wrap gap-2">
+            {artigo.tags.split(",").filter(Boolean).map((t) => (
+              <Link key={t} to={`/conteudos?tag=${encodeURIComponent(t)}`} className="chip !py-1 text-xs">{t}</Link>
+            ))}
+          </div>
+        )}
+        {relacionados.length > 0 && (
+          <aside className="mt-12 border-t border-ink/10 pt-8" aria-label="Artigos relacionados">
+            <h2 className="font-display text-xl font-bold">Leia também</h2>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              {relacionados.map((r) => (
+                <Link key={r.id} to={`/conteudo/${r.slug}`} className="card card-hover !p-4">
+                  <p className="tag">{dataBr(r.published_at)}</p>
+                  <p className="mt-1 text-sm font-medium leading-snug">{r.title}</p>
+                </Link>
+              ))}
+            </div>
+          </aside>
+        )}
         <footer className="mt-12 border-t border-ink/10 pt-6">
           <Link to="/conteudos" className="text-sm font-medium text-ultra hover:underline">← Todos os conteúdos</Link>
         </footer>

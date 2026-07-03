@@ -30,6 +30,10 @@ AGENT_DEFINITIONS = [
      "Acompanha health check, logs e alertas de erro."),
     ("cost-guard", "Cost Guard", "custos",
      "Monitora consumo de APIs de IA e impede estouro de orçamento."),
+    ("discovery-growth", "Discovery Growth Agent", "crescimento",
+     "Maximiza alcance orgânico: calendário editorial, tendências, palavras-chave, "
+     "clusters de conteúdo e preparação para Google Discover/Search Console/Analytics/"
+     "AdSense/Trends, Bing Webmaster e Cloudflare Analytics."),
 ]
 
 

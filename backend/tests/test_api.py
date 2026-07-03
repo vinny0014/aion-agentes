@@ -263,3 +263,33 @@ def test_robots_blocks_private_areas():
     for p in ["/conteudos", "/categorias", "/tags", "/privacidade", "/termos", "/contato"]:
         assert p in sm, f"faltou no sitemap: {p}"
     assert "/admin" not in sm and "/dashboard" not in sm
+
+
+# ====================== OMEGA — Discovery Growth ======================
+def test_reading_time_and_related():
+    h, _ = auth(ADMIN["email"], ADMIN["password"])
+    client.post("/api/contents", headers=h, json={
+        "title": "IA na educação", "slug": "ia-na-educacao",
+        "body": "palavra " * 400, "excerpt": "Educação e IA.",
+        "status": "published", "category": "saude", "tags": "ia,educacao"})
+    r = client.get("/api/public/articles/ia-na-educacao")
+    assert r.json()["reading_time"] == 2  # 400 palavras / 200 wpm
+    rel = client.get("/api/public/articles/ia-na-saude/related").json()
+    assert any(x["slug"] == "ia-na-educacao" for x in rel)  # mesma categoria + tag "ia"
+
+
+def test_growth_report_admin_only():
+    assert client.get("/api/growth/report").status_code == 401
+    ha, _ = auth(ADMIN["email"], ADMIN["password"])
+    r = client.get("/api/growth/report", headers=ha)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["agente"] == "discovery-growth"
+    assert "google_adsense" in body["integracoes"]
+    assert "fila" in body["calendario"] and "clusters" in body["calendario"]
+
+
+def test_discovery_agent_seeded():
+    ha, _ = auth(ADMIN["email"], ADMIN["password"])
+    slugs = {a["slug"] for a in client.get("/api/agents", headers=ha).json()}
+    assert "discovery-growth" in slugs

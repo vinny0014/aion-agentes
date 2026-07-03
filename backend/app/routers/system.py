@@ -123,6 +123,16 @@ def dequeue(item_id: int, user: dict = Depends(get_current_user)):
     db.execute("DELETE FROM content_queue WHERE id = ?", (item_id,))
 
 
+# ====================== DISCOVERY GROWTH ======================
+growth_router = APIRouter(prefix="/api/growth", tags=["discovery-growth"])
+
+
+@growth_router.get("/report")
+def get_growth_report(user: dict = Depends(require_admin)):
+    from ..agents.discovery import growth_report
+    return growth_report()
+
+
 # ====================== HEALTH CHECK ======================
 health_router = APIRouter(tags=["health"])
 

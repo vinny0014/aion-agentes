@@ -5,6 +5,7 @@ from collections import Counter
 from fastapi import APIRouter, HTTPException, status
 
 from ..core import database as db
+from ..agents.discovery import reading_time_minutes, related_articles
 from ..schemas import ContactIn
 
 router = APIRouter(prefix="/api/public", tags=["public"])
@@ -46,7 +47,13 @@ def get_article(slug: str):
     )
     if not row:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Artigo não encontrado")
+    row["reading_time"] = reading_time_minutes(row["body"])
     return row
+
+
+@router.get("/articles/{slug}/related")
+def get_related(slug: str, limit: int = 3):
+    return related_articles(slug, min(max(limit, 1), 6))
 
 
 @router.get("/categories")

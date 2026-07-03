@@ -18,7 +18,7 @@ from .routers.auth import router as auth_router
 from .routers.public import router as public_router
 from .routers.crud import agents_router, content_router, tasks_router, users_router
 from .routers.system import (
-    health_router, logs_router, memory_router, queue_router, settings_router,
+    growth_router, health_router, logs_router, memory_router, queue_router, settings_router,
 )
 
 scheduler = BackgroundScheduler()
@@ -81,7 +81,7 @@ async def security_middleware(request: Request, call_next):
 
 
 for r in (auth_router, users_router, agents_router, content_router, tasks_router,
-          logs_router, memory_router, settings_router, queue_router, health_router, public_router):
+          logs_router, memory_router, settings_router, queue_router, health_router, public_router, growth_router):
     app.include_router(r)
 
 
