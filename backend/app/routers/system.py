@@ -133,6 +133,34 @@ def get_growth_report(user: dict = Depends(require_admin)):
     return growth_report()
 
 
+# ====================== ORQUESTRADOR MULTIAGENTE ======================
+orchestrator_router = APIRouter(prefix="/api/orchestrator", tags=["orchestrator"])
+
+
+@orchestrator_router.post("/run")
+def orchestrator_run(user: dict = Depends(require_admin)):
+    """Executa um ciclo completo do pipeline multiagente (CEO Master)."""
+    from ..agents.orchestrator import run_cycle
+    return run_cycle("api")
+
+
+@orchestrator_router.get("/runs")
+def orchestrator_runs(limit: int = 50, agent: str | None = None,
+                      user: dict = Depends(require_admin)):
+    limit = min(max(limit, 1), 200)
+    if agent:
+        return db.query("SELECT * FROM agent_runs WHERE agent_slug = ? "
+                        "ORDER BY id DESC LIMIT ?", (agent, limit))
+    return db.query("SELECT * FROM agent_runs ORDER BY id DESC LIMIT ?", (limit,))
+
+
+@orchestrator_router.get("/metrics")
+def orchestrator_metrics(user: dict = Depends(require_admin)):
+    from ..agents.core import agent_metrics, budget_remaining
+    return {"por_agente": agent_metrics(),
+            "orcamento_restante_usd": round(budget_remaining(), 4)}
+
+
 # ====================== HEALTH CHECK ======================
 health_router = APIRouter(tags=["health"])
 

@@ -83,3 +83,11 @@ def contact(data: ContactIn):
          json.dumps({"name": data.name, "email": data.email, "message": data.message})),
     )
     return {"ok": True, "detail": "Mensagem recebida. Obrigado pelo contato!"}
+
+
+@router.post("/newsletter", status_code=201)
+def newsletter_subscribe(data: ContactIn):
+    """Inscrição na newsletter (usa name como segmento opcional)."""
+    if not db.query_one("SELECT id FROM subscribers WHERE email = ?", (data.email,)):
+        db.execute("INSERT INTO subscribers (email, segment) VALUES (?, 'geral')", (data.email,))
+    return {"ok": True, "detail": "Inscrição confirmada!"}

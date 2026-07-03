@@ -93,6 +93,26 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
     revoked INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS agent_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_slug TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ok',        -- ok | error | skipped
+    input TEXT NOT NULL DEFAULT '',
+    output TEXT NOT NULL DEFAULT '',
+    error TEXT,
+    retries INTEGER NOT NULL DEFAULT 0,
+    duration_ms INTEGER NOT NULL DEFAULT 0,
+    tokens INTEGER NOT NULL DEFAULT 0,
+    cost REAL NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS subscribers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT UNIQUE NOT NULL,
+    segment TEXT NOT NULL DEFAULT 'geral',
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE TABLE IF NOT EXISTS content_queue (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     topic TEXT NOT NULL,

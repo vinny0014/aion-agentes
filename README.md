@@ -73,6 +73,9 @@ cd backend && python -m pytest tests/ -v
 - **Seed** — `python scripts_seed.py` popula artigos de demonstração
 - **CI** — GitHub Actions roda testes e build a cada push
 
+## Documentação
+ARCHITECTURE.md · AGENTS.md · API.md · DEPLOY.md · AION_RELEASE_v1.0.md · GUIA_PUBLICACAO.md · CHECKLIST_DEPLOY.md
+
 ## Agentes
 
 CEO Master (orquestração) · Developer · QA · Content · SEO · GitHub · Deploy · Monitor · Cost Guard — registrados automaticamente no primeiro boot (`agents/registry.py`).

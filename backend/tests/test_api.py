@@ -293,3 +293,66 @@ def test_discovery_agent_seeded():
     ha, _ = auth(ADMIN["email"], ADMIN["password"])
     slugs = {a["slug"] for a in client.get("/api/agents", headers=ha).json()}
     assert "discovery-growth" in slugs
+
+
+# ====================== FASE 2 OMEGA — Multiagente ======================
+def test_16_agents_seeded():
+    ha, _ = auth(ADMIN["email"], ADMIN["password"])
+    slugs = {a["slug"] for a in client.get("/api/agents", headers=ha).json()}
+    esperados = {"ceo-master", "discovery", "content", "fact-check", "seo", "image-prompt",
+                 "translation", "social-media", "newsletter", "analytics", "discovery-growth",
+                 "adsense-opt", "qa", "security", "cost-guard", "scheduler"}
+    assert esperados <= slugs
+
+
+def test_orchestrator_cycle_and_runs():
+    ha, _ = auth(ADMIN["email"], ADMIN["password"])
+    assert client.post("/api/orchestrator/run").status_code == 401  # protegido
+    r = client.post("/api/orchestrator/run", headers=ha)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] >= 10 and body["erros"] == 0  # isolamento: nada explode
+    runs = client.get("/api/orchestrator/runs?limit=100", headers=ha).json()
+    assert any(x["agent_slug"] == "fact-check" for x in runs)
+    m = client.get("/api/orchestrator/metrics", headers=ha).json()
+    assert "orcamento_restante_usd" in m and len(m["por_agente"]) >= 10
+
+
+def test_fact_check_blocks_placeholder_draft():
+    ha, _ = auth(ADMIN["email"], ADMIN["password"])
+    client.post("/api/content-queue", headers=ha, json={"topic": "Pauta para fact check"})
+    client.post("/api/pipeline/run")  # gera rascunho offline com placeholders
+    from app.agents.team import fact_check_agent
+    rep = fact_check_agent({})
+    assert rep["bloqueados"] >= 1
+
+
+def test_orchestrator_anti_loop():
+    ha, _ = auth(ADMIN["email"], ADMIN["password"])
+    ultimo = {}
+    for _ in range(5):
+        ultimo = client.post("/api/orchestrator/run", headers=ha).json()
+    assert ultimo.get("status") == "skipped" and "ciclos/hora" in ultimo.get("motivo", "")
+
+
+def test_newsletter_subscribe_public():
+    r = client.post("/api/public/newsletter", json={
+        "name": "geral", "email": "leitor@site.com", "message": "inscrever"})
+    assert r.status_code == 201
+    # idempotente
+    assert client.post("/api/public/newsletter", json={
+        "name": "geral", "email": "leitor@site.com", "message": "inscrever"}).status_code == 201
+
+
+def test_cost_guard_blocks_ai_steps_when_budget_zero():
+    ha, _ = auth(ADMIN["email"], ADMIN["password"])
+    from app.core import database as db2
+    db2.execute("INSERT INTO app_settings (key, value) VALUES ('orcamento_diario_usd','0') "
+                "ON CONFLICT(key) DO UPDATE SET value='0'")
+    db2.execute("DELETE FROM agent_runs WHERE agent_slug='ceo-master'")  # liberar anti-loop
+    from app.agents.core import mem_set
+    mem_set("agent:ceo-master", "lock", "off")
+    r = client.post("/api/orchestrator/run", headers=ha).json()
+    pulados = [e for e in r["etapas"] if e.get("status") == "skipped"]
+    assert any("orçamento" in e.get("motivo", "") for e in pulados)
+    db2.execute("UPDATE app_settings SET value='5' WHERE key='orcamento_diario_usd'")

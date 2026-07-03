@@ -18,7 +18,7 @@ from .routers.auth import router as auth_router
 from .routers.public import router as public_router
 from .routers.crud import agents_router, content_router, tasks_router, users_router
 from .routers.system import (
-    growth_router, health_router, logs_router, memory_router, queue_router, settings_router,
+    growth_router, orchestrator_router, health_router, logs_router, memory_router, queue_router, settings_router,
 )
 
 scheduler = BackgroundScheduler()
@@ -30,6 +30,8 @@ async def lifespan(app: FastAPI):
     seed_agents()
     # Scheduler de publicação diária: processa a fila de conteúdo a cada hora
     scheduler.add_job(process_queue_once, "interval", hours=1, id="content-pipeline")
+    from .agents.orchestrator import run_cycle
+    scheduler.add_job(lambda: run_cycle("scheduler"), "interval", hours=6, id="agent-orchestrator")
     scheduler.start()
     db.execute(
         "INSERT INTO logs (level, source, message) VALUES ('info','system','API iniciada')"
@@ -56,7 +58,7 @@ app.add_middleware(
 # ---------------- Middlewares de segurança ----------------
 _BUCKETS: dict[str, list[float]] = defaultdict(list)
 _RATE_LIMITS = {"/api/auth/login": (10, 60), "/api/auth/register": (5, 60),
-                "/api/public/contact": (5, 60)}  # (req, janela s)
+                "/api/public/contact": (5, 60), "/api/public/newsletter": (5, 60)}  # (req, janela s)
 
 
 @app.middleware("http")
@@ -81,7 +83,7 @@ async def security_middleware(request: Request, call_next):
 
 
 for r in (auth_router, users_router, agents_router, content_router, tasks_router,
-          logs_router, memory_router, settings_router, queue_router, health_router, public_router, growth_router):
+          logs_router, memory_router, settings_router, queue_router, health_router, public_router, growth_router, orchestrator_router):
     app.include_router(r)
 
 
