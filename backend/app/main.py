@@ -1,5 +1,10 @@
 """AION AGENTES — API principal (FastAPI)."""
+import time as _time
+from collections import defaultdict
 from contextlib import asynccontextmanager
+
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
@@ -47,6 +52,32 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ---------------- Middlewares de segurança ----------------
+_BUCKETS: dict[str, list[float]] = defaultdict(list)
+_RATE_LIMITS = {"/api/auth/login": (10, 60), "/api/auth/register": (5, 60)}  # (req, janela s)
+
+
+@app.middleware("http")
+async def security_middleware(request: Request, call_next):
+    limit = _RATE_LIMITS.get(request.url.path)
+    if limit and request.method == "POST" and settings.ENV != "test":
+        max_req, window = limit
+        ip = request.client.host if request.client else "?"
+        key = f"{ip}:{request.url.path}"
+        now = _time.time()
+        _BUCKETS[key] = [t for t in _BUCKETS[key] if now - t < window]
+        if len(_BUCKETS[key]) >= max_req:
+            return JSONResponse({"detail": "Muitas tentativas. Aguarde um minuto."}, status_code=429)
+        _BUCKETS[key].append(now)
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    if settings.ENV == "production":
+        response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+    return response
+
 
 for r in (auth_router, users_router, agents_router, content_router, tasks_router,
           logs_router, memory_router, settings_router, queue_router, health_router, public_router):

@@ -5,6 +5,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ["DATABASE_URL"] = "sqlite:///./test_aion.db"
 os.environ["SECRET_KEY"] = "test-secret-key-not-for-production"
+os.environ["ENV"] = "test"
 
 from pathlib import Path
 
@@ -186,3 +187,26 @@ def test_public_pagination():
     r = client.get("/api/public/articles?page=1&per_page=1")
     b = r.json()
     assert b["per_page"] == 1 and len(b["items"]) <= 1
+
+
+
+# ====================== FASE 5 — Hardening ======================
+def test_security_headers():
+    r = client.get("/api/health")
+    assert r.headers["x-content-type-options"] == "nosniff"
+    assert r.headers["x-frame-options"] == "DENY"
+
+
+def test_rate_limit_login():
+    from app.core.config import settings as cfg
+    from app.main import _BUCKETS
+    cfg.ENV = "development"
+    _BUCKETS.clear()
+    try:
+        for _ in range(10):
+            client.post("/api/auth/login", data={"username": "x@x.dev", "password": "errada123"})
+        r = client.post("/api/auth/login", data={"username": "x@x.dev", "password": "errada123"})
+        assert r.status_code == 429
+    finally:
+        cfg.ENV = "test"
+        _BUCKETS.clear()
