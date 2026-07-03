@@ -83,30 +83,75 @@ TEMPLATES = {
 }
 
 
+def _unique_slug(base: str) -> str:
+    slug, n = base, 2
+    while db.query_one("SELECT id FROM contents WHERE slug = ?", (slug,)):
+        slug = f"{base}-{n}"
+        n += 1
+    return slug
+
+
+def _save_draft(item: dict, title: str, slug: str, body: str, excerpt: str,
+                status: str = "draft") -> int:
+    cid = db.execute(
+        """INSERT INTO contents (title, slug, body, excerpt, status, agent_id,
+           seo_title, seo_description)
+           VALUES (?,?,?,?,?,
+                   (SELECT id FROM agents WHERE slug = 'content'), ?, ?)""",
+        (title, _unique_slug(slug), body, excerpt, status, title, excerpt[:160]),
+    )
+    db.execute(
+        "UPDATE content_queue SET status = 'done', result_content_id = ? WHERE id = ?",
+        (cid, item["id"]),
+    )
+    return cid
+
+
 def process_queue_once() -> dict:
-    """Processa a fila de conteúdo. Sem provedor configurado, marca itens como
-    'blocked' e registra a pendência humana — o resto do sistema segue operando."""
+    """Processa a fila de conteúdo.
+
+    - Com provedor de IA configurado: gera o artigo completo (rascunho para revisão).
+    - Sem provedor: gera rascunho estruturado offline — a produção diária nunca para —
+      e registra a pendência humana (configurar API key) uma única vez em log.
+    """
+    from . import providers as prov
+
     items = db.query("SELECT * FROM content_queue WHERE status = 'queued' ORDER BY id LIMIT 10")
-    processed, blocked = 0, 0
+    processed, offline, failed = 0, 0, 0
     for item in items:
+        template = item["template"] if item["template"] in TEMPLATES else "artigo_padrao"
         try:
             provider = resolve_provider(item["provider"])
-            # Ponto de integração: chamada real ao provedor entra aqui.
-            # prompt = TEMPLATES[item["template"]].format(topic=item["topic"])
+            prompt = TEMPLATES[template].format(topic=item["topic"])
             db.execute(
                 "UPDATE content_queue SET status = 'processing', provider = ? WHERE id = ?",
                 (provider, item["id"]),
             )
-            processed += 1
+            try:
+                body = prov.generate(provider, prompt)
+                title = item["topic"].strip().capitalize()
+                _save_draft(item, title, prov.slugify(item["topic"]), body,
+                            f"Artigo sobre {item['topic']} gerado via {provider}.")
+                processed += 1
+            except Exception as exc:  # falha de rede/quota — não derruba a fila
+                db.execute(
+                    "UPDATE content_queue SET status = 'failed', error = ? WHERE id = ?",
+                    (f"{type(exc).__name__}: {exc}", item["id"]),
+                )
+                db.execute(
+                    "INSERT INTO logs (level, source, message, meta_json) VALUES ('error','content-pipeline',?,?)",
+                    (f"Falha ao gerar conteúdo via {provider}",
+                     json.dumps({"queue_id": item["id"], "erro": str(exc)[:300]})),
+                )
+                failed += 1
         except ProviderNotConfigured as exc:
-            db.execute(
-                "UPDATE content_queue SET status = 'blocked', error = ? WHERE id = ?",
-                (str(exc), item["id"]),
-            )
+            draft = prov.offline_draft(item["topic"], template)
+            _save_draft(item, draft["title"], draft["slug"], draft["body"], draft["excerpt"])
             db.execute(
                 "INSERT INTO logs (level, source, message, meta_json) VALUES ('warn','content-pipeline',?,?)",
-                ("Item da fila bloqueado: falta configurar API de IA (PENDÊNCIA HUMANA)",
-                 json.dumps({"queue_id": item["id"], "topic": item["topic"]})),
+                ("Rascunho gerado em modo offline (PENDÊNCIA HUMANA: configurar API de IA no .env)",
+                 json.dumps({"queue_id": item["id"], "topic": item["topic"], "detalhe": str(exc)})),
             )
-            blocked += 1
-    return {"processed": processed, "blocked": blocked, "scanned": len(items)}
+            offline += 1
+    return {"processed": processed, "offline_drafts": offline, "failed": failed,
+            "scanned": len(items)}

@@ -133,14 +133,29 @@ def test_logs_memory_settings():
     assert r.status_code == 400
 
 
-def test_content_queue_and_pipeline_blocks_without_provider():
+def test_content_queue_pipeline_offline_draft():
     h, _ = auth(ADMIN["email"], ADMIN["password"])
     r = client.post("/api/content-queue", headers=h, json={"topic": "Tendências de IA em 2026"})
     assert r.status_code == 201
     r = client.post("/api/pipeline/run")
-    assert r.json()["blocked"] >= 1  # sem API key -> pendência humana registrada
+    assert r.json()["offline_drafts"] >= 1  # sem API key -> rascunho offline + pendência em log
     items = client.get("/api/content-queue", headers=h).json()
-    assert items[0]["status"] == "blocked"
+    done = [i for i in items if i["topic"] == "Tendências de IA em 2026"][0]
+    assert done["status"] == "done" and done["result_content_id"]
+    draft = client.get(f"/api/contents/{done['result_content_id']}", headers=h).json()
+    assert draft["status"] == "draft" and "Rascunho automático" in draft["body"]
+    assert draft["slug"].startswith("tendencias-de-ia-em-2026")
+    # pendência humana registrada em log
+    logs = client.get("/api/logs", headers=h).json()
+    assert any("PENDÊNCIA HUMANA" in l["message"] for l in logs)
+
+
+def test_pipeline_unique_slug():
+    h, _ = auth(ADMIN["email"], ADMIN["password"])
+    client.post("/api/content-queue", headers=h, json={"topic": "Tendências de IA em 2026"})
+    client.post("/api/pipeline/run")
+    slugs = [c["slug"] for c in client.get("/api/contents", headers=h).json()]
+    assert len(slugs) == len(set(slugs))  # sem colisão de slug
 
 
 def test_auth_required():
