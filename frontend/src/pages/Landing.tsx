@@ -1,118 +1,264 @@
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
 
-const AGENTES = [
-  { slug: "ceo-master", nome: "CEO Master", papel: "orquestração", linha: "prioriza fila · aprova entregas" },
-  { slug: "content", nome: "Content", papel: "conteúdo", linha: "3 artigos na fila de hoje" },
-  { slug: "seo", nome: "SEO", papel: "otimização", linha: "sitemap atualizado · schema ok" },
-  { slug: "developer", nome: "Developer", papel: "engenharia", linha: "build verde · 11 testes ok" },
-  { slug: "qa", nome: "QA", papel: "qualidade", linha: "cobertura de fluxos críticos" },
-  { slug: "monitor", nome: "Monitor", papel: "observabilidade", linha: "health: ok · uptime 100%" },
-  { slug: "github", nome: "GitHub", papel: "versionamento", linha: "branch main protegida" },
-  { slug: "deploy", nome: "Deploy", papel: "devops", linha: "vercel + render preparados" },
-  { slug: "cost-guard", nome: "Cost Guard", papel: "custos", linha: "orçamento de API sob controle" },
-];
+const BASE = import.meta.env.VITE_API_URL || "";
 
-export function Nav() {
+type Art = { id: number; title: string; slug: string; excerpt: string;
+  category?: string; tags?: string; published_at: string; reading_time?: number };
+
+function dataBr(iso?: string | null) {
+  if (!iso) return "";
+  return new Date(iso.replace(" ", "T") + "Z").toLocaleDateString("pt-BR",
+    { day: "2-digit", month: "short", year: "numeric" });
+}
+function horaBr(iso?: string | null) {
+  if (!iso) return "";
+  return new Date(iso.replace(" ", "T") + "Z").toLocaleTimeString("pt-BR",
+    { hour: "2-digit", minute: "2-digit" });
+}
+
+export function BottomNav() {
+  const { pathname } = useLocation();
+  const item = (to: string, rotulo: string, icone: string, ativo: boolean) => (
+    <Link to={to} className={ativo ? "ativo" : ""}>
+      <span aria-hidden className="text-base leading-none">{icone}</span>{rotulo}
+    </Link>
+  );
   return (
-    <nav className="glass-nav"><div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-      <Link to="/" className="font-display text-xl font-bold tracking-tight">
-        AION<span className="text-ultra">·</span>AGENTES
-      </Link>
-      <div className="flex items-center gap-2 text-sm">
-        <Link to="/conteudos" className="px-3 py-2 text-slateui hover:text-ink">Conteúdos</Link>
-        <Link to="/sobre" className="px-3 py-2 text-slateui hover:text-ink">Sobre</Link>
-        <Link to="/login" className="px-3 py-2 text-slateui hover:text-ink">Entrar</Link>
-        <Link to="/cadastro" className="btn-primary !px-4 !py-2 text-sm">Criar conta</Link>
-      </div></div>
+    <nav className="bottom-nav" aria-label="Navegação inferior">
+      {item("/", "Home", "⌂", pathname === "/")}
+      {item("/categorias", "Categorias", "▤", pathname === "/categorias")}
+      {item("/tags", "Tags", "#", pathname === "/tags")}
+      {item("/conteudos", "Buscar", "⌕", pathname.startsWith("/conteudo"))}
+      {item("/login", "Conta", "◉", pathname === "/login" || pathname === "/dashboard")}
     </nav>
   );
 }
 
-export default function Landing() {
+export function Nav() {
   return (
-    <div className="min-h-screen">
-      <Nav />
-
-      <header className="relative mx-auto max-w-6xl overflow-visible px-6 pb-16 pt-12 md:pt-20">
-        <div className="orb h-64 w-64 bg-ultra/25" style={{ top: "-40px", right: "8%" }} />
-        <div className="orb h-52 w-52 bg-signal/25" style={{ top: "120px", right: "24%", animationDelay: "-4s" }} />
-        <p className="rise tag mb-4 inline-flex items-center gap-2 rounded-full border border-ink/10 bg-white/70 px-3 py-1.5 backdrop-blur">
-          <span className="status-dot inline-block h-1.5 w-1.5 rounded-full bg-signal" />
-          portal de inteligência artificial · publicação diária
-        </p>
-        <h1 className="rise rise-1 max-w-3xl font-display text-4xl font-bold leading-tight tracking-tight md:text-6xl">
-          Um portal de IA operado por uma equipe de{" "}
-          <span className="grad-text">agentes inteligentes</span>.
-        </h1>
-        <p className="rise rise-2 mt-5 max-w-2xl text-lg text-slateui">
-          Notícias, guias e análises sobre inteligência artificial, produzidos todos os dias
-          por um pipeline de agentes — do conteúdo ao SEO, do deploy ao monitoramento.
-        </p>
-        <div className="rise rise-3 mt-8 flex flex-wrap gap-3">
-          <Link to="/cadastro" className="btn-primary">Começar agora</Link>
-          <Link to="/conteudos" className="px-3 py-2 text-slateui hover:text-ink">Conteúdos</Link>
-        <Link to="/sobre" className="btn-ghost">Como funciona</Link>
-        </div>
-      </header>
-
-      {/* Quadro de operação — elemento assinatura */}
-      <section aria-label="Quadro de operação dos agentes" className="border-y border-ink/10 bg-white/60 backdrop-blur-sm">
-        <div className="mx-auto max-w-6xl px-6 py-12">
-          <div className="mb-6 flex items-center justify-between">
-            <h2 className="font-display text-xl font-bold">Quadro de operação</h2>
-            <span className="font-mono text-xs text-signal">
-              <span className="status-dot mr-1.5 inline-block h-2 w-2 rounded-full bg-signal align-middle" />
-              equipe em atividade
-            </span>
+    <>
+      <nav className="glass-nav">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+          <Link to="/" className="flex items-center gap-2 font-display text-xl font-bold tracking-tight">
+            <span aria-hidden className="grad-text text-2xl leading-none">▲</span>
+            <span>AION<span className="block font-mono text-[9px] font-normal uppercase tracking-[0.3em] text-slateui">ai news os</span></span>
+          </Link>
+          <div className="hidden items-center gap-1 text-sm sm:flex">
+            <Link to="/" className="px-3 py-2 text-signal">Home</Link>
+            <Link to="/conteudos" className="px-3 py-2 text-slateui hover:text-ink">Notícias</Link>
+            <Link to="/categorias" className="px-3 py-2 text-slateui hover:text-ink">Categorias</Link>
+            <Link to="/tags" className="px-3 py-2 text-slateui hover:text-ink">Tags</Link>
+            <Link to="/sobre" className="px-3 py-2 text-slateui hover:text-ink">Sobre</Link>
+            <Link to="/login" className="px-3 py-2 text-slateui hover:text-ink">Entrar</Link>
+            <Link to="/cadastro" className="btn-primary !px-4 !py-2 text-sm">Assinar</Link>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {AGENTES.map((a) => (
-              <div key={a.slug} className="card card-hover !p-4">
-                <div className="flex items-center justify-between">
-                  <span className="font-display font-bold">{a.nome}</span>
-                  <span className="tag">{a.papel}</span>
-                </div>
-                <p className="mt-2 font-mono text-xs text-slateui">
-                  <span className="text-signal">▸</span> {a.linha}
-                </p>
-              </div>
+          <Link to="/cadastro" className="btn-primary !px-4 !py-2 text-sm sm:hidden">Assinar</Link>
+        </div>
+      </nav>
+      <BottomNav />
+    </>
+  );
+}
+
+function Ticker({ artigos }: { artigos: Art[] }) {
+  if (artigos.length === 0) return null;
+  const itens = [...artigos, ...artigos]; // loop contínuo
+  return (
+    <div className="overflow-hidden border-b border-line bg-surface/60">
+      <div className="mx-auto flex max-w-6xl items-center gap-4 px-6 py-2.5">
+        <span className="shrink-0 font-mono text-[11px] font-medium uppercase tracking-widest text-signal">⚡ Em alta</span>
+        <div className="relative flex-1 overflow-hidden">
+          <div className="ticker-track">
+            {itens.map((a, i) => (
+              <Link key={i} to={`/conteudo/${a.slug}`}
+                className="shrink-0 text-sm text-slateui transition hover:text-ink">
+                <span className="mr-2 text-signal">•</span>{a.title}
+              </Link>
             ))}
           </div>
         </div>
-      </section>
+      </div>
+    </div>
+  );
+}
 
-      <section className="mx-auto max-w-6xl px-6 py-16">
-        <div className="grid gap-6 md:grid-cols-3">
-          <div className="card card-hover">
-            <p className="tag mb-2">conteúdo</p>
-            <h3 className="font-display text-lg font-bold">Publicação diária</h3>
-            <p className="mt-2 text-sm text-slateui">
-              Fila, agendador e templates prontos para produzir artigos todos os dias,
-              conectáveis a OpenAI, Anthropic, OpenRouter e Gemini.
-            </p>
-          </div>
-          <div className="card card-hover">
-            <p className="tag mb-2">plataforma</p>
-            <h3 className="font-display text-lg font-bold">Painel completo</h3>
-            <p className="mt-2 text-sm text-slateui">
-              Usuários, agentes, conteúdo, tarefas, logs, memória e configurações —
-              tudo administrável em um só lugar.
-            </p>
-          </div>
-          <div className="card card-hover">
-            <p className="tag mb-2">base</p>
-            <h3 className="font-display text-lg font-bold">Pronto para escalar</h3>
-            <p className="mt-2 text-sm text-slateui">
-              API REST documentada, autenticação com JWT e refresh token, SQLite hoje,
-              PostgreSQL amanhã.
-            </p>
-          </div>
+export default function Landing() {
+  const [artigos, setArtigos] = useState<Art[]>([]);
+  const [tags, setTags] = useState<{ tag: string; total: number }[]>([]);
+  const [email, setEmail] = useState("");
+  const [newsMsg, setNewsMsg] = useState("");
+
+  useEffect(() => {
+    fetch(`${BASE}/api/public/articles?per_page=9`).then(r => r.json())
+      .then(d => setArtigos(d.items)).catch(() => {});
+    fetch(`${BASE}/api/public/tags`).then(r => r.json()).then(setTags).catch(() => {});
+  }, []);
+
+  async function assinar(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      const r = await fetch(`${BASE}/api/public/contact`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Newsletter", email, message: `Inscrição na newsletter: ${email}` }),
+      });
+      setNewsMsg(r.ok ? "Inscrição recebida! ✓" : "Não foi possível inscrever agora.");
+      if (r.ok) setEmail("");
+    } catch { setNewsMsg("Não foi possível inscrever agora."); }
+  }
+
+  const destaque = artigos[0];
+  const hoje = artigos.slice(1, 5);
+  const ultimas = artigos.slice(1, 5);
+
+  const AGENTES = [
+    { n: "Content", d: "Produz o conteúdo diário do portal a partir da fila.", r: "conteúdo" },
+    { n: "SEO", d: "Otimiza títulos, slugs, schema e sitemap.", r: "otimização" },
+    { n: "Discovery Growth", d: "Clusters, tendências e calendário editorial.", r: "crescimento" },
+    { n: "QA", d: "Valida fluxos críticos e bloqueia regressões.", r: "qualidade" },
+    { n: "Cost Guard", d: "Controla o orçamento das APIs de IA.", r: "custos" },
+  ];
+
+  return (
+    <div className="min-h-screen pb-16 sm:pb-0">
+      <Nav />
+      <Ticker artigos={artigos.slice(0, 5)} />
+
+      <main className="mx-auto max-w-6xl px-6 py-8">
+        <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+          {/* HERO — matéria em destaque (real) */}
+          <section aria-label="Destaque">
+            {destaque ? (
+              <article className="thumb thumb-hero relative flex h-auto min-h-[380px] flex-col justify-end overflow-hidden rounded-xl border border-line p-8">
+                <div className="orb h-56 w-56 bg-ultra/40" style={{ top: "-30px", right: "6%" }} />
+                <div className="relative z-10">
+                  <div className="mb-4 flex flex-wrap items-center gap-2">
+                    <span className="badge-feat">Destaque</span>
+                    <span className="font-mono text-[10px] uppercase tracking-widest text-signal">notícias de ia</span>
+                  </div>
+                  <h1 className="max-w-xl font-display text-3xl font-bold leading-tight tracking-tight md:text-4xl">
+                    {destaque.title}
+                  </h1>
+                  {destaque.excerpt && <p className="mt-3 max-w-lg text-slateui">{destaque.excerpt}</p>}
+                  <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
+                    <p className="font-mono text-xs text-slateui">
+                      Equipe AION · {dataBr(destaque.published_at)}
+                      {destaque.reading_time ? ` · ${destaque.reading_time} min` : ""}
+                    </p>
+                    <Link to={`/conteudo/${destaque.slug}`} className="btn-primary !py-2 text-sm">
+                      Ler matéria →
+                    </Link>
+                  </div>
+                </div>
+              </article>
+            ) : (
+              <div className="empty-state min-h-[380px] justify-center">
+                <span className="font-mono text-2xl text-signal">▸_</span>
+                <p className="font-display font-bold text-ink">O primeiro destaque chega em breve</p>
+              </div>
+            )}
+
+            {/* ÚLTIMAS NOTÍCIAS */}
+            <section className="mt-10" aria-label="Últimas notícias">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="font-display text-lg font-bold uppercase tracking-wide">Últimas notícias</h2>
+                <Link to="/conteudos" className="text-sm text-signal hover:underline">Ver todas →</Link>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {ultimas.map((a) => (
+                  <Link key={a.id} to={`/conteudo/${a.slug}`} className="card card-hover !p-3">
+                    <div className="thumb mb-3">
+                      <span className="grad-text relative z-10 font-display text-3xl font-bold">
+                        {(a.category || "ia").slice(0, 1).toUpperCase()}
+                      </span>
+                    </div>
+                    {a.category && <p className="tag text-signal">{a.category}</p>}
+                    <p className="mt-1 text-sm font-medium leading-snug">{a.title}</p>
+                    <p className="mt-2 font-mono text-[11px] text-slateui">
+                      {dataBr(a.published_at)}{a.reading_time ? ` · ${a.reading_time} min` : ""}
+                    </p>
+                  </Link>
+                ))}
+              </div>
+            </section>
+
+            {/* HUB DE AGENTES */}
+            <section className="mt-10" aria-label="Hub de agentes">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="font-display text-lg font-bold uppercase tracking-wide">Hub de agentes</h2>
+                <Link to="/sobre" className="text-sm text-signal hover:underline">Conhecer a equipe →</Link>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                {AGENTES.map((ag) => (
+                  <div key={ag.n} className="card card-hover !p-4">
+                    <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg text-white"
+                         style={{ backgroundImage: "var(--grad)" }} aria-hidden>▲</div>
+                    <p className="font-display text-sm font-bold">{ag.n}</p>
+                    <p className="mt-1 text-xs leading-snug text-slateui">{ag.d}</p>
+                    <p className="tag mt-2 text-signal">{ag.r} →</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </section>
+
+          {/* SIDEBAR */}
+          <aside className="space-y-6">
+            <section className="card" aria-label="Hoje em IA">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="font-display font-bold uppercase tracking-wide">Hoje em IA</h2>
+                <span className="badge-live"><span className="status-dot h-1.5 w-1.5 rounded-full bg-emerald-400" />ao vivo</span>
+              </div>
+              <ul className="space-y-4">
+                {hoje.map((a) => (
+                  <li key={a.id} className="flex gap-3">
+                    <div className="thumb !h-12 !w-12 shrink-0 !rounded-md">
+                      <span className="grad-text relative z-10 font-display text-sm font-bold">▲</span>
+                    </div>
+                    <div>
+                      <p className="font-mono text-[10px] uppercase tracking-widest text-slateui">{horaBr(a.published_at)}</p>
+                      <Link to={`/conteudo/${a.slug}`} className="text-sm font-medium leading-snug hover:text-signal">{a.title}</Link>
+                    </div>
+                  </li>
+                ))}
+                {hoje.length === 0 && <li className="text-sm text-slateui">As primeiras publicações do dia chegam em breve.</li>}
+              </ul>
+              <Link to="/conteudos" className="btn-ghost mt-5 w-full !py-2 text-sm">Ver todas as atualizações →</Link>
+            </section>
+
+            <section className="card" aria-label="Newsletter">
+              <h2 className="font-display font-bold uppercase tracking-wide">Newsletter</h2>
+              <p className="mt-2 text-sm text-slateui">Receba o melhor de IA, ferramentas e análises no seu e-mail.</p>
+              <form onSubmit={assinar} className="mt-4 flex gap-2">
+                <input className="field !py-2" type="email" required placeholder="Seu e-mail"
+                  value={email} onChange={(e) => setEmail(e.target.value)} aria-label="E-mail para newsletter" />
+                <button className="btn-primary !px-4 !py-2 text-sm">Assinar</button>
+              </form>
+              {newsMsg && <p className="mt-2 text-xs text-emerald-300">{newsMsg}</p>}
+              <p className="mt-2 font-mono text-[10px] text-slateui">Sem spam. Cancele quando quiser.</p>
+            </section>
+
+            <section className="card" aria-label="Tópicos em alta">
+              <h2 className="font-display font-bold uppercase tracking-wide">Tópicos em alta</h2>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {tags.slice(0, 9).map((t) => (
+                  <Link key={t.tag} to={`/conteudos?tag=${encodeURIComponent(t.tag)}`} className="chip !py-1 text-xs">
+                    #{t.tag}
+                  </Link>
+                ))}
+                {tags.length === 0 && <p className="text-sm text-slateui">As tags aparecem conforme os artigos são publicados.</p>}
+              </div>
+              <Link to="/tags" className="btn-ghost mt-5 w-full !py-2 text-sm">Ver todos os tópicos →</Link>
+            </section>
+          </aside>
         </div>
-      </section>
+      </main>
 
-      <footer className="border-t border-ink/10">
+      <footer className="border-t border-line">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-8 text-sm text-slateui">
-          <span className="font-display font-bold text-ink">AION·AGENTES</span>
+          <span className="flex items-center gap-2 font-display font-bold text-ink">
+            <span aria-hidden className="grad-text">▲</span>AION·AGENTES
+          </span>
           <div className="flex gap-4 text-xs">
             <Link to="/categorias" className="hover:text-ink">Categorias</Link>
             <Link to="/tags" className="hover:text-ink">Tags</Link>

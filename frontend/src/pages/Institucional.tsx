@@ -76,8 +76,8 @@ export function Contato() {
           <textarea className="field mt-1.5 min-h-[120px]" required minLength={5} value={v.message}
             onChange={(e) => setV({ ...v, message: e.target.value })} />
         </label>
-        {ok && <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{ok}</p>}
-        {erro && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{erro}</p>}
+        {ok && <p className="rounded-md bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">{ok}</p>}
+        {erro && <p className="rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-300">{erro}</p>}
         <button className="btn-primary" disabled={enviando}>{enviando ? "Enviando…" : "Enviar mensagem"}</button>
       </form>
     </Pagina>

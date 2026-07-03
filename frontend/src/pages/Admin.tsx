@@ -9,24 +9,24 @@ type Aba = (typeof ABAS)[number];
 function Tabela({ cols, rows, onDelete }: { cols: string[]; rows: any[]; onDelete?: (id: any) => void }) {
   if (rows.length === 0) return <p className="mt-4 text-sm text-slateui">Nada por aqui ainda.</p>;
   return (
-    <div className="mt-4 overflow-x-auto rounded-lg border border-ink/10 bg-white">
+    <div className="mt-4 overflow-x-auto rounded-lg border border-line bg-surface">
       <table className="w-full text-left text-sm">
         <thead>
-          <tr className="border-b border-ink/10">
+          <tr className="border-b border-line">
             {cols.map((c) => <th key={c} className="px-4 py-2.5 font-mono text-[11px] uppercase tracking-wider text-slateui">{c}</th>)}
             {onDelete && <th className="px-4 py-2.5" />}
           </tr>
         </thead>
         <tbody>
           {rows.map((r, i) => (
-            <tr key={r.id ?? r.key ?? i} className="border-b border-ink/5 last:border-0">
+            <tr key={r.id ?? r.key ?? i} className="border-b border-line last:border-0">
               {cols.map((c) => (
                 <td key={c} className="max-w-[280px] truncate px-4 py-2.5">{String(r[c] ?? "—")}</td>
               ))}
               {onDelete && (
                 <td className="px-4 py-2.5 text-right">
                   <button onClick={() => onDelete(r.id ?? r.key)}
-                    className="text-xs font-medium text-red-600 hover:underline">Excluir</button>
+                    className="text-xs font-medium text-red-400 hover:underline">Excluir</button>
                 </td>
               )}
             </tr>
@@ -60,7 +60,7 @@ function Form({ campos, onSubmit, rotulo }: {
         </label>
       ))}
       <button className="btn-primary !py-2 text-sm">{rotulo}</button>
-      {erro && <p className="w-full text-sm text-red-600">{erro}</p>}
+      {erro && <p className="w-full text-sm text-red-400">{erro}</p>}
     </form>
   );
 }
@@ -108,7 +108,7 @@ export default function Admin() {
         <p className="tag mb-1">administração</p>
         <h1 className="font-display text-3xl font-bold">Painel administrativo</h1>
 
-        <div className="mt-6 flex flex-wrap gap-1 border-b border-ink/10" role="tablist">
+        <div className="mt-6 flex flex-wrap gap-1 border-b border-line" role="tablist">
           {ABAS.map((a) => (
             <button key={a} role="tab" aria-selected={aba === a} onClick={() => setAba(a)}
               className={`px-3.5 py-2 text-sm font-medium transition ${
@@ -138,15 +138,15 @@ export default function Admin() {
         {aba === "Conteúdo" && (<>
           <Link to="/admin/editor/novo" className="btn-primary mt-6 !py-2 text-sm">Novo artigo</Link>
           {dados.length === 0 ? <p className="mt-4 text-sm text-slateui">Nenhum conteúdo ainda.</p> : (
-            <div className="mt-4 overflow-x-auto rounded-lg border border-ink/10 bg-white">
+            <div className="mt-4 overflow-x-auto rounded-lg border border-line bg-surface">
               <table className="w-full text-left text-sm">
-                <thead><tr className="border-b border-ink/10">
+                <thead><tr className="border-b border-line">
                   {["id","title","slug","status","published_at"].map((c) =>
                     <th key={c} className="px-4 py-2.5 font-mono text-[11px] uppercase tracking-wider text-slateui">{c}</th>)}
                   <th className="px-4 py-2.5" />
                 </tr></thead>
                 <tbody>{dados.map((r: any) => (
-                  <tr key={r.id} className="border-b border-ink/5 last:border-0">
+                  <tr key={r.id} className="border-b border-line last:border-0">
                     <td className="px-4 py-2.5">{r.id}</td>
                     <td className="max-w-[280px] truncate px-4 py-2.5">{r.title}</td>
                     <td className="max-w-[200px] truncate px-4 py-2.5 font-mono text-xs">{r.slug}</td>
@@ -155,7 +155,7 @@ export default function Admin() {
                     <td className="px-4 py-2.5 text-right whitespace-nowrap">
                       <Link to={`/admin/editor/${r.id}`} className="mr-3 text-xs font-medium text-ultra hover:underline">Editar</Link>
                       <button onClick={() => excluir("/api/contents", r.id)}
-                        className="text-xs font-medium text-red-600 hover:underline">Excluir</button>
+                        className="text-xs font-medium text-red-400 hover:underline">Excluir</button>
                     </td>
                   </tr>))}
                 </tbody>
@@ -207,7 +207,7 @@ export default function Admin() {
         </>)}
 
         {aba === "Configurações" && (<>
-          <p className="mt-4 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <p className="mt-4 rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
             Segredos e chaves de API não são aceitos aqui — configure-os no arquivo .env do backend.
           </p>
           <Form rotulo="Salvar" campos={[

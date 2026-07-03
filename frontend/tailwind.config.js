@@ -4,11 +4,13 @@ export default {
   theme: {
     extend: {
       colors: {
-        ice: "#F4F6F9",
-        ink: "#0C1220",
-        ultra: "#2036C7",
-        signal: "#00B3C6",
-        slateui: "#5B6472",
+        ice: "#08080F",        /* fundo escuro */
+        ink: "#ECECF4",        /* texto claro */
+        surface: "#111119",    /* cartões */
+        line: "rgba(255,255,255,0.08)",
+        ultra: "#8B5CF6",      /* violeta primário */
+        signal: "#C084FC",     /* violeta claro / live */
+        slateui: "#9CA0B4",
       },
       fontFamily: {
         display: ["Space Grotesk", "system-ui", "sans-serif"],

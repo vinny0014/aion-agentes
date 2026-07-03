@@ -193,7 +193,7 @@ export function Artigo() {
           </div>
         )}
         {relacionados.length > 0 && (
-          <aside className="mt-12 border-t border-ink/10 pt-8" aria-label="Artigos relacionados">
+          <aside className="mt-12 border-t border-line pt-8" aria-label="Artigos relacionados">
             <h2 className="font-display text-xl font-bold">Leia também</h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               {relacionados.map((r) => (
@@ -205,7 +205,7 @@ export function Artigo() {
             </div>
           </aside>
         )}
-        <footer className="mt-12 border-t border-ink/10 pt-6">
+        <footer className="mt-12 border-t border-line pt-6">
           <Link to="/conteudos" className="text-sm font-medium text-ultra hover:underline">← Todos os conteúdos</Link>
         </footer>
       </article>

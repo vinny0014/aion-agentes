@@ -51,7 +51,7 @@ export default function Cadastro() {
               onChange={(e) => setSenha(e.target.value)} autoComplete="new-password" />
             <span className="mt-1 block text-xs font-normal text-slateui">Mínimo de 8 caracteres.</span>
           </label>
-          {erro && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{erro}</p>}
+          {erro && <p className="rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-300">{erro}</p>}
           <button className="btn-primary w-full" disabled={carregando}>
             {carregando ? "Criando…" : "Criar conta"}
           </button>

@@ -40,7 +40,7 @@ export default function Login() {
             <input className="field mt-1.5" type="password" required value={senha}
               onChange={(e) => setSenha(e.target.value)} autoComplete="current-password" />
           </label>
-          {erro && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{erro}</p>}
+          {erro && <p className="rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-300">{erro}</p>}
           <button className="btn-primary w-full" disabled={carregando}>
             {carregando ? "Entrando…" : "Entrar"}
           </button>

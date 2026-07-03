@@ -90,8 +90,8 @@ export default function Editor() {
           </div>
         </div>
 
-        {msg && <p className="mt-4 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{msg}</p>}
-        {erro && <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{erro}</p>}
+        {msg && <p className="mt-4 rounded-md bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">{msg}</p>}
+        {erro && <p className="mt-4 rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-300">{erro}</p>}
 
         <div className="mt-8 space-y-5">
           <label className="block text-sm font-medium">
