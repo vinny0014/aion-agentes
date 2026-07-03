@@ -19,6 +19,7 @@ export function Nav() {
         AION<span className="text-ultra">·</span>AGENTES
       </Link>
       <div className="flex items-center gap-2 text-sm">
+        <Link to="/conteudos" className="px-3 py-2 text-slateui hover:text-ink">Conteúdos</Link>
         <Link to="/sobre" className="px-3 py-2 text-slateui hover:text-ink">Sobre</Link>
         <Link to="/login" className="px-3 py-2 text-slateui hover:text-ink">Entrar</Link>
         <Link to="/cadastro" className="btn-primary !px-4 !py-2 text-sm">Criar conta</Link>
@@ -44,7 +45,8 @@ export default function Landing() {
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           <Link to="/cadastro" className="btn-primary">Começar agora</Link>
-          <Link to="/sobre" className="btn-ghost">Como funciona</Link>
+          <Link to="/conteudos" className="px-3 py-2 text-slateui hover:text-ink">Conteúdos</Link>
+        <Link to="/sobre" className="btn-ghost">Como funciona</Link>
         </div>
       </header>
 

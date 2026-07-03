@@ -146,3 +146,28 @@ def test_content_queue_and_pipeline_blocks_without_provider():
 def test_auth_required():
     assert client.get("/api/tasks").status_code == 401
     assert client.get("/api/agents").status_code == 401
+
+
+# ====================== FASE 2 — Portal público ======================
+def test_public_articles_list_and_detail():
+    h, _ = auth(ADMIN["email"], ADMIN["password"])
+    client.post("/api/contents", headers=h, json={
+        "title": "Guia público de IA", "slug": "guia-publico-de-ia",
+        "body": "# Seção\n\nParágrafo um.\n\nParágrafo dois.",
+        "excerpt": "Um guia aberto.", "status": "published"})
+    r = client.get("/api/public/articles")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total"] >= 1 and "body" not in body["items"][0]
+    r = client.get("/api/public/articles/guia-publico-de-ia")
+    assert r.status_code == 200 and "Parágrafo um" in r.json()["body"]
+    # rascunhos não vazam
+    client.post("/api/contents", headers=h, json={
+        "title": "Rascunho secreto", "slug": "rascunho-secreto", "status": "draft"})
+    assert client.get("/api/public/articles/rascunho-secreto").status_code == 404
+
+
+def test_public_pagination():
+    r = client.get("/api/public/articles?page=1&per_page=1")
+    b = r.json()
+    assert b["per_page"] == 1 and len(b["items"]) <= 1

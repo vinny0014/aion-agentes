@@ -10,6 +10,7 @@ from .agents.registry import process_queue_once, seed_agents
 from .core import database as db
 from .core.config import settings
 from .routers.auth import router as auth_router
+from .routers.public import router as public_router
 from .routers.crud import agents_router, content_router, tasks_router, users_router
 from .routers.system import (
     health_router, logs_router, memory_router, queue_router, settings_router,
@@ -48,7 +49,7 @@ app.add_middleware(
 )
 
 for r in (auth_router, users_router, agents_router, content_router, tasks_router,
-          logs_router, memory_router, settings_router, queue_router, health_router):
+          logs_router, memory_router, settings_router, queue_router, health_router, public_router):
     app.include_router(r)
 
 
