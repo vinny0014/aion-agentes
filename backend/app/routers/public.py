@@ -10,7 +10,7 @@ from ..schemas import ContactIn, EmailIn
 
 router = APIRouter(prefix="/api/public", tags=["public"])
 
-_FIELDS = "id, title, slug, excerpt, seo_title, seo_description, category, tags, published_at"
+_FIELDS = "id, title, slug, excerpt, seo_title, seo_description, category, tags, image_url, source_url, published_at"
 
 
 @router.get("/articles")
@@ -54,6 +54,27 @@ def get_article(slug: str):
 @router.get("/articles/{slug}/related")
 def get_related(slug: str, limit: int = 3):
     return related_articles(slug, min(max(limit, 1), 6))
+
+
+@router.get("/hero")
+def get_hero():
+    """Matéria do hero: Breaking News se houver, senão a mais recente."""
+    from ..agents.core import mem_get
+    breaking = mem_get("agent:breaking-news", "hero") or {}
+    if breaking.get("slug"):
+        row = db.query_one(
+            f"SELECT {_FIELDS} FROM contents WHERE slug=? AND status='published'",
+            (breaking["slug"],))
+        if row:
+            row["breaking"] = True
+            return row
+    row = db.query_one(
+        f"SELECT {_FIELDS} FROM contents WHERE status='published' "
+        "ORDER BY published_at DESC LIMIT 1")
+    if not row:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Sem conteúdo publicado")
+    row["breaking"] = False
+    return row
 
 
 @router.get("/categories")

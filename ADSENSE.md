@@ -1,0 +1,2 @@
+# ADSENSE.md
+Componente `AdSlot` reutilizável: renderiza **somente** com `VITE_ADSENSE_CLIENT` — sem a credencial não há espaço vazio nem script (CWV preservado). Posições: home-topo (abaixo do hero), sidebar (sob Tópicos), meio do artigo. Pré-requisitos cobertos: conteúdo original, privacidade/termos, navegação clara. Ativação: criar conta AdSense → definir a env na Vercel → redeploy → aguardar aprovação do Google (pendência humana). Revenue Agent só reporta receita real.

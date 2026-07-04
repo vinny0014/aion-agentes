@@ -99,7 +99,8 @@ for r in (auth_router, users_router, agents_router, content_router, tasks_router
 @app.get("/robots.txt", response_class=PlainTextResponse, tags=["seo"])
 def robots():
     return ("User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /admin\nDisallow: /dashboard\n"
-            "Sitemap: https://aion-agentes.vercel.app/sitemap.xml\n")
+            "Sitemap: https://aion-agentes.vercel.app/sitemap.xml\n"
+            "Sitemap: https://aion-agentes.vercel.app/news-sitemap.xml\n")
 
 
 @app.get("/sitemap.xml", tags=["seo"])
@@ -118,6 +119,28 @@ def sitemap():
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
         + "".join(urls) + "</urlset>"
     )
+    return Response(content=xml, media_type="application/xml")
+
+
+@app.get("/news-sitemap.xml", tags=["seo"])
+def news_sitemap():
+    """Google News sitemap: artigos publicados nas últimas 48 horas."""
+    base = "https://aion-agentes.vercel.app"
+    rows = db.query(
+        """SELECT slug, title, published_at FROM contents
+           WHERE status='published' AND published_at > datetime('now','-2 days')
+           ORDER BY published_at DESC LIMIT 100""")
+    urls = "".join(
+        f"<url><loc>{base}/conteudo/{r['slug']}</loc>"
+        f"<news:news><news:publication><news:name>AION AI NEWS OS</news:name>"
+        f"<news:language>pt</news:language></news:publication>"
+        f"<news:publication_date>{r['published_at'].replace(' ', 'T')}Z</news:publication_date>"
+        f"<news:title>{r['title'][:110].replace('&','&amp;').replace('<','&lt;')}</news:title>"
+        f"</news:news></url>" for r in rows)
+    xml = ('<?xml version="1.0" encoding="UTF-8"?>'
+           '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
+           'xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">'
+           + urls + "</urlset>")
     return Response(content=xml, media_type="application/xml")
 
 

@@ -347,7 +347,7 @@ def test_newsletter_subscribe_public():
 def test_cost_guard_blocks_ai_steps_when_budget_zero():
     ha, _ = auth(ADMIN["email"], ADMIN["password"])
     from app.core import database as db2
-    db2.execute("INSERT INTO app_settings (key, value) VALUES ('orcamento_diario_usd','0') "
+    db2.execute("INSERT INTO app_settings (key, value) VALUES ('orcamento_mensal_usd','0') "
                 "ON CONFLICT(key) DO UPDATE SET value='0'")
     db2.execute("DELETE FROM agent_runs WHERE agent_slug='ceo-master'")  # liberar anti-loop
     from app.agents.core import mem_set
@@ -355,7 +355,7 @@ def test_cost_guard_blocks_ai_steps_when_budget_zero():
     r = client.post("/api/orchestrator/run", headers=ha).json()
     pulados = [e for e in r["etapas"] if e.get("status") == "skipped"]
     assert any("orçamento" in e.get("motivo", "") for e in pulados)
-    db2.execute("UPDATE app_settings SET value='5' WHERE key='orcamento_diario_usd'")
+    db2.execute("UPDATE app_settings SET value='10' WHERE key='orcamento_mensal_usd'")
 
 
 # ====================== INGESTÃO E PUBLICAÇÃO AUTOMÁTICA ======================
@@ -420,3 +420,72 @@ def test_publisher_agent_registered_and_in_pipeline():
     from app.agents.orchestrator import PIPELINE
     ordem = [p[0] for p in PIPELINE]
     assert ordem.index("publisher") == ordem.index("fact-check") + 1
+
+
+# ====================== DISCOVERY OMEGA ======================
+def test_cost_guard_tiers():
+    from app.core import database as db3
+    from app.agents.core import budget_tier
+    db3.execute("INSERT INTO app_settings (key,value) VALUES ('orcamento_mensal_usd','10') "
+                "ON CONFLICT(key) DO UPDATE SET value='10'")
+    db3.execute("DELETE FROM agent_runs WHERE agent_slug='_custo_teste'")
+    assert budget_tier()["modo"] in ("normal", "alerta")
+    db3.execute("INSERT INTO agent_runs (agent_slug,cost) VALUES ('_custo_teste', 7.2)")
+    assert budget_tier()["modo"] == "economico"
+    db3.execute("INSERT INTO agent_runs (agent_slug,cost) VALUES ('_custo_teste', 2.9)")  # 10.1
+    t = budget_tier()
+    assert t["modo"] == "suspenso" and t["ia_liberada"] is False
+    db3.execute("DELETE FROM agent_runs WHERE agent_slug='_custo_teste'")
+
+
+def test_news_sitemap_last_48h():
+    r = client.get("/news-sitemap.xml")
+    assert r.status_code == 200 and "sitemap-news" in r.text
+    assert "AION AI NEWS OS" in r.text and "<news:title>" in r.text
+
+
+def test_hero_endpoint_and_breaking():
+    r = client.get("/api/public/hero")
+    assert r.status_code == 200 and "slug" in r.json()
+    # breaking news define hero para o radar do dia
+    from app.agents.core import mem_set
+    from app.agents.team import breaking_news_agent
+    mem_set("agent:discovery", "manchetes_do_dia",
+            [{"title": "Empresa lança modelo aberto", "link": "https://ex.org/x", "image": ""}])
+    rep = breaking_news_agent({})
+    assert rep["manchetes_quentes"] == 1
+    if rep["hero_definido"]:
+        assert client.get("/api/public/hero").json()["breaking"] is True
+
+
+def test_discovery_captures_official_image(monkeypatch):
+    import app.agents.team as team
+
+    class FakeResp:
+        status_code = 200
+        text = ('<rss><channel><title>F</title><item><title>Notícia com foto oficial</title>'
+                '<link>https://ex.org/n1</link>'
+                '<enclosure url="https://ex.org/press/foto.jpg" type="image/jpeg"/>'
+                '</item></channel></rss>')
+        def raise_for_status(self): pass
+
+    monkeypatch.setattr(team.httpx, "get", lambda *a, **k: FakeResp())
+    team.discovery_agent({"max_sources": 1})
+    from app.agents.core import mem_get
+    m = mem_get("agent:discovery", "manchetes_do_dia")
+    assert m[0]["image"] == "https://ex.org/press/foto.jpg"
+
+
+def test_new_agents_registered_and_pipeline_23():
+    ha, _ = auth(ADMIN["email"], ADMIN["password"])
+    slugs = {a["slug"] for a in client.get("/api/agents", headers=ha).json()}
+    novos = {"breaking-news", "trend-hunter", "google-discover", "image-optimization",
+             "search-console", "revenue", "dashboard", "performance"}
+    assert novos <= slugs
+    from app.agents.orchestrator import PIPELINE
+    assert len(PIPELINE) == 23
+
+
+def test_public_articles_expose_image_and_source():
+    item = client.get("/api/public/articles").json()["items"][0]
+    assert "image_url" in item and "source_url" in item

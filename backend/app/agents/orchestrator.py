@@ -10,6 +10,8 @@ from .core import budget_remaining, mem_get, mem_set, run_agent
 PIPELINE = [
     ("cost-guard", team.cost_guard_agent, False),
     ("discovery", team.discovery_agent, False),
+    ("breaking-news", team.breaking_news_agent, False),
+    ("trend-hunter", team.trend_hunter_agent, False),
     ("content", team.content_writer_agent, True),       # etapa de IA (respeita orçamento)
     ("fact-check", team.fact_check_agent, False),
     ("publisher", team.publisher_agent, False),
@@ -20,7 +22,13 @@ PIPELINE = [
     ("newsletter", team.newsletter_agent, False),
     ("analytics", team.analytics_agent, False),
     ("discovery-growth", team.discovery_growth_agent, False),
+    ("google-discover", team.google_discover_agent, False),
+    ("image-optimization", team.image_optimization_agent, False),
+    ("search-console", team.search_console_agent, False),
     ("adsense-opt", team.adsense_agent, False),
+    ("revenue", team.revenue_agent, False),
+    ("dashboard", team.dashboard_agent, False),
+    ("performance", team.performance_agent, False),
     ("qa", team.qa_agent, False),
     ("security", team.security_agent, False),
 ]

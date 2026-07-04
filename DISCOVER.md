@@ -1,0 +1,3 @@
+# DISCOVER.md — Estratégia Google Discover / Google News
+**Implementado:** meta `max-image-preview:large` · News Sitemap `/news-sitemap.xml` (artigos <48h, atualiza sozinho) · imagem em todo artigo (oficial do feed via enclosure/media:content, com atribuição; fallback = arte editorial em gradiente — nunca caixa vazia) · JSON-LD NewsArticle com `image` + BreadcrumbList · títulos auditados ≤110 chars · hero "Última hora" trocado pelo Breaking News Agent · publicação diária (Radar) para frescor.
+**Pendente (humano):** verificar propriedade no Search Console, enviar os 2 sitemaps, solicitar Google News. Métricas do Discover só existem lá — o Google Discover Agent audita requisitos, nunca inventa tráfego.

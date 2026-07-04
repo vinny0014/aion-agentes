@@ -48,6 +48,22 @@ AGENT_DEFINITIONS = [
      "Audita conformidade e posições de anúncio; nunca aplica práticas proibidas."),
     ("security", "Security Agent", "seguranca",
      "Audita rate limit, headers, SQLi, XSS, CSRF, segredos e senhas."),
+    ("breaking-news", "Breaking News Agent", "urgencia",
+     "Detecta a manchete mais quente e troca o hero automaticamente."),
+    ("trend-hunter", "Trend Hunter Agent", "tendencias",
+     "Extrai tendências das manchetes e cria pautas de guias."),
+    ("google-discover", "Google Discover Agent", "discover",
+     "Audita requisitos do Discover: imagens grandes, títulos, news sitemap."),
+    ("image-optimization", "Image Optimization Agent", "imagens",
+     "Valida URLs de imagens oficiais e garante fallback editorial."),
+    ("search-console", "Search Console Agent", "indexacao",
+     "Gerencia sitemaps e prepara integração com o Search Console."),
+    ("revenue", "Revenue Agent", "receita",
+     "Consolida custo de IA vs receita AdSense (real, nunca estimada)."),
+    ("dashboard", "Dashboard Agent", "executivo",
+     "Consolida o painel executivo: agentes, orçamento, conteúdo, erros."),
+    ("performance", "Performance Agent", "performance",
+     "Audita code splitting, cache, imagens e metas de Core Web Vitals."),
     ("publisher", "Publisher Agent", "publicacao",
      "Publica o Radar IA diário (curadoria original com atribuição) e artigos aprovados."),
     ("scheduler", "Scheduler Agent", "automacao",
@@ -141,8 +157,12 @@ def process_queue_once() -> dict:
       e registra a pendência humana (configurar API key) uma única vez em log.
     """
     from . import providers as prov
+    from .core import budget_tier, record_cost
 
-    items = db.query("SELECT * FROM content_queue WHERE status = 'queued' ORDER BY id LIMIT 10")
+    tier = budget_tier()
+    limite = {"normal": 10, "alerta": 10, "economico": 5,
+              "reducao": 2, "apenas-principais": 1, "suspenso": 0}[tier["modo"]]
+    items = db.query("SELECT * FROM content_queue WHERE status = 'queued' ORDER BY id LIMIT ?", (max(limite, 10),))
     processed, offline, failed = 0, 0, 0
     for item in items:
         template = item["template"] if item["template"] in TEMPLATES else "artigo_padrao"
@@ -153,8 +173,17 @@ def process_queue_once() -> dict:
                 "UPDATE content_queue SET status = 'processing', provider = ? WHERE id = ?",
                 (provider, item["id"]),
             )
+            if limite <= 0:
+                continue  # IA suspensa pelo Cost Guard; item permanece na fila
+            limite -= 1
             try:
+                prov.LAST_USAGE["tokens"] = 0
                 body = prov.generate(provider, prompt)
+                preco = db.query_one(
+                    "SELECT value FROM app_settings WHERE key='preco_por_1k_tokens_usd'")
+                custo = (prov.LAST_USAGE["tokens"] / 1000.0) * (
+                    float(preco["value"]) if preco else 0.0006)
+                record_cost("content", prov.LAST_USAGE["tokens"], custo)
                 title = item["topic"].strip().capitalize()
                 _save_draft(item, title, prov.slugify(item["topic"]), body,
                             f"Artigo sobre {item['topic']} gerado via {provider}.")

@@ -6,7 +6,8 @@
     <title>AION AGENTES — Portal de Inteligência Artificial</title>
     <meta name="description" content="Portal de Inteligência Artificial com publicação diária de conteúdo, operado por uma equipe de agentes inteligentes. Notícias, guias e análises sobre IA em português." />
     <link rel="canonical" href="https://aion-agentes.vercel.app/" />
-    <meta name="robots" content="index, follow" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#8B5CF6" />
 
     <!-- Open Graph -->
@@ -50,6 +51,10 @@
       const GA = import.meta.env.VITE_GA_MEASUREMENT_ID;
       const ADS = import.meta.env.VITE_ADSENSE_CLIENT;
       const CF = import.meta.env.VITE_CF_ANALYTICS_TOKEN;
+      const GSV = import.meta.env.VITE_GOOGLE_SITE_VERIFICATION;
+      const CLARITY = import.meta.env.VITE_CLARITY_PROJECT_ID;
+      if (GSV) { const m = document.createElement("meta"); m.name = "google-site-verification"; m.content = GSV; document.head.appendChild(m); }
+      if (CLARITY) { const s4 = document.createElement("script"); s4.text = `(function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);})(window,document,"clarity","script","${CLARITY}");`; document.head.appendChild(s4); }
       if (GA) {
         const s1 = document.createElement("script");
         s1.src = `https://www.googletagmanager.com/gtag/js?id=${GA}`;

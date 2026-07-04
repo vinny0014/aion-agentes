@@ -1,0 +1,10 @@
+{
+  "name": "AION AI NEWS OS",
+  "short_name": "AION",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#08080F",
+  "theme_color": "#8B5CF6",
+  "description": "Portal de notícias de IA operado por agentes.",
+  "icons": []
+}

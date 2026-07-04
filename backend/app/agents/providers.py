@@ -20,16 +20,21 @@ def slugify(text: str) -> str:
     return text[:200] or "artigo"
 
 
+LAST_USAGE = {"tokens": 0}
+
+
 def _openai_compat(url: str, key: str, model: str, prompt: str, extra_headers: dict | None = None) -> str:
-    """Chat Completions compatível: OpenAI e OpenRouter."""
+    """Chat Completions compatível: OpenAI e OpenRouter. Registra tokens reais."""
     headers = {"Authorization": f"Bearer {key}", **(extra_headers or {})}
     r = httpx.post(url, headers=headers, timeout=TIMEOUT, json={
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 2000,
+        "max_tokens": 1200,
     })
     r.raise_for_status()
-    return r.json()["choices"][0]["message"]["content"]
+    body = r.json()
+    LAST_USAGE["tokens"] = int(body.get("usage", {}).get("total_tokens", 0))
+    return body["choices"][0]["message"]["content"]
 
 
 def _anthropic(prompt: str) -> str:
@@ -66,7 +71,7 @@ def generate(provider: str, prompt: str) -> str:
     if provider == "openai":
         return _openai_compat(
             "https://api.openai.com/v1/chat/completions",
-            settings.OPENAI_API_KEY, "gpt-4o-mini", prompt)
+            settings.OPENAI_API_KEY, "gpt-4o-mini", prompt)  # modelo econômico por padrão
     if provider == "openrouter":
         return _openai_compat(
             "https://openrouter.ai/api/v1/chat/completions",

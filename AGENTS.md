@@ -1,4 +1,6 @@
-# AGENTS.md — Os 16 agentes do AION
+# AGENTS.md — Os 29 agentes do AION (16 originais + Publisher + 8 da Operação Discovery + 4 organizacionais)
+
+Novos: Breaking News (hero automático) · Trend Hunter (pautas de tendências) · Google Discover (auditoria de requisitos) · Image Optimization (valida imagens oficiais) · Search Console · Revenue (custo vs receita real) · Dashboard (painel executivo) · Performance. Pipeline: 23 etapas.
 
 Todos executam via `run_agent()` (app/agents/core.py): isolamento de falha, retry (2x com backoff), log em `agent_runs` (entrada, saída, erro, retries, duração, tokens, custo), status na tabela `agents` e memória compartilhada (`memories`, escopo `agent:<slug>`).
 

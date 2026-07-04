@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { Nav } from "./Landing";
+import AdSlot from "../lib/AdSlot";
 
 const BASE = import.meta.env.VITE_API_URL || "";
 
 type Artigo = {
   id: number; title: string; slug: string; excerpt: string;
   seo_title: string; seo_description: string; published_at: string; body?: string;
-  reading_time?: number; category?: string; tags?: string;
+  reading_time?: number; category?: string; tags?: string; image_url?: string; source_url?: string;
 };
 
 function Rich({ t }: { t: string }) {
@@ -149,6 +150,14 @@ export function Artigo() {
         setMeta('link[rel="canonical"]', "href", `https://aion-agentes.vercel.app/conteudo/${a.slug}`);
         const old = document.getElementById("jsonld-artigo");
         if (old) old.remove();
+        const bc = document.createElement("script");
+        bc.type = "application/ld+json"; bc.id = "jsonld-breadcrumb";
+        document.getElementById("jsonld-breadcrumb")?.remove();
+        bc.textContent = JSON.stringify({"@context":"https://schema.org","@type":"BreadcrumbList",
+          itemListElement:[{"@type":"ListItem",position:1,name:"Home",item:"https://aion-agentes.vercel.app/"},
+          {"@type":"ListItem",position:2,name:"Conteúdos",item:"https://aion-agentes.vercel.app/conteudos"},
+          {"@type":"ListItem",position:3,name:a.title}]});
+        document.head.appendChild(bc);
         const ld = document.createElement("script");
         ld.type = "application/ld+json";
         ld.id = "jsonld-artigo";
@@ -157,6 +166,7 @@ export function Artigo() {
           headline: a.title, description: a.seo_description || a.excerpt,
           datePublished: a.published_at, inLanguage: "pt-BR",
           mainEntityOfPage: `https://aion-agentes.vercel.app/conteudo/${a.slug}`,
+          ...(a.image_url ? { image: [a.image_url] } : {}),
           publisher: { "@type": "Organization", name: "AION AGENTES" },
           author: { "@type": "Organization", name: "AION AGENTES" },
         });
@@ -193,6 +203,10 @@ export function Artigo() {
           {artigo.category ? <> · {artigo.category}</> : null}
         </p>
         <h1 className="font-display text-4xl font-bold leading-tight tracking-tight">{artigo.title}</h1>
+        {artigo.image_url && (
+          <img src={artigo.image_url} alt={`Imagem oficial: ${artigo.title}`}
+            className="mt-6 w-full rounded-xl border border-line object-cover" fetchPriority="high" />
+        )}
         {artigo.excerpt && <p className="mt-4 text-lg text-slateui">{artigo.excerpt}</p>}
         <div className="mt-8 space-y-4 leading-relaxed text-ink/90">
           {(artigo.body || "").split(/\n\n+/).filter(Boolean).map((p, i) => {
@@ -201,6 +215,7 @@ export function Artigo() {
             return <p key={i}><Rich t={p} /></p>;
           })}
         </div>
+        <AdSlot slot="aion-artigo" className="mt-8" />
         {artigo.tags && (
           <div className="mt-8 flex flex-wrap gap-2">
             {artigo.tags.split(",").filter(Boolean).map((t) => (

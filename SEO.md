@@ -1,0 +1,2 @@
+# SEO.md
+Schema.org: WebSite + NewsArticle (com image) + BreadcrumbList · OG/Twitter Cards dinâmicos por artigo · canonical dinâmico · robots.txt (Allow público, Disallow /admin,/dashboard,/api) · sitemap.xml dinâmico + news-sitemap.xml · slugs limpos · seo_title≤60/description≤160 normalizados pelo SEO Agent · alt-text por artigo · linkagem interna via "Leia também" (clusters por categoria/tags).

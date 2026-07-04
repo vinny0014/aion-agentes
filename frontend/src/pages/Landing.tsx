@@ -3,8 +3,11 @@ import { Link, useLocation } from "react-router-dom";
 
 const BASE = import.meta.env.VITE_API_URL || "";
 
+import AdSlot from "../lib/AdSlot";
+
 type Art = { id: number; title: string; slug: string; excerpt: string;
-  category?: string; tags?: string; published_at: string; reading_time?: number };
+  category?: string; tags?: string; published_at: string; reading_time?: number;
+  image_url?: string; breaking?: boolean };
 
 function dataBr(iso?: string | null) {
   if (!iso) return "";
@@ -89,7 +92,9 @@ export default function Landing() {
   const [email, setEmail] = useState("");
   const [newsMsg, setNewsMsg] = useState("");
 
+  const [hero, setHero] = useState<Art | null>(null);
   useEffect(() => {
+    fetch(`${BASE}/api/public/hero`).then(r => r.ok ? r.json() : null).then(setHero).catch(() => {});
     fetch(`${BASE}/api/public/articles?per_page=9`).then(r => r.json())
       .then(d => setArtigos(d.items)).catch(() => {});
     fetch(`${BASE}/api/public/tags`).then(r => r.json()).then(setTags).catch(() => {});
@@ -107,7 +112,7 @@ export default function Landing() {
     } catch { setNewsMsg("Não foi possível inscrever agora."); }
   }
 
-  const destaque = artigos[0];
+  const destaque = hero || artigos[0];
   const hoje = artigos.slice(1, 5);
   const ultimas = artigos.slice(1, 5);
 
@@ -130,10 +135,15 @@ export default function Landing() {
           <section aria-label="Destaque">
             {destaque ? (
               <article className="thumb thumb-hero relative flex h-auto min-h-[380px] flex-col justify-end overflow-hidden rounded-xl border border-line p-8">
+                {destaque.image_url && (
+                  <img src={destaque.image_url} alt={`Imagem oficial: ${destaque.title}`}
+                    className="absolute inset-0 h-full w-full object-cover opacity-45"
+                    fetchPriority="high" />
+                )}
                 <div className="orb h-56 w-56 bg-ultra/40" style={{ top: "-30px", right: "6%" }} />
                 <div className="relative z-10">
                   <div className="mb-4 flex flex-wrap items-center gap-2">
-                    <span className="badge-feat">Destaque</span>
+                    <span className="badge-feat">{destaque.breaking ? "Última hora" : "Destaque"}</span>
                     <span className="font-mono text-[10px] uppercase tracking-widest text-signal">notícias de ia</span>
                   </div>
                   <h1 className="max-w-xl font-display text-3xl font-bold leading-tight tracking-tight md:text-4xl">
@@ -158,6 +168,8 @@ export default function Landing() {
               </div>
             )}
 
+            <AdSlot slot="aion-home-top" className="mt-6" />
+
             {/* ÚLTIMAS NOTÍCIAS */}
             <section className="mt-10" aria-label="Últimas notícias">
               <div className="mb-4 flex items-center justify-between">
@@ -168,9 +180,14 @@ export default function Landing() {
                 {ultimas.map((a) => (
                   <Link key={a.id} to={`/conteudo/${a.slug}`} className="card card-hover !p-3">
                     <div className="thumb mb-3">
-                      <span className="grad-text relative z-10 font-display text-3xl font-bold">
-                        {(a.category || "ia").slice(0, 1).toUpperCase()}
-                      </span>
+                      {a.image_url ? (
+                        <img src={a.image_url} alt="" loading="lazy"
+                          className="absolute inset-0 h-full w-full object-cover" />
+                      ) : (
+                        <span className="grad-text relative z-10 font-display text-3xl font-bold">
+                          {(a.category || "ia").slice(0, 1).toUpperCase()}
+                        </span>
+                      )}
                     </div>
                     {a.category && <p className="tag text-signal">{a.category}</p>}
                     <p className="mt-1 text-sm font-medium leading-snug">{a.title}</p>
@@ -238,6 +255,7 @@ export default function Landing() {
               <p className="mt-2 font-mono text-[10px] text-slateui">Sem spam. Cancele quando quiser.</p>
             </section>
 
+            <AdSlot slot="aion-sidebar" />
             <section className="card" aria-label="Tópicos em alta">
               <h2 className="font-display font-bold uppercase tracking-wide">Tópicos em alta</h2>
               <div className="mt-4 flex flex-wrap gap-2">

@@ -30,14 +30,35 @@ def mem_set(scope: str, key: str, value) -> None:
 
 
 # ---------- orçamento (Cost Guard integra aqui) ----------
+def monthly_budget() -> float:
+    row = db.query_one("SELECT value FROM app_settings WHERE key = 'orcamento_mensal_usd'")
+    return float(row["value"]) if row else 10.0  # regra: US$10/mês
+
+
+def monthly_spent() -> float:
+    return db.query_one(
+        "SELECT COALESCE(SUM(cost),0) AS c FROM agent_runs "
+        "WHERE strftime('%Y-%m',created_at)=strftime('%Y-%m','now')")["c"]
+
+
+def budget_tier() -> dict:
+    """Níveis do Cost Guard: 50% alerta · 70% econômico · 85% redução ·
+    95% só principais · 100% IA suspensa (RSS/cache seguem funcionando)."""
+    b, gasto = monthly_budget(), monthly_spent()
+    pct = (gasto / b * 100) if b > 0 else 100.0
+    if pct >= 100: modo = "suspenso"
+    elif pct >= 95: modo = "apenas-principais"
+    elif pct >= 85: modo = "reducao"
+    elif pct >= 70: modo = "economico"
+    elif pct >= 50: modo = "alerta"
+    else: modo = "normal"
+    return {"orcamento_usd": b, "gasto_usd": round(gasto, 4),
+            "percentual": round(pct, 1), "modo": modo,
+            "ia_liberada": pct < 100}
+
+
 def budget_remaining() -> float:
-    """Orçamento diário (USD) menos gasto registrado hoje em agent_runs."""
-    row = db.query_one("SELECT value FROM app_settings WHERE key = 'orcamento_diario_usd'")
-    budget = float(row["value"]) if row else 5.0  # padrão conservador
-    spent = db.query_one(
-        "SELECT COALESCE(SUM(cost),0) AS c FROM agent_runs WHERE date(created_at)=date('now')"
-    )["c"]
-    return budget - spent
+    return monthly_budget() - monthly_spent()
 
 
 def record_cost(agent_slug: str, tokens: int, cost: float) -> None:

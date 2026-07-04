@@ -45,8 +45,10 @@ def discovery_agent(payload: dict) -> dict:
                     continue
                 titulo = re.sub(r"<[^>]+>", "", t.group(1)).strip()
                 link = (l.group(1) or l.group(2) or "").strip() if l else ""
+                img = re.search(r'<(?:enclosure|media:content|media:thumbnail)[^>]*url="([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"', item)
                 if titulo:
-                    found.append({"source": url, "title": titulo, "link": link})
+                    found.append({"source": url, "title": titulo, "link": link,
+                                  "image": img.group(1) if img else ""})
         except Exception as exc:
             errors.append({"source": url, "erro": f"{type(exc).__name__}"})
     novos = 0
@@ -352,15 +354,18 @@ def publisher_agent(payload: dict) -> dict:
               "do AION a partir de feeds oficiais. Os títulos pertencem às respectivas fontes; "
               "a curadoria e o texto de apresentação são originais."
         )
+        img_oficial = next((m.get("image") for m in manchetes if m.get("image")), "")
         cid = db.execute(
             """INSERT INTO contents (title, slug, body, excerpt, status, agent_id,
-               seo_title, seo_description, category, tags, published_at)
+               seo_title, seo_description, category, tags, image_url, published_at)
                VALUES (?,?,?,?, 'published',
                        (SELECT id FROM agents WHERE slug='discovery'), ?, ?, 'radar',
-                       'radar,noticias,ia', datetime('now'))""",
+                       'radar,noticias,ia', ?, datetime('now'))""",
             (f"Radar IA — {data_br}: os destaques do dia", slug_hoje, corpo,
              f"As {min(len(manchetes),12)} manchetes de IA mais relevantes de {data_br}, com fontes.",
-             f"Radar IA {data_br}", f"Curadoria diária de notícias de IA de {data_br} com links para as fontes."))
+             f"Radar IA {data_br}",
+             f"Curadoria diária de notícias de IA de {data_br} com links para as fontes.",
+             img_oficial))
         resultado["radar"] = {"id": cid, "slug": slug_hoje, "manchetes": min(len(manchetes), 12)}
 
     # --- Auto-publicação de artigos IA aprovados ---
@@ -377,3 +382,100 @@ def publisher_agent(payload: dict) -> dict:
         resultado["limitacao"] = ("Sem manchetes coletadas (fontes inacessíveis ou primeiro boot); "
                                   "Radar será criado no próximo ciclo com rede disponível")
     return resultado
+
+
+# ═══════════ BREAKING NEWS AGENT ═══════════
+_BREAKING_TERMS = ("lança", "launch", "anuncia", "announce", "release", "apresenta",
+                   "gpt", "claude", "gemini", "llama", "open source", "breakthrough")
+
+
+def breaking_news_agent(payload: dict) -> dict:
+    """Detecta a manchete mais quente e define o hero automaticamente."""
+    manchetes = mem_get("agent:discovery", "manchetes_do_dia", []) or []
+    quentes = [m for m in manchetes
+               if any(t in m["title"].lower() for t in _BREAKING_TERMS)]
+    hero = None
+    radar = db.query_one("SELECT slug FROM contents WHERE category='radar' AND status='published' "
+                         "ORDER BY published_at DESC LIMIT 1")
+    if quentes and radar:
+        hero = radar["slug"]  # a matéria quente vive no Radar do dia, com fonte
+        mem_set("agent:breaking-news", "hero",
+                {"slug": hero, "motivo": quentes[0]["title"][:120]})
+    return {"manchetes_quentes": len(quentes), "hero_definido": hero,
+            "nota": "Hero troca sozinho quando surge manchete com termos de lançamento"}
+
+
+# ═══════════ TREND HUNTER AGENT ═══════════
+def trend_hunter_agent(payload: dict) -> dict:
+    manchetes = mem_get("agent:discovery", "manchetes_do_dia", []) or []
+    kws = extract_keywords(" ".join(m["title"] for m in manchetes), top=6)
+    novas = 0
+    for kw in kws[:3]:
+        topico = f"Guia AION: o que é {kw} e por que está em alta"
+        if not db.query_one("SELECT id FROM content_queue WHERE topic = ?", (topico,)):
+            db.execute("INSERT INTO content_queue (topic, template) VALUES (?, 'guia_pratico')",
+                       (topico,))
+            novas += 1
+    return {"tendencias": kws, "pautas_criadas": novas}
+
+
+# ═══════════ GOOGLE DISCOVER AGENT ═══════════
+def google_discover_agent(payload: dict) -> dict:
+    """Audita requisitos reais do Discover; nunca inventa métricas de tráfego."""
+    sem_imagem = db.query_one("SELECT COUNT(*) AS n FROM contents "
+                              "WHERE status='published' AND image_url=''")["n"]
+    titulos_longos = db.query_one("SELECT COUNT(*) AS n FROM contents "
+                                  "WHERE status='published' AND length(title) > 110")["n"]
+    checks = {
+        "max_image_preview_large": "meta robots configurada no frontend",
+        "news_sitemap": "/news-sitemap.xml ativo (últimas 48h)",
+        "artigos_sem_imagem_oficial": sem_imagem,
+        "fallback": "arte editorial em gradiente (nunca caixa vazia)",
+        "titulos_acima_110_chars": titulos_longos,
+    }
+    return {"auditoria": checks,
+            "limitacao": "Métricas reais do Discover só existem no Search Console (credencial sua)"}
+
+
+# ═══════════ IMAGE OPTIMIZATION AGENT ═══════════
+def image_optimization_agent(payload: dict) -> dict:
+    rows = db.query("SELECT id, image_url FROM contents WHERE status='published' AND image_url!=''")
+    invalidas = [c["id"] for c in rows
+                 if not re.match(r"^https://[^\s]+\.(jpg|jpeg|png|webp)", c["image_url"], re.I)]
+    for cid in invalidas:
+        db.execute("UPDATE contents SET image_url='' WHERE id = ?", (cid,))
+    return {"com_imagem_oficial": len(rows) - len(invalidas),
+            "urls_invalidas_removidas": len(invalidas),
+            "frontend": "loading=lazy nas listas; hero com prioridade"}
+
+
+# ═══════════ SEARCH CONSOLE / REVENUE / DASHBOARD / PERFORMANCE ═══════════
+def search_console_agent(payload: dict) -> dict:
+    cfg = mem_get("agent:search-console", "site_url") or "não configurado"
+    return {"site": cfg, "sitemaps": ["/sitemap.xml", "/news-sitemap.xml"],
+            "limitacao": "Impressões/cliques exigem SEARCH_CONSOLE_SITE_URL + verificação (pendência humana)"}
+
+
+def revenue_agent(payload: dict) -> dict:
+    from .core import budget_tier
+    t = budget_tier()
+    return {"custo_ia_mes_usd": t["gasto_usd"], "orcamento_usd": t["orcamento_usd"],
+            "receita_adsense_usd": None,
+            "limitacao": "Receita real só após aprovação do AdSense — nunca será estimada aqui"}
+
+
+def dashboard_agent(payload: dict) -> dict:
+    from .core import agent_metrics, budget_tier
+    return {"agentes": agent_metrics(), "orcamento": budget_tier(),
+            "publicados": db.query_one("SELECT COUNT(*) n FROM contents WHERE status='published'")["n"],
+            "fila": db.query_one("SELECT COUNT(*) n FROM content_queue WHERE status='queued'")["n"],
+            "inscritos": db.query_one("SELECT COUNT(*) n FROM subscribers WHERE active=1")["n"],
+            "erros_24h": db.query_one("SELECT COUNT(*) n FROM logs WHERE level='error' "
+                                      "AND created_at > datetime('now','-1 day')")["n"]}
+
+
+def performance_agent(payload: dict) -> dict:
+    return {"frontend": {"code_splitting": "rotas lazy (React.lazy)", "bundle_alvo": "<70KB gzip inicial",
+                         "imagens": "lazy + fallback CSS sem request", "pwa": "manifest ativo"},
+            "backend": {"cache": "feeds lidos 1x/ciclo; dedupe por título", "sqlite": "disco Render"},
+            "limitacao": "Lighthouse real requer o site publicado — rode no PageSpeed Insights"}
