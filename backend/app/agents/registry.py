@@ -48,6 +48,8 @@ AGENT_DEFINITIONS = [
      "Audita conformidade e posições de anúncio; nunca aplica práticas proibidas."),
     ("security", "Security Agent", "seguranca",
      "Audita rate limit, headers, SQLi, XSS, CSRF, segredos e senhas."),
+    ("publisher", "Publisher Agent", "publicacao",
+     "Publica o Radar IA diário (curadoria original com atribuição) e artigos aprovados."),
     ("scheduler", "Scheduler Agent", "automacao",
      "Agenda pipelines, evita concorrência e impede loops."),
     ("discovery-growth", "Discovery Growth Agent", "crescimento",

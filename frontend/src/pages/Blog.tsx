@@ -10,6 +10,22 @@ type Artigo = {
   reading_time?: number; category?: string; tags?: string;
 };
 
+function Rich({ t }: { t: string }) {
+  // Suporte mínimo a **negrito** e [texto](url) — sem HTML bruto (seguro por padrão no React)
+  const parts = t.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g);
+  return (
+    <>
+      {parts.map((p, i) => {
+        const b = p.match(/^\*\*([^*]+)\*\*$/);
+        if (b) return <strong key={i}>{b[1]}</strong>;
+        const l = p.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+        if (l) return <a key={i} href={l[2]} target="_blank" rel="noopener noreferrer nofollow" className="text-signal underline decoration-signal/40 hover:decoration-signal">{l[1]}</a>;
+        return p;
+      })}
+    </>
+  );
+}
+
 function dataBr(iso: string | null) {
   if (!iso) return "";
   return new Date(iso.replace(" ", "T") + "Z").toLocaleDateString("pt-BR", {
@@ -182,7 +198,7 @@ export function Artigo() {
           {(artigo.body || "").split(/\n\n+/).filter(Boolean).map((p, i) => {
             if (p.startsWith("## ")) return <h2 key={i} className="pt-4 font-display text-2xl font-bold">{p.slice(3)}</h2>;
             if (p.startsWith("# ")) return <h2 key={i} className="pt-4 font-display text-2xl font-bold">{p.slice(2)}</h2>;
-            return <p key={i}>{p}</p>;
+            return <p key={i}><Rich t={p} /></p>;
           })}
         </div>
         {artigo.tags && (

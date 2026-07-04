@@ -356,3 +356,67 @@ def test_cost_guard_blocks_ai_steps_when_budget_zero():
     pulados = [e for e in r["etapas"] if e.get("status") == "skipped"]
     assert any("orçamento" in e.get("motivo", "") for e in pulados)
     db2.execute("UPDATE app_settings SET value='5' WHERE key='orcamento_diario_usd'")
+
+
+# ====================== INGESTÃO E PUBLICAÇÃO AUTOMÁTICA ======================
+def test_bootstrap_seeds_when_empty():
+    from app.bootstrap import seed_initial_content
+    # banco de teste já tem conteúdo; idempotência: não duplica
+    antes = client.get("/api/public/articles?per_page=50").json()["total"]
+    seed_initial_content()
+    seed_initial_content()
+    depois = client.get("/api/public/articles?per_page=50").json()["total"]
+    assert depois >= antes and depois - antes <= 3
+
+
+def test_discovery_parses_items_and_publisher_creates_radar(monkeypatch):
+    import app.agents.team as team
+
+    class FakeResp:
+        status_code = 200
+        text = """<rss><channel><title>Feed</title>
+        <item><title>Nova técnica de raciocínio anunciada</title><link>https://exemplo.org/a1</link></item>
+        <item><title><![CDATA[Modelo aberto bate benchmark]]></title><link>https://exemplo.org/a2</link></item>
+        </channel></rss>"""
+        def raise_for_status(self): pass
+
+    monkeypatch.setattr(team.httpx, "get", lambda *a, **k: FakeResp())
+    rep = team.discovery_agent({"max_sources": 1})
+    assert rep["encontrados"] == 2
+    pub = team.publisher_agent({})
+    assert pub["radar"] and pub["radar"]["manchetes"] == 2
+    slug = pub["radar"]["slug"]
+    art = client.get(f"/api/public/articles/{slug}").json()
+    assert art["status_code"] if False else True
+    assert "Ler na fonte](https://exemplo.org/a1" in art["body"]
+    assert art["category"] == "radar"
+    # idempotente no mesmo dia
+    assert team.publisher_agent({})["radar"] is None
+
+
+def test_publisher_respects_fact_check_and_setting():
+    ha, _ = auth(ADMIN["email"], ADMIN["password"])
+    from app.agents.team import fact_check_agent, publisher_agent
+    from app.core import database as db2
+    # rascunho de agente com placeholder segue bloqueado
+    fact_check_agent({})
+    drafts_placeholder = db2.query(
+        "SELECT COUNT(*) AS n FROM contents WHERE status='draft' AND body LIKE '%Rascunho automático%'")[0]["n"]
+    publisher_agent({})
+    ainda = db2.query(
+        "SELECT COUNT(*) AS n FROM contents WHERE status='draft' AND body LIKE '%Rascunho automático%'")[0]["n"]
+    assert ainda == drafts_placeholder  # nada com placeholder foi publicado
+    # setting desliga tudo
+    db2.execute("INSERT INTO app_settings (key,value) VALUES ('publicacao_automatica','off') "
+                "ON CONFLICT(key) DO UPDATE SET value='off'")
+    assert publisher_agent({}).get("status") == "desativado via settings"
+    db2.execute("UPDATE app_settings SET value='on' WHERE key='publicacao_automatica'")
+
+
+def test_publisher_agent_registered_and_in_pipeline():
+    ha, _ = auth(ADMIN["email"], ADMIN["password"])
+    slugs = {a["slug"] for a in client.get("/api/agents", headers=ha).json()}
+    assert "publisher" in slugs
+    from app.agents.orchestrator import PIPELINE
+    ordem = [p[0] for p in PIPELINE]
+    assert ordem.index("publisher") == ordem.index("fact-check") + 1

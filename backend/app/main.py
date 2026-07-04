@@ -28,10 +28,18 @@ scheduler = BackgroundScheduler()
 async def lifespan(app: FastAPI):
     db.init_db()
     seed_agents()
+    # Bootstrap de produção: se não há nenhum conteúdo, publica os guias iniciais
+    if not db.query_one("SELECT id FROM contents LIMIT 1"):
+        from .bootstrap import seed_initial_content
+        seed_initial_content()
     # Scheduler de publicação diária: processa a fila de conteúdo a cada hora
     scheduler.add_job(process_queue_once, "interval", hours=1, id="content-pipeline")
     from .agents.orchestrator import run_cycle
     scheduler.add_job(lambda: run_cycle("scheduler"), "interval", hours=6, id="agent-orchestrator")
+    # Primeiro ciclo logo após o boot (popula o portal sem intervenção manual)
+    from datetime import datetime, timedelta
+    scheduler.add_job(lambda: run_cycle("bootstrap"), "date",
+                      run_date=datetime.now() + timedelta(seconds=45), id="first-cycle")
     scheduler.start()
     db.execute(
         "INSERT INTO logs (level, source, message) VALUES ('info','system','API iniciada')"

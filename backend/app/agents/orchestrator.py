@@ -12,6 +12,7 @@ PIPELINE = [
     ("discovery", team.discovery_agent, False),
     ("content", team.content_writer_agent, True),       # etapa de IA (respeita orçamento)
     ("fact-check", team.fact_check_agent, False),
+    ("publisher", team.publisher_agent, False),
     ("seo", team.seo_agent, False),
     ("image-prompt", team.image_prompt_agent, False),
     ("translation", team.translation_agent, True),

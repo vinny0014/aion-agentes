@@ -38,9 +38,15 @@ def discovery_agent(payload: dict) -> dict:
             r = httpx.get(url, timeout=10, follow_redirects=True,
                           headers={"User-Agent": "AION-Discovery/1.0"})
             r.raise_for_status()
-            titles = re.findall(r"<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</title>", r.text)[1:6]
-            found += [{"source": url, "title": re.sub(r"<[^>]+>", "", t).strip()}
-                      for t in titles if t.strip()]
+            for item in re.findall(r"<(?:item|entry)>(.*?)</(?:item|entry)>", r.text, re.S)[:5]:
+                t = re.search(r"<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</title>", item, re.S)
+                l = re.search(r'<link[^>]*href="([^"]+)"|<link>(.*?)</link>', item, re.S)
+                if not t:
+                    continue
+                titulo = re.sub(r"<[^>]+>", "", t.group(1)).strip()
+                link = (l.group(1) or l.group(2) or "").strip() if l else ""
+                if titulo:
+                    found.append({"source": url, "title": titulo, "link": link})
         except Exception as exc:
             errors.append({"source": url, "erro": f"{type(exc).__name__}"})
     novos = 0
@@ -56,6 +62,7 @@ def discovery_agent(payload: dict) -> dict:
         mem_set("agent:discovery", "limitacao",
                 "Fontes externas inacessíveis neste ambiente de rede; "
                 "em produção (Render) o acesso é liberado.")
+    mem_set("agent:discovery", "manchetes_do_dia", found[:20])
     mem_set("agent:discovery", "ultima_execucao",
             {"encontrados": len(found), "enfileirados": novos, "erros_fonte": errors})
     return {"encontrados": len(found), "enfileirados": novos, "fontes_com_erro": len(errors)}
@@ -307,3 +314,66 @@ def cost_guard_agent(payload: dict) -> dict:
             "bloquear_ia": alerta,
             "nota": "Custos por token só são contabilizados quando um provedor de IA "
                     "estiver ativo e reportar uso — nada é estimado artificialmente"}
+
+
+# ═══════════ PUBLISHER: Radar IA diário + auto-publicação ═══════════
+def _fonte_amigavel(url: str) -> str:
+    m = re.search(r"https?://(?:www\.|blogs?\.|export\.)?([^/]+)", url or "")
+    return (m.group(1) if m else "fonte").split(".")[0].capitalize()
+
+
+def publisher_agent(payload: dict) -> dict:
+    """Publica automaticamente conteúdo aprovado.
+    1) Radar IA diário: curadoria ORIGINAL das manchetes reais coletadas pelo
+       Discovery, com atribuição e link — nunca copia o texto das fontes.
+    2) Artigos gerados por IA (agent_id preenchido) que o Fact Check aprovou.
+    Controlado pela setting 'publicacao_automatica' (padrão: on)."""
+    cfg = db.query_one("SELECT value FROM app_settings WHERE key='publicacao_automatica'")
+    if cfg and cfg["value"].lower() in ("off", "0", "false"):
+        return {"status": "desativado via settings"}
+    resultado = {"radar": None, "auto_publicados": 0}
+
+    # --- Radar diário ---
+    manchetes = mem_get("agent:discovery", "manchetes_do_dia", []) or []
+    slug_hoje = "radar-ia-" + db.query_one("SELECT date('now') AS d")["d"]
+    if manchetes and not db.query_one("SELECT id FROM contents WHERE slug = ?", (slug_hoje,)):
+        data_br = db.query_one("SELECT strftime('%d/%m/%Y','now') AS d")["d"]
+        linhas = []
+        for m in manchetes[:12]:
+            fonte = _fonte_amigavel(m.get("link") or m.get("source", ""))
+            link = m.get("link") or m.get("source", "")
+            linhas.append(f"**{m['title']}** — via {fonte}. [Ler na fonte]({link})")
+        corpo = (
+            f"## O que movimentou a IA hoje\n\n"
+            f"Curadoria diária do AION: os destaques publicados pelas principais fontes do setor "
+            f"em {data_br}, com link direto para a matéria original de cada uma.\n\n"
+            + "\n\n".join(linhas)
+            + "\n\n## Sobre o Radar\n\nO Radar IA é gerado automaticamente pelo Discovery Agent "
+              "do AION a partir de feeds oficiais. Os títulos pertencem às respectivas fontes; "
+              "a curadoria e o texto de apresentação são originais."
+        )
+        cid = db.execute(
+            """INSERT INTO contents (title, slug, body, excerpt, status, agent_id,
+               seo_title, seo_description, category, tags, published_at)
+               VALUES (?,?,?,?, 'published',
+                       (SELECT id FROM agents WHERE slug='discovery'), ?, ?, 'radar',
+                       'radar,noticias,ia', datetime('now'))""",
+            (f"Radar IA — {data_br}: os destaques do dia", slug_hoje, corpo,
+             f"As {min(len(manchetes),12)} manchetes de IA mais relevantes de {data_br}, com fontes.",
+             f"Radar IA {data_br}", f"Curadoria diária de notícias de IA de {data_br} com links para as fontes."))
+        resultado["radar"] = {"id": cid, "slug": slug_hoje, "manchetes": min(len(manchetes), 12)}
+
+    # --- Auto-publicação de artigos IA aprovados ---
+    bloqueados = {b["id"] for b in (mem_get("agent:fact-check", "bloqueados", []) or [])}
+    drafts = db.query(
+        "SELECT id, body FROM contents WHERE status='draft' AND agent_id IS NOT NULL")
+    for c in drafts:
+        if c["id"] in bloqueados or "[Rascunho automático" in (c["body"] or ""):
+            continue
+        db.execute("UPDATE contents SET status='published', published_at=datetime('now') "
+                   "WHERE id = ?", (c["id"],))
+        resultado["auto_publicados"] += 1
+    if not manchetes:
+        resultado["limitacao"] = ("Sem manchetes coletadas (fontes inacessíveis ou primeiro boot); "
+                                  "Radar será criado no próximo ciclo com rede disponível")
+    return resultado
