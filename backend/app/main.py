@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
     # Scheduler de publicação diária: processa a fila de conteúdo a cada hora
     scheduler.add_job(process_queue_once, "interval", hours=1, id="content-pipeline")
     from .agents.orchestrator import run_cycle
-    scheduler.add_job(lambda: run_cycle("scheduler"), "interval", hours=6, id="agent-orchestrator")
+    scheduler.add_job(lambda: run_cycle("scheduler"), "interval", hours=2, id="agent-orchestrator")
     # Primeiro ciclo logo após o boot (popula o portal sem intervenção manual)
     from datetime import datetime, timedelta
     scheduler.add_job(lambda: run_cycle("bootstrap"), "date",
@@ -120,6 +120,27 @@ def sitemap():
         + "".join(urls) + "</urlset>"
     )
     return Response(content=xml, media_type="application/xml")
+
+
+@app.get("/rss.xml", tags=["seo"])
+def rss_feed():
+    """Feed RSS 2.0 do portal — atualiza sozinho a cada publicação."""
+    base = "https://aion-agentes.vercel.app"
+    rows = db.query("SELECT title, slug, excerpt, published_at FROM contents "
+                    "WHERE status='published' ORDER BY published_at DESC LIMIT 30")
+    def esc(t): return (t or "").replace("&", "&amp;").replace("<", "&lt;")
+    items = "".join(
+        f"<item><title>{esc(r['title'])}</title>"
+        f"<link>{base}/conteudo/{r['slug']}</link>"
+        f"<guid>{base}/conteudo/{r['slug']}</guid>"
+        f"<description>{esc(r['excerpt'])}</description>"
+        f"<pubDate>{r['published_at']}</pubDate></item>" for r in rows)
+    xml = ('<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel>'
+           '<title>AION AI NEWS OS</title>'
+           f'<link>{base}</link>'
+           '<description>Notícias de IA publicadas por agentes autônomos.</description>'
+           f'{items}</channel></rss>')
+    return Response(content=xml, media_type="application/rss+xml")
 
 
 @app.get("/news-sitemap.xml", tags=["seo"])

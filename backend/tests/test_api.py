@@ -419,7 +419,7 @@ def test_publisher_agent_registered_and_in_pipeline():
     assert "publisher" in slugs
     from app.agents.orchestrator import PIPELINE
     ordem = [p[0] for p in PIPELINE]
-    assert ordem.index("publisher") == ordem.index("fact-check") + 1
+    assert ordem.index("publisher") > ordem.index("fact-check")  # publisher sempre depois do fact-check
 
 
 # ====================== DISCOVERY OMEGA ======================
@@ -483,9 +483,40 @@ def test_new_agents_registered_and_pipeline_23():
              "search-console", "revenue", "dashboard", "performance"}
     assert novos <= slugs
     from app.agents.orchestrator import PIPELINE
-    assert len(PIPELINE) == 23
+    assert len(PIPELINE) == 24
 
 
 def test_public_articles_expose_image_and_source():
     item = client.get("/api/public/articles").json()["items"][0]
     assert "image_url" in item and "source_url" in item
+
+
+# ====================== AUDITORIA DOS AGENTES ======================
+def test_research_agent_briefing_feeds_writer():
+    ha, _ = auth(ADMIN["email"], ADMIN["password"])
+    from app.agents.core import mem_set, mem_get
+    from app.agents.team import research_agent
+    r = client.post("/api/content-queue", headers=ha, json={"topic": "modelos abertos de linguagem"})
+    qid = r.json()["id"]
+    mem_set("agent:discovery", "manchetes_do_dia",
+            [{"title": "Novos modelos abertos de linguagem anunciados", "link": "https://ex.org/m1"}])
+    rep = research_agent({})
+    assert rep["briefings_gerados"] >= 1
+    brief = mem_get("agent:research", f"briefing:{qid}")
+    assert brief and brief["fontes"] == ["https://ex.org/m1"]
+
+
+def test_rss_feed():
+    r = client.get("/rss.xml")
+    assert r.status_code == 200 and "<rss version=\"2.0\"" in r.text and "<item>" in r.text
+
+
+def test_pipeline_order_matches_flow():
+    from app.agents.orchestrator import PIPELINE
+    ordem = [p[0] for p in PIPELINE]
+    fluxo = ["discovery", "breaking-news", "research", "content", "fact-check",
+             "seo", "image-prompt", "publisher", "dashboard", "google-discover",
+             "newsletter", "social-media"]
+    idx = [ordem.index(e) for e in fluxo]
+    assert idx == sorted(idx), f"fluxo fora de ordem: {ordem}"
+    assert len(PIPELINE) == 24

@@ -48,6 +48,8 @@ AGENT_DEFINITIONS = [
      "Audita conformidade e posições de anúncio; nunca aplica práticas proibidas."),
     ("security", "Security Agent", "seguranca",
      "Audita rate limit, headers, SQLi, XSS, CSRF, segredos e senhas."),
+    ("research", "Research Agent", "pesquisa-profunda",
+     "Monta briefing factual por pauta: manchetes correlatas, fontes e links internos."),
     ("breaking-news", "Breaking News Agent", "urgencia",
      "Detecta a manchete mais quente e troca o hero automaticamente."),
     ("trend-hunter", "Trend Hunter Agent", "tendencias",
@@ -169,6 +171,16 @@ def process_queue_once() -> dict:
         try:
             provider = resolve_provider(item["provider"])
             prompt = TEMPLATES[template].format(topic=item["topic"])
+            from .core import mem_get as _mg
+            brief = _mg("agent:research", f"briefing:{item['id']}")
+            if brief:
+                fontes = "; ".join(brief.get("fontes", [])[:4])
+                prompt += (f"\nContexto factual (cite as fontes): "
+                           f"manchetes correlatas: "
+                           f"{'; '.join(m['title'] for m in brief.get('manchetes_correlatas', []))}. "
+                           f"Fontes: {fontes}. "
+                           f"Linke internamente: "
+                           f"{'; '.join('/conteudo/'+a['slug'] for a in brief.get('artigos_internos', []))}.")
             db.execute(
                 "UPDATE content_queue SET status = 'processing', provider = ? WHERE id = ?",
                 (provider, item["id"]),

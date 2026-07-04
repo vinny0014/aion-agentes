@@ -367,6 +367,11 @@ def publisher_agent(payload: dict) -> dict:
              f"Curadoria diária de notícias de IA de {data_br} com links para as fontes.",
              img_oficial))
         resultado["radar"] = {"id": cid, "slug": slug_hoje, "manchetes": min(len(manchetes), 12)}
+        # Hero imediato se houver manchete quente (Breaking News rodou antes do Radar existir)
+        quentes = [m for m in manchetes if any(t in m["title"].lower() for t in _BREAKING_TERMS)]
+        if quentes:
+            mem_set("agent:breaking-news", "hero",
+                    {"slug": slug_hoje, "motivo": quentes[0]["title"][:120]})
 
     # --- Auto-publicação de artigos IA aprovados ---
     bloqueados = {b["id"] for b in (mem_get("agent:fact-check", "bloqueados", []) or [])}
@@ -479,3 +484,31 @@ def performance_agent(payload: dict) -> dict:
                          "imagens": "lazy + fallback CSS sem request", "pwa": "manifest ativo"},
             "backend": {"cache": "feeds lidos 1x/ciclo; dedupe por título", "sqlite": "disco Render"},
             "limitacao": "Lighthouse real requer o site publicado — rode no PageSpeed Insights"}
+
+
+# ═══════════ RESEARCH AGENT ═══════════
+def research_agent(payload: dict) -> dict:
+    """Monta um briefing por pauta da fila: manchetes correlatas do dia,
+    artigos internos do mesmo cluster e palavras-chave — consumido pelo
+    Content Writer para enriquecer o prompt. Sem IA: só fatos coletados."""
+    pautas = db.query("SELECT id, topic FROM content_queue WHERE status='queued' LIMIT 10")
+    manchetes = mem_get("agent:discovery", "manchetes_do_dia", []) or []
+    briefings = 0
+    for pt in pautas:
+        kws = set(extract_keywords(pt["topic"], top=5))
+        correlatas = [m for m in manchetes
+                      if kws & set(extract_keywords(m["title"], top=6))][:4]
+        internos = db.query(
+            """SELECT title, slug FROM contents WHERE status='published'
+               ORDER BY published_at DESC LIMIT 30""")
+        relacionados = [i for i in internos
+                        if kws & set(extract_keywords(i["title"], top=6))][:3]
+        mem_set("agent:research", f"briefing:{pt['id']}", {
+            "topic": pt["topic"], "keywords": sorted(kws),
+            "manchetes_correlatas": correlatas,
+            "artigos_internos": relacionados,
+            "fontes": [m.get("link") for m in correlatas if m.get("link")],
+        })
+        briefings += 1
+    return {"briefings_gerados": briefings,
+            "nota": "Briefing factual (fontes reais coletadas); redação fica com o Content Writer"}
