@@ -1,6 +1,7 @@
 """Conteúdo editorial inicial — publicado automaticamente no primeiro boot
 com banco vazio, para o portal nunca estrear em branco."""
 from .core import database as db
+from .agents.imagegen import editorial_data_uri
 
 ARTIGOS = [
     ("O que são agentes de IA e por que eles importam", "o-que-sao-agentes-de-ia",
@@ -24,9 +25,12 @@ def seed_initial_content() -> int:
         if not db.query_one("SELECT id FROM contents WHERE slug = ?", (slug,)):
             db.execute(
                 """INSERT INTO contents (title, slug, body, excerpt, status,
-                   seo_title, seo_description, category, tags, published_at)
-                   VALUES (?,?,?,?,'published',?,?,?,?,datetime('now'))""",
-                (title, slug, body, excerpt, title, excerpt[:160], cat, tags))
+                   seo_title, seo_description, category, tags, image_url,
+                   image_alt, image_credit, image_width, image_height, published_at)
+                   VALUES (?,?,?,?,'published',?,?,?,?,?,?,?,'1200','630',datetime('now'))""",
+                (title, slug, body, excerpt, title, excerpt[:160], cat, tags,
+                 editorial_data_uri(title, cat), f"Arte editorial AION: {title[:90]}",
+                 "Arte editorial AION"))
             n += 1
     db.execute("INSERT INTO logs (level, source, message) VALUES "
                "('info','bootstrap',?)", (f"Bootstrap publicou {n} artigo(s) inicial(is)",))

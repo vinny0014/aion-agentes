@@ -8,7 +8,7 @@ const BASE = import.meta.env.VITE_API_URL || "";
 type Artigo = {
   id: number; title: string; slug: string; excerpt: string;
   seo_title: string; seo_description: string; published_at: string; body?: string;
-  reading_time?: number; category?: string; tags?: string; image_url?: string; source_url?: string;
+  reading_time?: number; category?: string; tags?: string; image_url?: string; image_alt?: string; source_url?: string;
 };
 
 function Rich({ t }: { t: string }) {
@@ -205,8 +205,9 @@ export function Artigo() {
         </p>
         <h1 className="font-display text-4xl font-bold leading-tight tracking-tight">{artigo.title}</h1>
         {artigo.image_url && (
-          <img src={artigo.image_url} alt={`Imagem oficial: ${artigo.title}`}
-            className="mt-6 w-full rounded-xl border border-line object-cover" fetchPriority="high" />
+          <img src={artigo.image_url} alt={artigo.image_alt || artigo.title}
+            width={1200} height={630} decoding="async" fetchPriority="high"
+            className="mt-6 w-full rounded-xl border border-line object-cover" />
         )}
         {artigo.excerpt && <p className="mt-4 text-lg text-slateui">{artigo.excerpt}</p>}
         <div className="mt-8 space-y-4 leading-relaxed text-ink/90">
@@ -229,7 +230,9 @@ export function Artigo() {
             <h2 className="font-display text-xl font-bold">Leia também</h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               {relacionados.map((r) => (
-                <Link key={r.id} to={`/conteudo/${r.slug}`} className="card card-hover !p-4">
+                <Link key={r.id} to={`/conteudo/${r.slug}`} className="card card-hover !p-3">
+                  {r.image_url && <img src={r.image_url} alt={r.image_alt || r.title} loading="lazy"
+                    className="mb-2 h-24 w-full rounded-md object-cover" />}
                   <p className="tag">{dataBr(r.published_at)}</p>
                   <p className="mt-1 text-sm font-medium leading-snug">{r.title}</p>
                 </Link>

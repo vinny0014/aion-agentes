@@ -483,7 +483,7 @@ def test_new_agents_registered_and_pipeline_23():
              "search-console", "revenue", "dashboard", "performance"}
     assert novos <= slugs
     from app.agents.orchestrator import PIPELINE
-    assert len(PIPELINE) == 27
+    assert len(PIPELINE) == 29
 
 
 def test_public_articles_expose_image_and_source():
@@ -515,12 +515,12 @@ def test_pipeline_order_matches_flow():
     from app.agents.orchestrator import PIPELINE
     ordem = [p[0] for p in PIPELINE]
     fluxo = ["discovery", "research", "trend-hunter", "breaking-news", "content",
-             "fact-check", "seo", "image-prompt", "image-optimization", "publisher",
+             "fact-check", "seo", "image", "image-optimization", "publisher",
              "dashboard", "google-discover", "google-news", "rss", "newsletter",
              "social-media"]
     idx = [ordem.index(e) for e in fluxo]
     assert idx == sorted(idx), f"fluxo fora de ordem: {ordem}"
-    assert len(PIPELINE) == 27
+    assert len(PIPELINE) == 29
 
 
 
@@ -585,3 +585,61 @@ def test_dashboard_executive_fields():
     for k in ("publicados_hoje", "publicados_semana", "publicados_mes",
               "saldo_disponivel_usd", "tempo_medio_agente_ms"):
         assert k in d
+
+
+# ====================== IMAGE AGENT OMEGA ======================
+def test_image_agent_guarantees_image_on_all():
+    from app.agents.team import image_agent
+    from app.core import database as db6
+    db6.execute("UPDATE contents SET image_url='' WHERE id IN "
+                "(SELECT id FROM contents LIMIT 3)")  # simula acervo antigo sem imagem
+    rep = image_agent({})
+    vazios = db6.query("SELECT COUNT(*) n FROM contents WHERE image_url=''")[0]["n"]
+    assert vazios == 0 and rep["corrigidos"] >= 3
+
+
+def test_editorial_art_is_valid_dimensions():
+    from app.agents.imagegen import editorial_data_uri, editorial_svg
+    uri = editorial_data_uri("Um título de teste para arte editorial", "noticias")
+    assert uri.startswith("data:image/svg+xml;base64,")
+    svg = editorial_svg("Um título", "ia")
+    assert 'width="1200"' in svg and 'height="630"' in svg
+
+
+def test_image_repair_agent_idempotent():
+    from app.agents.team import image_repair_agent
+    r1 = image_repair_agent({})
+    assert r1["acervo_completo"] is True
+    r2 = image_repair_agent({})  # nada a reparar na 2ª vez
+    assert r2["vazios_antes"] == 0 and r2["acervo_completo"] is True
+
+
+def test_public_articles_all_have_image():
+    items = client.get("/api/public/articles?per_page=50").json()["items"]
+    assert items and all(i["image_url"] for i in items)
+    assert all("image_alt" in i and "image_width" in i for i in items)
+
+
+def test_fact_check_blocks_ai_article_without_image():
+    from app.core import database as db7
+    from app.agents.team import fact_check_agent
+    from app.agents.core import mem_get
+    db7.execute("""INSERT INTO contents (title, slug, body, excerpt, status, agent_id,
+        category, image_url) VALUES ('IA sem imagem','ia-sem-imagem',?, 'resumo ok',
+        'draft',(SELECT id FROM agents WHERE slug='content'),'noticias','')""",
+        ("palavra " * 600,))
+    fact_check_agent({})
+    bloq = mem_get("agent:fact-check", "bloqueados") or []
+    assert any(b["title"] == "IA sem imagem" and
+               any("sem imagem" in p for p in b["problemas"]) for b in bloq)
+
+
+def test_image_sitemap():
+    r = client.get("/image-sitemap.xml")
+    assert r.status_code == 200 and "sitemap-image" in r.text
+
+
+def test_new_image_agents_registered():
+    ha, _ = auth(ADMIN["email"], ADMIN["password"])
+    slugs = {a["slug"] for a in client.get("/api/agents", headers=ha).json()}
+    assert {"image", "image-repair"} <= slugs

@@ -10,7 +10,7 @@ from ..schemas import ContactIn, EmailIn
 
 router = APIRouter(prefix="/api/public", tags=["public"])
 
-_FIELDS = "id, title, slug, excerpt, seo_title, seo_description, category, tags, image_url, source_url, published_at"
+_FIELDS = "id, title, slug, excerpt, seo_title, seo_description, category, tags, image_url, image_alt, image_credit, image_width, image_height, source_url, published_at"
 
 
 @router.get("/articles")

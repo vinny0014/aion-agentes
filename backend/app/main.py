@@ -122,6 +122,25 @@ def sitemap():
     return Response(content=xml, media_type="application/xml")
 
 
+@app.get("/image-sitemap.xml", tags=["seo"])
+def image_sitemap():
+    """Sitemap de imagens — só URLs http(s) (data-URIs de arte editorial ficam de fora
+    do sitemap, mas renderizam normalmente no site)."""
+    base = "https://aion-agentes.vercel.app"
+    rows = db.query("SELECT slug, image_url, title FROM contents "
+                    "WHERE status='published' AND image_url LIKE 'http%'")
+    urls = "".join(
+        f"<url><loc>{base}/conteudo/{r['slug']}</loc>"
+        f"<image:image><image:loc>{r['image_url']}</image:loc>"
+        f"<image:title>{r['title'][:100].replace('&','&amp;').replace('<','&lt;')}</image:title>"
+        f"</image:image></url>" for r in rows)
+    xml = ('<?xml version="1.0" encoding="UTF-8"?>'
+           '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
+           'xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">'
+           + urls + "</urlset>")
+    return Response(content=xml, media_type="application/xml")
+
+
 @app.get("/rss.xml", tags=["seo"])
 def rss_feed():
     """Feed RSS 2.0 do portal — atualiza sozinho a cada publicação."""

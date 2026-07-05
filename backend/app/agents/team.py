@@ -94,6 +94,8 @@ def fact_check_agent(payload: dict) -> dict:
                 problemas.append("artigo de IA sem categoria")
             if not (c.get("excerpt") or "").strip():
                 problemas.append("artigo de IA sem resumo")
+            if not (c.get("image_url") or "").strip():
+                problemas.append("artigo de IA sem imagem")
         dup = db.query_one(
             "SELECT id FROM contents WHERE title = ? AND id != ? AND status = 'published'",
             (c["title"], c["id"]))
@@ -148,6 +150,38 @@ def seo_agent(payload: dict) -> dict:
 
 
 # ═══════════ 6. IMAGE PROMPT AGENT ═══════════
+def image_agent(payload: dict) -> dict:
+    """REGRA ABSOLUTA: nenhum artigo sem imagem. Usa a oficial (do Discovery,
+    com metadados) ou gera arte editorial SVG determinística (custo zero)."""
+    from .imagegen import editorial_data_uri
+    manchetes = mem_get("agent:discovery", "manchetes_do_dia", []) or []
+    por_titulo = {m["title"]: m for m in manchetes}
+    corrigidos, editoriais, oficiais = 0, 0, 0
+    for c in db.query("SELECT id, title, category, image_url, source_url FROM contents "
+                      "WHERE status IN ('draft','published')"):
+        if c["image_url"]:
+            continue
+        # tenta imagem oficial correlata coletada pelo Discovery
+        oficial = next((m.get("image") for m in manchetes
+                        if m.get("image") and m["title"][:20] in (c["title"] or "")), "")
+        if oficial:
+            db.execute("""UPDATE contents SET image_url=?, image_alt=?, image_credit=?,
+                          image_width='1200', image_height='630' WHERE id=?""",
+                       (oficial, f"Imagem oficial: {c['title'][:90]}",
+                        _fonte_amigavel(c["source_url"]), c["id"]))
+            oficiais += 1
+        else:
+            uri = editorial_data_uri(c["title"], c["category"] or "IA")
+            db.execute("""UPDATE contents SET image_url=?, image_alt=?, image_credit=?,
+                          image_width='1200', image_height='630' WHERE id=?""",
+                       (uri, f"Arte editorial AION: {c['title'][:90]}", "Arte editorial AION", c["id"]))
+            editoriais += 1
+        corrigidos += 1
+    return {"corrigidos": corrigidos, "imagens_oficiais": oficiais,
+            "arte_editorial": editoriais,
+            "garantia": "100% dos artigos com imagem (oficial ou editorial 1200x630)"}
+
+
 def image_prompt_agent(payload: dict) -> dict:
     rows = db.query("SELECT id, slug, title, category, tags FROM contents "
                     "WHERE status = 'published' ORDER BY id DESC LIMIT 20")
@@ -409,6 +443,8 @@ def publisher_agent(payload: dict) -> dict:
     if not manchetes:
         resultado["limitacao"] = ("Sem manchetes coletadas (fontes inacessíveis ou primeiro boot); "
                                   "Radar será criado no próximo ciclo com rede disponível")
+    image_agent({})  # garante imagem em tudo que acabou de ser publicado
+    resultado["imagens_garantidas"] = True
     return resultado
 
 
@@ -488,6 +524,19 @@ def google_discover_agent(payload: dict) -> dict:
 
 
 # ═══════════ IMAGE OPTIMIZATION AGENT ═══════════
+def image_repair_agent(payload: dict) -> dict:
+    """Repara o acervo: encontra artigos com image_url vazio e completa,
+    sem duplicar. Roda no pipeline e é idempotente."""
+    vazios = db.query("SELECT COUNT(*) n FROM contents WHERE image_url=''")[0]["n"]
+    rep = image_agent({})
+    restantes = db.query("SELECT COUNT(*) n FROM contents WHERE image_url=''")[0]["n"]
+    if vazios and not restantes:
+        db.execute("INSERT INTO logs (level, source, message) VALUES ('info','image-repair',?)",
+                   (f"Reparadas {vazios} imagem(ns) ausente(s); acervo 100% com imagem",))
+    return {"vazios_antes": vazios, "reparados": rep["corrigidos"],
+            "vazios_depois": restantes, "acervo_completo": restantes == 0}
+
+
 def image_optimization_agent(payload: dict) -> dict:
     rows = db.query("SELECT id, image_url FROM contents WHERE status='published' AND image_url!=''")
     invalidas = [c["id"] for c in rows
