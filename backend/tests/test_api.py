@@ -552,3 +552,36 @@ def test_fact_check_blocks_short_ai_article():
     assert any("500" in str(b["problemas"]) for b in
                __import__("app.agents.core", fromlist=["mem_get"]).mem_get("agent:fact-check", "bloqueados")
                if b["title"] == "Curto demais IA")
+
+
+# ====================== MODO CEO — plano editorial e saúde ======================
+def test_editorial_plan_daily_mix():
+    from app.agents.team import trend_hunter_agent
+    from app.core import database as db5
+    rep = trend_hunter_agent({})
+    assert "plano_editorial" in rep
+    hoje = {r["template"]: r["n"] for r in db5.query(
+        "SELECT template, COUNT(*) n FROM content_queue "
+        "WHERE date(created_at)=date('now') GROUP BY template")}
+    assert hoje.get("noticia_curta", 0) >= 8 and hoje.get("guia_pratico", 0) >= 2
+    assert hoje.get("comparativo", 0) >= 1 and hoje.get("evergreen", 0) >= 1
+
+
+def test_qa_detects_broken_internal_link():
+    ha, _ = auth(ADMIN["email"], ADMIN["password"])
+    client.post("/api/contents", headers=ha, json={
+        "title": "Com link quebrado", "slug": "com-link-quebrado",
+        "body": "Veja também /conteudo/slug-que-nao-existe neste texto longo o bastante "
+                "para passar nas outras regras do fact check sem problemas adicionais.",
+        "excerpt": "x", "status": "published"})
+    from app.agents.team import qa_agent
+    rep = qa_agent({})
+    assert any("quebrado" in p for p in rep["problemas"])
+
+
+def test_dashboard_executive_fields():
+    from app.agents.team import dashboard_agent
+    d = dashboard_agent({})
+    for k in ("publicados_hoje", "publicados_semana", "publicados_mes",
+              "saldo_disponivel_usd", "tempo_medio_agente_ms"):
+        assert k in d

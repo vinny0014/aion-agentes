@@ -288,8 +288,19 @@ def qa_agent(payload: dict) -> dict:
     dup = db.query("SELECT slug, COUNT(*) c FROM contents GROUP BY slug HAVING c > 1")
     if dup:
         problemas.append(f"slugs duplicados: {dup}")
+    # saúde de indexação: links internos quebrados e imagens ausentes
+    quebrados = 0
+    for c in db.query("SELECT id, body FROM contents WHERE status='published'"):
+        for slug in re.findall(r"/conteudo/([a-z0-9-]+)", c["body"] or ""):
+            if not db.query_one("SELECT 1 x FROM contents WHERE slug=? AND status='published'", (slug,)):
+                quebrados += 1
+    if quebrados:
+        problemas.append(f"{quebrados} link(s) interno(s) quebrado(s)")
+    sem_img = db.query_one("SELECT COUNT(*) n FROM contents WHERE status='published' "
+                           "AND image_url='' AND category != 'guias'")["n"]
     return {"aprovado": not problemas, "problemas": problemas,
-            "cobertura": "23 testes de integração no CI cobrem rotas/auth/CRUD/SEO/pipeline"}
+            "noticias_sem_imagem_oficial": sem_img,
+            "cobertura": "suite completa no CI cobre rotas/auth/CRUD/SEO/pipeline/agentes"}
 
 
 # ═══════════ 14. SECURITY AGENT ═══════════
@@ -428,7 +439,29 @@ def trend_hunter_agent(payload: dict) -> dict:
             db.execute("INSERT INTO content_queue (topic, template) VALUES (?, 'guia_pratico')",
                        (topico,))
             novas += 1
-    return {"tendencias": kws, "pautas_criadas": novas}
+    # Plano editorial diário: garantir mix 8 notícias + 2 guias + 1 comparativo + 1 evergreen
+    hoje = db.query_one("SELECT date('now') AS d")["d"]
+    plano = {"noticia_curta": 8, "guia_pratico": 2, "comparativo": 1, "evergreen": 1}
+    na_fila_hoje = {r["template"]: r["n"] for r in db.query(
+        "SELECT template, COUNT(*) n FROM content_queue "
+        "WHERE date(created_at)=date('now') GROUP BY template")}
+    complementos = 0
+    for template, meta in plano.items():
+        falta = meta - na_fila_hoje.get(template, 0)
+        for i in range(max(0, falta)):
+            base = (kws + ["inteligência artificial"])[i % max(len(kws), 1)]
+            topico = {"noticia_curta": f"Panorama do dia: {base} em destaque",
+                      "guia_pratico": f"Guia AION: como aplicar {base}",
+                      "comparativo": f"Comparativo AION: abordagens de {base} em {hoje[:4]}",
+                      "evergreen": f"Fundamentos: o que é {base} e por que importa"}[template]
+            if not db.query_one("SELECT id FROM content_queue WHERE topic = ?", (topico,)):
+                db.execute("INSERT INTO content_queue (topic, template) VALUES (?,?)",
+                           (topico, template))
+                complementos += 1
+    return {"tendencias": kws, "pautas_criadas": novas,
+            "plano_editorial": {"meta_diaria": "12-20 (8 notícias, 2 guias, 1 comparativo, "
+                                "1 evergreen, 1 Radar)", "complementos_hoje": complementos},
+            "nota": "Volume real depende do Cost Guard e da OPENAI_API_KEY"}
 
 
 # ═══════════ GOOGLE DISCOVER AGENT ═══════════
@@ -477,8 +510,18 @@ def revenue_agent(payload: dict) -> dict:
 
 
 def dashboard_agent(payload: dict) -> dict:
-    from .core import agent_metrics, budget_tier
+    from .core import agent_metrics, budget_tier, budget_remaining
+    pub = lambda d: db.query_one(
+        f"SELECT COUNT(*) n FROM contents WHERE status='published' "
+        f"AND published_at > datetime('now','-{d} days')")["n"]
+    resp = db.query_one("SELECT ROUND(AVG(duration_ms)) ms FROM agent_runs "
+                        "WHERE created_at > datetime('now','-1 day')")["ms"]
     return {"agentes": agent_metrics(), "orcamento": budget_tier(),
+            "publicados_hoje": pub(1), "publicados_semana": pub(7), "publicados_mes": pub(30),
+            "saldo_disponivel_usd": round(budget_remaining(), 4),
+            "tempo_medio_agente_ms": resp,
+            "metricas_externas": "visitantes/CTR/impressões/receita: aguardam GA4, "
+                                 "Search Console e AdSense (jamais estimadas)",
             "publicados": db.query_one("SELECT COUNT(*) n FROM contents WHERE status='published'")["n"],
             "fila": db.query_one("SELECT COUNT(*) n FROM content_queue WHERE status='queued'")["n"],
             "inscritos": db.query_one("SELECT COUNT(*) n FROM subscribers WHERE active=1")["n"],

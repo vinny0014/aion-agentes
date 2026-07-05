@@ -128,6 +128,17 @@ TEMPLATES = {
         "Escreva uma notícia curta (até 300 palavras) sobre: {topic}. "
         "Lead direto, contexto e fecho."
     ),
+    "comparativo": (
+        "Escreva um COMPARATIVO original em pt-BR (800-1500 palavras) sobre: {topic}. "
+        "Estrutura markdown: lead; ## critérios de comparação; ## análise de cada opção; "
+        "## tabela-resumo em texto; ## FAQ (3 perguntas); ## Conclusão com recomendação e CTA. "
+        "Nunca invente números; cite fontes fornecidas no contexto."
+    ),
+    "evergreen": (
+        "Escreva um artigo EVERGREEN atemporal em pt-BR (800-1500 palavras) sobre: {topic}. "
+        "Estrutura: lead; ## conceitos fundamentais; ## como funciona; ## aplicações; "
+        "## FAQ (3 perguntas); ## Conclusão com CTA. Didático, sem referências datadas."
+    ),
     "guia_pratico": (
         "Escreva um guia prático passo a passo sobre: {topic}, com pré-requisitos e dicas."
     ),
