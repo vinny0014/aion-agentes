@@ -35,9 +35,19 @@
       "url": "https://aion-agentes.vercel.app/",
       "description": "Portal de Inteligência Artificial com publicação diária de conteúdo operado por agentes inteligentes.",
       "inLanguage": "pt-BR",
-      "publisher": { "@type": "Organization", "name": "AION AGENTES" }
+      "publisher": { "@type": "Organization", "name": "AION AGENTES", "url": "https://aion-agentes.vercel.app/" },
+      "potentialAction": { "@type": "SearchAction",
+        "target": { "@type": "EntryPoint", "urlTemplate": "https://aion-agentes.vercel.app/conteudos?q={search_term_string}" },
+        "query-input": "required name=search_term_string" }
     }
     </script>
+    <script type="application/ld+json">
+    { "@context": "https://schema.org", "@type": "NewsMediaOrganization",
+      "name": "AION AI NEWS OS", "url": "https://aion-agentes.vercel.app/",
+      "logo": { "@type": "ImageObject", "url": "https://aion-agentes.vercel.app/manifest.json" } }
+    </script>
+    <link rel="alternate" hreflang="pt-BR" href="https://aion-agentes.vercel.app/" />
+    <link rel="alternate" hreflang="x-default" href="https://aion-agentes.vercel.app/" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

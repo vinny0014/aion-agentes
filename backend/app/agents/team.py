@@ -84,8 +84,11 @@ def fact_check_agent(payload: dict) -> dict:
         problemas = []
         if "[Rascunho automático" in (c["body"] or "") or "[Desenvolva" in (c["body"] or ""):
             problemas.append("placeholders de rascunho no corpo")
+        palavras = len((c["body"] or "").split())
         if len(c["body"] or "") < 200:
             problemas.append("corpo muito curto (<200 caracteres)")
+        elif c.get("agent_id") and palavras < 500:
+            problemas.append(f"artigo de IA com só {palavras} palavras (mínimo 500 p/ publicação automática)")
         dup = db.query_one(
             "SELECT id FROM contents WHERE title = ? AND id != ? AND status = 'published'",
             (c["title"], c["id"]))
@@ -178,7 +181,7 @@ def translation_agent(payload: dict) -> dict:
 
 # ═══════════ 8. SOCIAL MEDIA AGENT ═══════════
 def social_media_agent(payload: dict) -> dict:
-    redes = ["x", "linkedin", "facebook", "instagram", "threads", "bluesky", "mastodon"]
+    redes = ["x", "linkedin", "facebook", "instagram", "threads", "bluesky", "mastodon", "pinterest"]
     rows = db.query("SELECT slug, title, excerpt, tags FROM contents "
                     "WHERE status='published' ORDER BY id DESC LIMIT 10")
     gerados = 0
@@ -212,7 +215,11 @@ def newsletter_agent(payload: dict) -> dict:
         edicao = {"assunto": f"AION · {arts[0]['title']}",
                   "materias": arts,
                   "rodape": "Você recebe porque se inscreveu. Cancele quando quiser."}
-        mem_set("agent:newsletter", "ultima_edicao", edicao)
+        mem_set("agent:newsletter", "edicao_diaria", edicao)
+        semanais = db.query("SELECT title, slug, excerpt FROM contents WHERE status='published' "
+                            "AND published_at > datetime('now','-7 days') ORDER BY published_at DESC LIMIT 12")
+        mem_set("agent:newsletter", "edicao_semanal",
+                {"assunto": "AION · Resumo da semana em IA", "materias": semanais})
     return {"inscritos_por_segmento": subs, "edicao_preparada": bool(arts),
             "limitacao": "Envio real requer provedor de e-mail (SMTP/Resend/SES) — pendência humana; "
                          "métricas de abertura só existirão após envios reais"}
@@ -512,3 +519,73 @@ def research_agent(payload: dict) -> dict:
         briefings += 1
     return {"briefings_gerados": briefings,
             "nota": "Briefing factual (fontes reais coletadas); redação fica com o Content Writer"}
+
+
+# ═══════════ RSS / GOOGLE NEWS / MONITOR AGENTS ═══════════
+def rss_agent(payload: dict) -> dict:
+    """Valida o feed RSS do próprio portal (existe, é XML válido, tem itens)."""
+    import xml.etree.ElementTree as ET
+    rows = db.query("SELECT COUNT(*) n FROM contents WHERE status='published'")[0]["n"]
+    from ..main import rss_feed
+    xml = rss_feed().body.decode()
+    try:
+        itens = len(ET.fromstring(xml).findall(".//item"))
+        valido = True
+    except Exception:
+        itens, valido = 0, False
+    return {"xml_valido": valido, "itens_no_feed": itens, "publicados": rows,
+            "endpoint": "/rss.xml"}
+
+
+def google_news_agent(payload: dict) -> dict:
+    """Valida o news-sitemap (48h) e a prontidão para o Publisher Center."""
+    import xml.etree.ElementTree as ET
+    from ..main import news_sitemap
+    xml = news_sitemap().body.decode()
+    try:
+        ns = {"n": "http://www.google.com/schemas/sitemap-news/0.9"}
+        itens = len(ET.fromstring(xml).findall(".//n:news", ns))
+        valido = True
+    except Exception:
+        itens, valido = 0, False
+    return {"news_sitemap_valido": valido, "artigos_48h": itens,
+            "publisher_center": "pendência humana: cadastrar o site e enviar o sitemap"}
+
+
+def monitor_agent(payload: dict) -> dict:
+    """Vigia a saúde: agentes em erro, erros recentes, tamanho do banco."""
+    em_erro = db.query("SELECT slug FROM agents WHERE status='error'")
+    erros = db.query_one("SELECT COUNT(*) n FROM logs WHERE level='error' "
+                         "AND created_at > datetime('now','-6 hours')")["n"]
+    if em_erro:
+        db.execute("INSERT INTO logs (level, source, message) VALUES ('warn','monitor',?)",
+                   (f"Agentes em erro (CEO reinicia no próximo ciclo): "
+                    f"{[a['slug'] for a in em_erro]}",))
+    return {"agentes_em_erro": [a["slug"] for a in em_erro], "erros_6h": erros,
+            "saudavel": not em_erro and erros == 0}
+
+
+# ═══════════ HERO RANKING (breaking + relevância + frescor) ═══════════
+def hero_ranking() -> dict | None:
+    """Score: breaking do dia (+5), radar (+2), imagem oficial (+1),
+    decaimento por idade em horas. Nunca artigo aleatório."""
+    breaking = mem_get("agent:breaking-news", "hero") or {}
+    rows = db.query(
+        """SELECT slug, category, image_url,
+                  (julianday('now') - julianday(published_at)) * 24 AS idade_h
+           FROM contents WHERE status='published'
+           AND published_at > datetime('now','-3 days')""")
+    if not rows:
+        row = db.query_one("SELECT slug FROM contents WHERE status='published' "
+                           "ORDER BY published_at DESC LIMIT 1")
+        return {"slug": row["slug"], "score": 0} if row else None
+    melhor, melhor_score = None, -1e9
+    for r in rows:
+        score = 0.0
+        if r["slug"] == breaking.get("slug"): score += 5
+        if r["category"] == "radar": score += 2
+        if r["image_url"]: score += 1
+        score -= (r["idade_h"] or 0) / 12.0  # frescor
+        if score > melhor_score:
+            melhor, melhor_score = r["slug"], score
+    return {"slug": melhor, "score": round(melhor_score, 2)}

@@ -68,6 +68,10 @@ AGENT_DEFINITIONS = [
      "Audita code splitting, cache, imagens e metas de Core Web Vitals."),
     ("publisher", "Publisher Agent", "publicacao",
      "Publica o Radar IA diário (curadoria original com atribuição) e artigos aprovados."),
+    ("rss", "RSS Agent", "feeds",
+     "Valida e mantém o feed RSS 2.0 do portal."),
+    ("google-news", "Google News Agent", "google-news",
+     "Valida o news-sitemap e a prontidão para o Publisher Center."),
     ("scheduler", "Scheduler Agent", "automacao",
      "Agenda pipelines, evita concorrência e impede loops."),
     ("discovery-growth", "Discovery Growth Agent", "crescimento",
@@ -113,9 +117,12 @@ def resolve_provider(requested: str) -> str:
 
 TEMPLATES = {
     "artigo_padrao": (
-        "Escreva um artigo em português para o portal AION AGENTES sobre: {topic}. "
-        "Estrutura: título, introdução, 3 seções com subtítulos, conclusão. "
-        "Tom informativo e acessível."
+        "Escreva um artigo ORIGINAL em português (pt-BR) para o portal AION sobre: {topic}. "
+        "Entre 800 e 1500 palavras. Estrutura obrigatória em markdown: "
+        "lead de 2 frases; ## subtítulos para 3-4 seções de desenvolvimento; "
+        "## FAQ com 3 perguntas e respostas; ## Conclusão com CTA de leitura. "
+        "Cite as fontes com links markdown quando fornecidas no contexto. "
+        "Nunca copie texto de terceiros; nunca use lorem ipsum ou placeholders."
     ),
     "noticia_curta": (
         "Escreva uma notícia curta (até 300 palavras) sobre: {topic}. "

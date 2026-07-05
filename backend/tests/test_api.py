@@ -483,7 +483,7 @@ def test_new_agents_registered_and_pipeline_23():
              "search-console", "revenue", "dashboard", "performance"}
     assert novos <= slugs
     from app.agents.orchestrator import PIPELINE
-    assert len(PIPELINE) == 24
+    assert len(PIPELINE) == 27
 
 
 def test_public_articles_expose_image_and_source():
@@ -514,9 +514,41 @@ def test_rss_feed():
 def test_pipeline_order_matches_flow():
     from app.agents.orchestrator import PIPELINE
     ordem = [p[0] for p in PIPELINE]
-    fluxo = ["discovery", "breaking-news", "research", "content", "fact-check",
-             "seo", "image-prompt", "publisher", "dashboard", "google-discover",
-             "newsletter", "social-media"]
+    fluxo = ["discovery", "research", "trend-hunter", "breaking-news", "content",
+             "fact-check", "seo", "image-prompt", "image-optimization", "publisher",
+             "dashboard", "google-discover", "google-news", "rss", "newsletter",
+             "social-media"]
     idx = [ordem.index(e) for e in fluxo]
     assert idx == sorted(idx), f"fluxo fora de ordem: {ordem}"
-    assert len(PIPELINE) == 24
+    assert len(PIPELINE) == 27
+
+
+
+# ====================== OMEGA FINAL ======================
+def test_hero_ranking_never_random():
+    from app.agents.team import hero_ranking
+    r = hero_ranking()
+    assert r and r["slug"]  # sempre determinístico, com score
+    h = client.get("/api/public/hero").json()
+    assert "hero_score" in h
+
+
+def test_rss_googlenews_monitor_agents():
+    from app.agents.team import rss_agent, google_news_agent, monitor_agent
+    assert rss_agent({})["xml_valido"] is True
+    assert google_news_agent({})["news_sitemap_valido"] is True
+    m = monitor_agent({})
+    assert "agentes_em_erro" in m and "erros_6h" in m
+
+
+def test_fact_check_blocks_short_ai_article():
+    from app.core import database as db4
+    from app.agents.team import fact_check_agent
+    db4.execute("""INSERT INTO contents (title, slug, body, excerpt, status, agent_id)
+        VALUES ('Curto demais IA', 'curto-demais-ia', ?, 'x', 'draft',
+        (SELECT id FROM agents WHERE slug='content'))""",
+        ("palavra " * 100,))  # 100 palavras < 500
+    rep = fact_check_agent({})
+    assert any("500" in str(b["problemas"]) for b in
+               __import__("app.agents.core", fromlist=["mem_get"]).mem_get("agent:fact-check", "bloqueados")
+               if b["title"] == "Curto demais IA")

@@ -272,6 +272,7 @@ export default function Landing() {
         </div>
       </main>
 
+      <div className="mx-auto max-w-6xl px-6"><AdSlot slot="aion-footer" className="mb-6" /></div>
       <footer className="border-t border-line">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-8 text-sm text-slateui">
           <span className="flex items-center gap-2 font-display font-bold text-ink">

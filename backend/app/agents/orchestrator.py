@@ -8,11 +8,10 @@ from . import team
 from .core import budget_remaining, mem_get, mem_set, run_agent
 
 PIPELINE = [
-    ("cost-guard", team.cost_guard_agent, False),
     ("discovery", team.discovery_agent, False),
-    ("breaking-news", team.breaking_news_agent, False),
-    ("trend-hunter", team.trend_hunter_agent, False),
     ("research", team.research_agent, False),
+    ("trend-hunter", team.trend_hunter_agent, False),
+    ("breaking-news", team.breaking_news_agent, False),
     ("content", team.content_writer_agent, True),
     ("fact-check", team.fact_check_agent, False),
     ("seo", team.seo_agent, False),
@@ -21,6 +20,8 @@ PIPELINE = [
     ("publisher", team.publisher_agent, False),
     ("dashboard", team.dashboard_agent, False),
     ("google-discover", team.google_discover_agent, False),
+    ("google-news", team.google_news_agent, False),
+    ("rss", team.rss_agent, False),
     ("newsletter", team.newsletter_agent, False),
     ("social-media", team.social_media_agent, False),
     ("translation", team.translation_agent, True),
@@ -29,9 +30,11 @@ PIPELINE = [
     ("search-console", team.search_console_agent, False),
     ("adsense-opt", team.adsense_agent, False),
     ("revenue", team.revenue_agent, False),
+    ("cost-guard", team.cost_guard_agent, False),
     ("performance", team.performance_agent, False),
     ("qa", team.qa_agent, False),
     ("security", team.security_agent, False),
+    ("monitor", team.monitor_agent, False),
 ]
 
 MAX_CYCLES_PER_HOUR = 4  # guarda anti-loop

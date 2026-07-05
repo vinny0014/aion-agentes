@@ -60,13 +60,16 @@ def get_related(slug: str, limit: int = 3):
 def get_hero():
     """Matéria do hero: Breaking News se houver, senão a mais recente."""
     from ..agents.core import mem_get
+    from ..agents.team import hero_ranking
     breaking = mem_get("agent:breaking-news", "hero") or {}
-    if breaking.get("slug"):
+    rank = hero_ranking()
+    if rank:
         row = db.query_one(
             f"SELECT {_FIELDS} FROM contents WHERE slug=? AND status='published'",
-            (breaking["slug"],))
+            (rank["slug"],))
         if row:
-            row["breaking"] = True
+            row["breaking"] = rank["slug"] == breaking.get("slug")
+            row["hero_score"] = rank["score"]
             return row
     row = db.query_one(
         f"SELECT {_FIELDS} FROM contents WHERE status='published' "
