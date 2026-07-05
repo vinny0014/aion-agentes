@@ -198,9 +198,10 @@ export function Artigo() {
       <Nav />
       <article className="mx-auto max-w-3xl px-6 py-14">
         <p className="tag mb-2">
-          {dataBr(artigo.published_at)}
+          Por Equipe AION · {dataBr(artigo.published_at)}
           {artigo.reading_time ? <> · {artigo.reading_time} min de leitura</> : null}
           {artigo.category ? <> · {artigo.category}</> : null}
+          {artigo.source_url ? <> · <a className="text-signal hover:underline" href={artigo.source_url} target="_blank" rel="noopener nofollow">fonte</a></> : null}
         </p>
         <h1 className="font-display text-4xl font-bold leading-tight tracking-tight">{artigo.title}</h1>
         {artigo.image_url && (

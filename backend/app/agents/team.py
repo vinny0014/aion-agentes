@@ -89,6 +89,11 @@ def fact_check_agent(payload: dict) -> dict:
             problemas.append("corpo muito curto (<200 caracteres)")
         elif c.get("agent_id") and palavras < 500:
             problemas.append(f"artigo de IA com só {palavras} palavras (mínimo 500 p/ publicação automática)")
+        if c.get("agent_id"):
+            if not (c.get("category") or "").strip():
+                problemas.append("artigo de IA sem categoria")
+            if not (c.get("excerpt") or "").strip():
+                problemas.append("artigo de IA sem resumo")
         dup = db.query_one(
             "SELECT id FROM contents WHERE title = ? AND id != ? AND status = 'published'",
             (c["title"], c["id"]))

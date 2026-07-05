@@ -153,14 +153,24 @@ def _unique_slug(base: str) -> str:
     return slug
 
 
+_TEMPLATE_CATEGORIA = {"noticia_curta": "noticias", "artigo_padrao": "noticias",
+                        "guia_pratico": "guias", "comparativo": "comparativos",
+                        "evergreen": "fundamentos"}
+
+
 def _save_draft(item: dict, title: str, slug: str, body: str, excerpt: str,
                 status: str = "draft") -> int:
+    from .core import mem_get as _mg
+    brief = _mg("agent:research", f"briefing:{item['id']}") or {}
+    tags = ",".join((brief.get("keywords") or ["ia"])[:5])
+    categoria = _TEMPLATE_CATEGORIA.get(item.get("template", ""), "noticias")
     cid = db.execute(
         """INSERT INTO contents (title, slug, body, excerpt, status, agent_id,
-           seo_title, seo_description)
+           seo_title, seo_description, category, tags)
            VALUES (?,?,?,?,?,
-                   (SELECT id FROM agents WHERE slug = 'content'), ?, ?)""",
-        (title, _unique_slug(slug), body, excerpt, status, title, excerpt[:160]),
+                   (SELECT id FROM agents WHERE slug = 'content'), ?, ?, ?, ?)""",
+        (title, _unique_slug(slug), body, excerpt, status, title, excerpt[:160],
+         categoria, tags),
     )
     db.execute(
         "UPDATE content_queue SET status = 'done', result_content_id = ? WHERE id = ?",
