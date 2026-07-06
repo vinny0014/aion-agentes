@@ -18,14 +18,17 @@ from .registry import process_queue_once, resolve_provider, ProviderNotConfigure
 
 # Fontes padrão do Discovery (RSS/Atom oficiais) — configuráveis via memória
 DEFAULT_SOURCES = [
+    # Feeds com resumo (description/summary) redistribuível — base da síntese
+    "https://techcrunch.com/category/artificial-intelligence/feed/",
+    "https://venturebeat.com/category/ai/feed/",
+    "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
+    "https://www.wired.com/feed/tag/ai/latest/rss",
+    "https://export.arxiv.org/rss/cs.AI",
+    "https://huggingface.co/blog/feed.xml",
+    "https://blogs.nvidia.com/feed/",
+    "https://www.anthropic.com/rss.xml",
     "https://openai.com/news/rss.xml",
     "https://blog.google/technology/ai/rss/",
-    "https://www.anthropic.com/rss.xml",
-    "https://huggingface.co/blog/feed.xml",
-    "https://blogs.microsoft.com/ai/feed/",
-    "https://blogs.nvidia.com/feed/",
-    "https://export.arxiv.org/rss/cs.AI",
-    "https://github.com/trending",  # HTML, tratado à parte
 ]
 
 
@@ -46,9 +49,12 @@ def discovery_agent(payload: dict) -> dict:
                 titulo = re.sub(r"<[^>]+>", "", t.group(1)).strip()
                 link = (l.group(1) or l.group(2) or "").strip() if l else ""
                 img = re.search(r'<(?:enclosure|media:content|media:thumbnail)[^>]*url="([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"', item)
+                desc_m = re.search(r"<(?:description|summary)[^>]*>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</(?:description|summary)>", item, re.S)
+                desc = re.sub(r"<[^>]+>", " ", desc_m.group(1)).strip() if desc_m else ""
+                desc = re.sub(r"\s+", " ", desc)[:600]
                 if titulo:
                     found.append({"source": url, "title": titulo, "link": link,
-                                  "image": img.group(1) if img else ""})
+                                  "image": img.group(1) if img else "", "resumo": desc})
         except Exception as exc:
             errors.append({"source": url, "erro": f"{type(exc).__name__}"})
     novos = 0
@@ -429,6 +435,40 @@ def publisher_agent(payload: dict) -> dict:
         if quentes:
             mem_set("agent:breaking-news", "hero",
                     {"slug": slug_hoje, "motivo": quentes[0]["title"][:120]})
+
+    # --- Notícias sintetizadas (custo zero, sem IA): 1 artigo por cluster de manchetes ---
+    from .synthesizer import cluster_manchetes, sintetizar
+    from .imagegen import editorial_data_uri
+    sintetizadas = 0
+    grupos = cluster_manchetes([m for m in manchetes if m.get("resumo")])
+    for grupo in grupos[:6]:  # até 6 notícias por ciclo
+        art = sintetizar(grupo)
+        if not art:
+            continue
+        # já publicado este tema hoje? (por título — rascunhos do Content Writer
+        # podem ter o mesmo slug e não devem bloquear a publicação da síntese)
+        if db.query_one("SELECT id FROM contents WHERE title = ? AND status='published'",
+                        (art["title"][:200],)):
+            continue
+        base_slug, k = art["slug"], 2
+        while db.query_one("SELECT id FROM contents WHERE slug = ?", (art["slug"],)):
+            art["slug"] = f"{base_slug}-{k}"; k += 1
+        img = art["image"] or editorial_data_uri(art["title"], "noticias")
+        credit = _fonte_amigavel(art["source_url"]) if art["image"] else "Arte editorial AION"
+        alt = (f"Imagem: {art['title'][:80]}" if art["image"]
+               else f"Arte editorial AION: {art['title'][:80]}")
+        db.execute(
+            """INSERT INTO contents (title, slug, body, excerpt, status, agent_id,
+               seo_title, seo_description, category, tags, image_url, image_alt,
+               image_credit, image_width, image_height, source_url, published_at)
+               VALUES (?,?,?,?, 'published',
+                       (SELECT id FROM agents WHERE slug='content'), ?, ?, 'noticias',
+                       ?, ?, ?, ?, '1200', '630', ?, datetime('now'))""",
+            (art["title"], art["slug"], art["body"], art["excerpt"],
+             art["title"][:60], art["excerpt"][:160], art["tags"], img, alt,
+             credit, art["source_url"]))
+        sintetizadas += 1
+    resultado["noticias_sintetizadas"] = sintetizadas
 
     # --- Auto-publicação de artigos IA aprovados ---
     bloqueados = {b["id"] for b in (mem_get("agent:fact-check", "bloqueados", []) or [])}

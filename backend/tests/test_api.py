@@ -643,3 +643,65 @@ def test_new_image_agents_registered():
     ha, _ = auth(ADMIN["email"], ADMIN["password"])
     slugs = {a["slug"] for a in client.get("/api/agents", headers=ha).json()}
     assert {"image", "image-repair"} <= slugs
+
+
+# ====================== CONTENT SYNTHESIZER (custo zero) ======================
+def test_synthesizer_creates_original_news():
+    from app.agents.synthesizer import sintetizar
+    grupo = [
+        {"title": "Laboratório apresenta modelo aberto de raciocínio",
+         "link": "https://techcrunch.com/x", "source": "https://techcrunch.com/feed",
+         "resumo": "O novo modelo foi lançado nesta semana com foco em raciocínio matemático. "
+                   "A empresa afirma que ele supera versões anteriores em testes padronizados. "
+                   "Os pesos serão disponibilizados publicamente para pesquisadores."},
+        {"title": "Modelo aberto de raciocínio chega ao mercado",
+         "link": "https://venturebeat.com/y", "source": "https://venturebeat.com/feed",
+         "resumo": "Segundo a empresa, a arquitetura reduz custo de inferência pela metade. "
+                   "Desenvolvedores já podem baixar os pesos sob licença permissiva."},
+    ]
+    art = sintetizar(grupo)
+    assert art and art["fontes"] == 2
+    assert "techcrunch" in art["body"] and "venturebeat" in art["body"].lower() or "Venturebeat" in art["body"]
+    assert "## Fontes" in art["body"] and "## O que se sabe" in art["body"]
+    assert "leia na fonte" in art["body"].lower()
+    # não é cópia literal de uma única fonte: combina blocos atribuídos
+    assert art["body"].count("Segundo a") >= 2
+
+
+def test_synthesizer_clusters_related():
+    from app.agents.synthesizer import cluster_manchetes
+    manchetes = [
+        {"title": "OpenAI lança novo modelo de linguagem"},
+        {"title": "Novo modelo de linguagem da OpenAI é anunciado"},
+        {"title": "NVIDIA apresenta chip para data centers"},
+    ]
+    grupos = cluster_manchetes(manchetes)
+    assert any(len(g) == 2 for g in grupos)  # os dois de OpenAI juntos
+
+
+def test_synthesizer_requires_source_summary():
+    from app.agents.synthesizer import sintetizar
+    # sem 'resumo' não sintetiza (não inventa conteúdo)
+    assert sintetizar([{"title": "Só título", "link": "https://x.org", "resumo": ""}]) is None
+
+
+def test_publisher_synthesizes_from_feeds():
+    from app.agents.core import mem_set
+    from app.agents.team import publisher_agent
+    from app.core import database as db8
+    mem_set("agent:discovery", "manchetes_do_dia", [
+        {"title": "Empresa lança ferramenta de IA para código",
+         "link": "https://techcrunch.com/a", "image": "",
+         "resumo": "A ferramenta promete acelerar revisões de código em equipes. "
+                   "O recurso está disponível em prévia para usuários selecionados. "
+                   "A companhia pretende expandir o acesso nos próximos meses."},
+        {"title": "Nova ferramenta de IA para código é lançada",
+         "link": "https://venturebeat.com/b", "image": "",
+         "resumo": "Integração com editores populares foi confirmada. "
+                   "Planos gratuitos e pagos estarão disponíveis."},
+    ])
+    rep = publisher_agent({})
+    assert rep.get("noticias_sintetizadas", 0) >= 1
+    art = db8.query_one("SELECT * FROM contents WHERE category='noticias' "
+                        "AND status='published' ORDER BY id DESC LIMIT 1")
+    assert art and art["image_url"] and art["source_url"]  # imagem garantida + atribuição
