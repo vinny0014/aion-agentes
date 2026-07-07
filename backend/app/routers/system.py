@@ -154,6 +154,13 @@ def orchestrator_runs(limit: int = 50, agent: str | None = None,
     return db.query("SELECT * FROM agent_runs ORDER BY id DESC LIMIT ?", (limit,))
 
 
+@orchestrator_router.get("/health/google")
+def google_health(user: dict = Depends(require_admin)):
+    """Diagnóstico de prontidão Google: indexáveis, problemas e scores internos."""
+    from ..agents.team import google_health_report
+    return google_health_report()
+
+
 @orchestrator_router.get("/metrics")
 def orchestrator_metrics(user: dict = Depends(require_admin)):
     from ..agents.core import agent_metrics, budget_remaining

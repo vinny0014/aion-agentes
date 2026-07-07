@@ -614,6 +614,7 @@ def dashboard_agent(payload: dict) -> dict:
             "publicados_hoje": pub(1), "publicados_semana": pub(7), "publicados_mes": pub(30),
             "saldo_disponivel_usd": round(budget_remaining(), 4),
             "tempo_medio_agente_ms": resp,
+            "scores": google_health_report()["scores_conformidade_interna"],
             "metricas_externas": "visitantes/CTR/impressões/receita: aguardam GA4, "
                                  "Search Console e AdSense (jamais estimadas)",
             "publicados": db.query_one("SELECT COUNT(*) n FROM contents WHERE status='published'")["n"],
@@ -726,3 +727,38 @@ def hero_ranking() -> dict | None:
         if score > melhor_score:
             melhor, melhor_score = r["slug"], score
     return {"slug": melhor, "score": round(melhor_score, 2)}
+
+
+# ═══════════ DIAGNÓSTICO GOOGLE (/health/google) ═══════════
+def google_health_report() -> dict:
+    """Diagnóstico interno de prontidão para Google Search/Discover/News.
+    Scores são CONFORMIDADE INTERNA (0-100), não métricas reais do Google."""
+    pub = db.query("SELECT id, slug, title, body, excerpt, category, tags, image_url, "
+                   "seo_title, seo_description FROM contents WHERE status='published'")
+    total = len(pub) or 1
+    sem_imagem = [c["slug"] for c in pub if not c["image_url"]]
+    sem_seo = [c["slug"] for c in pub if not (c["seo_title"] and c["seo_description"])]
+    sem_taxonomia = [c["slug"] for c in pub if not (c["category"] and c["tags"])]
+    links_quebrados = []
+    for c in pub:
+        for slug in re.findall(r"/conteudo/([a-z0-9-]+)", c["body"] or ""):
+            if not db.query_one("SELECT 1 x FROM contents WHERE slug=? AND status='published'", (slug,)):
+                links_quebrados.append({"em": c["slug"], "para": slug})
+    dups = db.query("SELECT slug, COUNT(*) c FROM contents GROUP BY slug HAVING c>1")
+    seo_score = round(100 * (1 - (len(sem_seo) + len(sem_taxonomia)) / (2 * total)))
+    discover_score = round(100 * (1 - len(sem_imagem) / total))
+    health = round(100 * (1 - (len(links_quebrados) + len(dups)) / max(total, 1)))
+    return {
+        "paginas_indexaveis": {"artigos": total, "fixas": 8,
+                               "sitemaps": ["/sitemap.xml", "/news-sitemap.xml",
+                                            "/image-sitemap.xml", "/rss.xml"]},
+        "problemas": {"artigos_sem_imagem": sem_imagem, "sem_seo_completo": sem_seo,
+                      "sem_categoria_ou_tags": sem_taxonomia,
+                      "links_internos_quebrados": links_quebrados,
+                      "slugs_duplicados": [d["slug"] for d in dups]},
+        "scores_conformidade_interna": {"seo": min(seo_score, 100),
+                                        "discover": min(discover_score, 100),
+                                        "health": max(min(health, 100), 0)},
+        "aviso": "Scores medem conformidade interna do acervo; impressões/CTR/indexação "
+                 "reais só existem no Search Console (credencial humana)",
+    }

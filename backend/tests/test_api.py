@@ -705,3 +705,17 @@ def test_publisher_synthesizes_from_feeds():
     art = db8.query_one("SELECT * FROM contents WHERE category='noticias' "
                         "AND status='published' ORDER BY id DESC LIMIT 1")
     assert art and art["image_url"] and art["source_url"]  # imagem garantida + atribuição
+
+
+# ====================== /health/google + SCORES ======================
+def test_google_health_endpoint_and_scores():
+    ha, _ = auth(ADMIN["email"], ADMIN["password"])
+    assert client.get("/api/orchestrator/health/google").status_code == 401
+    r = client.get("/api/orchestrator/health/google", headers=ha)
+    assert r.status_code == 200
+    body = r.json()
+    s = body["scores_conformidade_interna"]
+    assert all(0 <= s[k] <= 100 for k in ("seo", "discover", "health"))
+    assert "aviso" in body  # honestidade: scores internos, não métricas do Google
+    from app.agents.team import dashboard_agent
+    assert "scores" in dashboard_agent({})
