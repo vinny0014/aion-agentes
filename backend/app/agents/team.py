@@ -157,36 +157,102 @@ def seo_agent(payload: dict) -> dict:
 
 
 # ═══════════ 6. IMAGE PROMPT AGENT ═══════════
+def _og_image(page_url: str) -> str:
+    """Extrai og:image / twitter:image da página da fonte (produção; falha graciosa)."""
+    if not page_url or not page_url.startswith("http"):
+        return ""
+    try:
+        r = httpx.get(page_url, timeout=8, follow_redirects=True,
+                      headers={"User-Agent": "AION-ImageAgent/1.0"})
+        m = (re.search(r'property=["\']og:image["\'][^>]*content=["\']([^"\']+)', r.text)
+             or re.search(r'content=["\']([^"\']+)["\'][^>]*property=["\']og:image', r.text)
+             or re.search(r'name=["\']twitter:image["\'][^>]*content=["\']([^"\']+)', r.text))
+        url = (m.group(1) if m else "").strip()
+        return url if url.startswith("http") else ""
+    except Exception:
+        return ""
+
+
+def _needs_image(c, provider_on: bool) -> bool:
+    if not c["image_url"]:
+        return True
+    # capa SVG genérica é substituída por foto quando há provedor
+    return provider_on and c["image_url"].startswith("data:image/svg")
+
+
 def image_agent(payload: dict) -> dict:
-    """REGRA ABSOLUTA: nenhum artigo sem imagem. Usa a oficial (do Discovery,
-    com metadados) ou gera arte editorial SVG determinística (custo zero)."""
-    from .imagegen import editorial_data_uri
+    """IMAGE AGENT PRO — REGRA ABSOLUTA: nenhum artigo sem imagem boa.
+    Cadeia: (1) imagem do feed → (2) og:image da fonte → (3) foto do provedor
+    (Pollinations grátis / Gemini via ENV) → (4) arte editorial SVG (último recurso).
+    Alimenta e processa a image_queue; atualiza url/alt/credit/width/height."""
+    from .imagegen import editorial_data_uri, provider_photo_url
     manchetes = mem_get("agent:discovery", "manchetes_do_dia", []) or []
-    por_titulo = {m["title"]: m for m in manchetes}
-    corrigidos, editoriais, oficiais = 0, 0, 0
-    for c in db.query("SELECT id, title, category, image_url, source_url FROM contents "
-                      "WHERE status IN ('draft','published')"):
-        if c["image_url"]:
-            continue
-        # tenta imagem oficial correlata coletada pelo Discovery
+    provider_on = provider_photo_url("probe", "") is not None
+    stats = {"feed": 0, "og_image": 0, "foto_provedor": 0, "arte_editorial": 0}
+
+    # 1) enfileirar quem precisa
+    for c in db.query("SELECT id, image_url FROM contents WHERE status IN ('draft','published')"):
+        if _needs_image(c, provider_on) and not db.query_one(
+                "SELECT id FROM image_queue WHERE content_id=? AND status='queued'", (c["id"],)):
+            db.execute("INSERT INTO image_queue (content_id) VALUES (?)", (c["id"],))
+
+    # 2) processar a fila
+    fila = db.query("SELECT q.id qid, c.* FROM image_queue q JOIN contents c ON c.id=q.content_id "
+                    "WHERE q.status='queued' LIMIT 40")
+    for c in fila:
+        img = alt = credit = ""
         oficial = next((m.get("image") for m in manchetes
                         if m.get("image") and m["title"][:20] in (c["title"] or "")), "")
         if oficial:
-            db.execute("""UPDATE contents SET image_url=?, image_alt=?, image_credit=?,
-                          image_width='1200', image_height='630' WHERE id=?""",
-                       (oficial, f"Official image: {c['title'][:90]}",
-                        _fonte_amigavel(c["source_url"]), c["id"]))
-            oficiais += 1
-        else:
-            uri = editorial_data_uri(c["title"], c["category"] or "IA")
-            db.execute("""UPDATE contents SET image_url=?, image_alt=?, image_credit=?,
-                          image_width='1200', image_height='630' WHERE id=?""",
-                       (uri, f"AION editorial artwork: {c['title'][:90]}", "AION editorial artwork", c["id"]))
-            editoriais += 1
-        corrigidos += 1
-    return {"corrigidos": corrigidos, "imagens_oficiais": oficiais,
-            "arte_editorial": editoriais,
-            "garantia": "100% dos artigos com imagem (oficial ou editorial 1200x630)"}
+            img, credit = oficial, _fonte_amigavel(c["source_url"])
+            alt = f"Official image: {c['title'][:90]}"; stats["feed"] += 1
+        if not img and c["source_url"]:
+            og = _og_image(c["source_url"])
+            if og:
+                img, credit = og, _fonte_amigavel(c["source_url"])
+                alt = f"Official image: {c['title'][:90]}"; stats["og_image"] += 1
+        if not img and provider_on:
+            prov = provider_photo_url(c["title"], c["tags"] or "")
+            if prov:
+                img, credit = prov
+                alt = f"Editorial photo: {c['title'][:90]}"; stats["foto_provedor"] += 1
+        if not img:
+            img = editorial_data_uri(c["title"], c["category"] or "news")
+            credit, alt = "AION editorial artwork", f"AION editorial artwork: {c['title'][:90]}"
+            stats["arte_editorial"] += 1
+        db.execute("""UPDATE contents SET image_url=?, image_alt=?, image_credit=?,
+                      image_width='1200', image_height='630' WHERE id=?""",
+                   (img, alt, credit, c["id"]))
+        db.execute("UPDATE image_queue SET status='done', attempts=attempts+1, note=? WHERE id=?",
+                   (alt[:60], c["qid"]))
+    restantes = db.query_one("SELECT COUNT(*) n FROM contents WHERE image_url=''")["n"]
+    return {"processados": len(fila), **stats, "sem_imagem_restantes": restantes,
+            "provedor_ativo": provider_on,
+            "garantia": "cadeia feed→og:image→foto→arte; image_url nunca fica vazio"}
+
+
+def image_quality_agent(payload: dict) -> dict:
+    """Quality Check: bloqueia vazio/formatos inválidos; conta capas genéricas
+    (SVG) e as re-enfileira para virar foto quando houver provedor."""
+    from .imagegen import provider_photo_url
+    provider_on = provider_photo_url("probe", "") is not None
+    vazios = db.query("SELECT id FROM contents WHERE status='published' AND image_url=''")
+    invalidos = db.query("SELECT id FROM contents WHERE status='published' "
+                         "AND image_url NOT LIKE 'http%' AND image_url NOT LIKE 'data:image/%' "
+                         "AND image_url != ''")
+    genericos = db.query("SELECT id FROM contents WHERE status='published' "
+                         "AND image_url LIKE 'data:image/svg%'")
+    reenfileirados = 0
+    for c in (vazios + invalidos + (genericos if provider_on else [])):
+        if not db.query_one("SELECT id FROM image_queue WHERE content_id=? AND status='queued'",
+                            (c["id"],)):
+            db.execute("INSERT INTO image_queue (content_id) VALUES (?)", (c["id"],))
+            reenfileirados += 1
+    return {"vazios": len(vazios), "formatos_invalidos": len(invalidos),
+            "capas_genericas_svg": len(genericos), "reenfileirados": reenfileirados,
+            "aprovado": not vazios and not invalidos,
+            "limitacao": "Detecção de texto embutido em fotos exigiria OCR; nossas artes "
+                         "geradas não contêm título desde a v6.1"}
 
 
 def image_prompt_agent(payload: dict) -> dict:
@@ -584,14 +650,14 @@ def image_repair_agent(payload: dict) -> dict:
     if vazios and not restantes:
         db.execute("INSERT INTO logs (level, source, message) VALUES ('info','image-repair',?)",
                    (f"Reparadas {vazios} imagem(ns) ausente(s); acervo 100% com imagem",))
-    return {"vazios_antes": vazios, "reparados": rep["corrigidos"],
+    return {"vazios_antes": vazios, "reparados": rep["processados"],
             "vazios_depois": restantes, "acervo_completo": restantes == 0}
 
 
 def image_optimization_agent(payload: dict) -> dict:
     rows = db.query("SELECT id, image_url FROM contents WHERE status='published' AND image_url!=''")
     invalidas = [c["id"] for c in rows
-                 if not re.match(r"^https://[^\s]+\.(jpg|jpeg|png|webp)", c["image_url"], re.I)]
+                 if not c["image_url"].startswith(("https://", "data:image/"))]
     for cid in invalidas:
         db.execute("UPDATE contents SET image_url='' WHERE id = ?", (cid,))
     return {"com_imagem_oficial": len(rows) - len(invalidas),

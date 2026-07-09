@@ -36,6 +36,8 @@ AGENT_DEFINITIONS = [
      "Verifica placeholders, duplicidade, links internos e bloqueia publicação com problemas."),
     ("image", "Image Agent", "imagens",
      "Garante imagem em todo artigo: oficial (com metadados) ou arte editorial 1200x630."),
+    ("image-quality", "Image Quality Check", "qualidade-imagens",
+     "Bloqueia vazio/invalido e re-enfileira capas genericas para virar foto."),
     ("image-repair", "Image Repair Agent", "reparo-imagens",
      "Varre o acervo e completa qualquer image_url vazio, sem duplicar."),
     ("image-prompt", "Image Prompt Agent", "imagens",

@@ -118,6 +118,14 @@ CREATE TABLE IF NOT EXISTS agent_runs (
     cost REAL NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS image_queue (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    content_id INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'queued',   -- queued | done | failed
+    attempts INTEGER NOT NULL DEFAULT 0,
+    note TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE TABLE IF NOT EXISTS subscribers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT UNIQUE NOT NULL,

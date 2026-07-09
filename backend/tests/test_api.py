@@ -4,6 +4,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ["DATABASE_URL"] = "sqlite:///./test_aion.db"
+os.environ.setdefault("IMAGE_PROVIDER", "none")
 os.environ["SECRET_KEY"] = "test-secret-key-not-for-production"
 os.environ["ENV"] = "test"
 
@@ -483,7 +484,7 @@ def test_new_agents_registered_and_pipeline_23():
              "search-console", "revenue", "dashboard", "performance"}
     assert novos <= slugs
     from app.agents.orchestrator import PIPELINE
-    assert len(PIPELINE) == 29
+    assert len(PIPELINE) == 30
 
 
 def test_public_articles_expose_image_and_source():
@@ -520,7 +521,7 @@ def test_pipeline_order_matches_flow():
              "social-media"]
     idx = [ordem.index(e) for e in fluxo]
     assert idx == sorted(idx), f"fluxo fora de ordem: {ordem}"
-    assert len(PIPELINE) == 29
+    assert len(PIPELINE) == 30
 
 
 
@@ -595,7 +596,7 @@ def test_image_agent_guarantees_image_on_all():
                 "(SELECT id FROM contents LIMIT 3)")  # simula acervo antigo sem imagem
     rep = image_agent({})
     vazios = db6.query("SELECT COUNT(*) n FROM contents WHERE image_url=''")[0]["n"]
-    assert vazios == 0 and rep["corrigidos"] >= 3
+    assert vazios == 0 and rep["processados"] >= 3
 
 
 def test_editorial_art_is_valid_dimensions():
@@ -807,3 +808,75 @@ def test_v61_synthesizer_why_it_matters():
                                  "Analysts called it a turning point for open models."}])
     assert art and "## Why it matters" in art["body"]
     assert "turning point" in art["body"]  # frase real da fonte, não inventada
+
+
+# ====================== IMAGE AGENT PRO ======================
+def test_pro_og_image_extracted_from_source(monkeypatch):
+    import app.agents.team as team
+    class Page:
+        status_code = 200
+        text = '<html><head><meta property="og:image" content="https://site.com/press/photo.jpg"/></head></html>'
+        def raise_for_status(self): pass
+    monkeypatch.setattr(team.httpx, "get", lambda *a, **k: Page())
+    from app.core import database as db9
+    cid = db9.execute("""INSERT INTO contents (title, slug, body, excerpt, status, source_url)
+        VALUES ('OG test article','og-test-article','body text here ok','e','published',
+        'https://site.com/story')""")
+    rep = team.image_agent({})
+    art = db9.query_one("SELECT image_url, image_credit FROM contents WHERE id=?", (cid,))
+    assert art["image_url"] == "https://site.com/press/photo.jpg"
+    assert rep["og_image"] >= 1
+
+
+def test_pro_provider_photo_when_no_feed_or_og(monkeypatch):
+    monkeypatch.setenv("IMAGE_PROVIDER", "pollinations")
+    import app.agents.team as team
+    monkeypatch.setattr(team, "_og_image", lambda url: "")
+    from app.core import database as db10
+    cid = db10.execute("""INSERT INTO contents (title, slug, body, excerpt, status, tags)
+        VALUES ('Provider photo test','provider-photo-test','body ok here','e','published','ai,models')""")
+    rep = team.image_agent({})
+    art = db10.query_one("SELECT image_url, image_credit FROM contents WHERE id=?", (cid,))
+    assert art["image_url"].startswith("https://image.pollinations.ai/prompt/")
+    assert "width=1200" in art["image_url"] and "nologo=true" in art["image_url"]
+    assert "Pollinations" in art["image_credit"] and rep["foto_provedor"] >= 1
+
+
+def test_pro_repair_swaps_generic_svg_for_photo(monkeypatch):
+    monkeypatch.setenv("IMAGE_PROVIDER", "pollinations")
+    import app.agents.team as team
+    monkeypatch.setattr(team, "_og_image", lambda url: "")
+    from app.core import database as db11
+    cid = db11.execute("""INSERT INTO contents (title, slug, body, excerpt, status, image_url)
+        VALUES ('Generic cover swap','generic-cover-swap','body ok','e','published',
+        'data:image/svg+xml;base64,AAAA')""")
+    q = team.image_quality_agent({})
+    assert q["capas_genericas_svg"] >= 1 and q["reenfileirados"] >= 1
+    team.image_agent({})
+    art = db11.query_one("SELECT image_url FROM contents WHERE id=?", (cid,))
+    assert art["image_url"].startswith("https://image.pollinations.ai/")
+
+
+def test_pro_svg_fallback_when_provider_off(monkeypatch):
+    monkeypatch.setenv("IMAGE_PROVIDER", "none")
+    import app.agents.team as team
+    monkeypatch.setattr(team, "_og_image", lambda url: "")
+    from app.core import database as db12
+    cid = db12.execute("""INSERT INTO contents (title, slug, body, excerpt, status)
+        VALUES ('Fallback svg test','fallback-svg-test','body ok','e','published')""")
+    team.image_agent({})
+    art = db12.query_one("SELECT image_url FROM contents WHERE id=?", (cid,))
+    assert art["image_url"].startswith("data:image/svg+xml")  # nunca vazio
+
+
+def test_pro_image_queue_lifecycle():
+    from app.core import database as db13
+    done = db13.query_one("SELECT COUNT(*) n FROM image_queue WHERE status='done'")["n"]
+    queued = db13.query_one("SELECT COUNT(*) n FROM image_queue WHERE status='queued'")["n"]
+    assert done >= 3 and queued == 0  # fila processada pelos testes acima
+
+
+def test_pro_quality_gate_zero_empty():
+    from app.agents.team import image_quality_agent
+    q = image_quality_agent({})
+    assert q["vazios"] == 0 and q["formatos_invalidos"] == 0 and q["aprovado"] is True

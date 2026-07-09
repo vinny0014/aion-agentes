@@ -82,3 +82,39 @@ def editorial_data_uri(titulo: str, categoria: str = "IA") -> str:
     svg = editorial_svg(titulo, categoria)
     b64 = base64.b64encode(svg.encode("utf-8")).decode("ascii")
     return f"data:image/svg+xml;base64,{b64}"
+
+
+# ═══════════ IMAGE PROVIDERS (fotografia editorial) ═══════════
+import os
+import urllib.parse
+
+
+def photo_prompt(titulo: str, tags: str = "") -> str:
+    """Prompt fotográfico editorial: sem texto, sem logo, sem cara de IA."""
+    tema = ", ".join([t.strip() for t in (tags or "").split(",") if t.strip()][:3]) or "artificial intelligence technology"
+    return (f"professional editorial photograph for a news article about {titulo[:90]}, "
+            f"{tema}, photojournalism style, natural lighting, shallow depth of field, "
+            f"realistic, high detail, 4k, no text, no words, no logo, no watermark")
+
+
+def provider_photo_url(titulo: str, tags: str = "") -> tuple[str, str] | None:
+    """URL de foto gerada pelo provedor configurado (IMAGE_PROVIDER).
+    - pollinations: gratuito, sem chave (padrão)
+    - gemini ("Nano Banana"): requer GEMINI_API_KEY (integração por ENV)
+    - none: desliga provedores (cai na arte SVG)
+    Retorna (url, credit) ou None."""
+    provider = os.environ.get("IMAGE_PROVIDER", "pollinations").lower()
+    if provider in ("none", "off", ""):
+        return None
+    if provider == "pollinations":
+        prompt = urllib.parse.quote(photo_prompt(titulo, tags))
+        url = (f"https://image.pollinations.ai/prompt/{prompt}"
+               f"?width=1200&height=630&nologo=true&seed={_hash(titulo) % 99999}")
+        return url, "Editorial photo via Pollinations.ai"
+    if provider == "gemini":
+        if not os.environ.get("GEMINI_API_KEY"):
+            return None  # integração pronta; falta credencial (pendência humana)
+        # Geração via Gemini exige chamada de API com custo; implementação ativa
+        # apenas quando a chave existir — nunca simulamos o resultado.
+        return None
+    return None

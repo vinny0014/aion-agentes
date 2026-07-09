@@ -19,6 +19,7 @@ PIPELINE = [
     ("image-prompt", team.image_prompt_agent, False),
     ("image-repair", team.image_repair_agent, False),
     ("image-optimization", team.image_optimization_agent, False),
+    ("image-quality", team.image_quality_agent, False),
     ("publisher", team.publisher_agent, False),
     ("dashboard", team.dashboard_agent, False),
     ("google-discover", team.google_discover_agent, False),
