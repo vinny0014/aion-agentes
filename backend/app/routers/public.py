@@ -10,7 +10,7 @@ from ..schemas import ContactIn, EmailIn
 
 router = APIRouter(prefix="/api/public", tags=["public"])
 
-_FIELDS = "id, title, slug, excerpt, seo_title, seo_description, category, tags, image_url, image_alt, image_credit, image_width, image_height, source_url, published_at"
+_FIELDS = "id, title, slug, excerpt, seo_title, seo_description, category, tags, image_url, image_alt, image_credit, image_width, image_height, source_url, author, featured, pinned, breaking_flag, editors_pick, published_at"
 
 
 @router.get("/articles")
@@ -32,7 +32,7 @@ def list_articles(page: int = 1, per_page: int = 10, category: str = "",
     w = " AND ".join(where)
     total = db.query_one(f"SELECT COUNT(*) AS n FROM contents WHERE {w}", tuple(params))["n"]
     items = db.query(
-        f"SELECT {_FIELDS} FROM contents WHERE {w} ORDER BY published_at DESC LIMIT ? OFFSET ?",
+        f"SELECT {_FIELDS} FROM contents WHERE {w} ORDER BY pinned DESC, published_at DESC LIMIT ? OFFSET ?",
         (*params, per_page, (page - 1) * per_page),
     )
     return {"items": items, "total": total, "page": page, "per_page": per_page,

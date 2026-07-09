@@ -108,7 +108,7 @@ def fact_check_agent(payload: dict) -> dict:
         if dup:
             problemas.append(f"título duplicado do conteúdo #{dup['id']}")
         # links internos citados devem existir
-        for slug in re.findall(r"/conteudo/([a-z0-9-]+)", c["body"] or ""):
+        for slug in re.findall(r"/article/([a-z0-9-]+)", c["body"] or ""):
             if not db.query_one("SELECT id FROM contents WHERE slug = ?", (slug,)):
                 problemas.append(f"link interno quebrado: {slug}")
         if problemas:
@@ -173,14 +173,14 @@ def image_agent(payload: dict) -> dict:
         if oficial:
             db.execute("""UPDATE contents SET image_url=?, image_alt=?, image_credit=?,
                           image_width='1200', image_height='630' WHERE id=?""",
-                       (oficial, f"Imagem oficial: {c['title'][:90]}",
+                       (oficial, f"Official image: {c['title'][:90]}",
                         _fonte_amigavel(c["source_url"]), c["id"]))
             oficiais += 1
         else:
             uri = editorial_data_uri(c["title"], c["category"] or "IA")
             db.execute("""UPDATE contents SET image_url=?, image_alt=?, image_credit=?,
                           image_width='1200', image_height='630' WHERE id=?""",
-                       (uri, f"Arte editorial AION: {c['title'][:90]}", "Arte editorial AION", c["id"]))
+                       (uri, f"AION editorial artwork: {c['title'][:90]}", "AION editorial artwork", c["id"]))
             editoriais += 1
         corrigidos += 1
     return {"corrigidos": corrigidos, "imagens_oficiais": oficiais,
@@ -236,7 +236,8 @@ def social_media_agent(payload: dict) -> dict:
             continue
         hashtags = " ".join(f"#{t.strip().replace(' ', '')}"
                             for t in (c["tags"] or "ia").split(",")[:4])
-        url = f"https://aion-agentes.vercel.app/conteudo/{c['slug']}"
+        import os as _os
+        url = f"{_os.environ.get('SITE_URL', 'https://wordbet.com.br').rstrip('/')}/article/{c['slug']}"
         posts = {}
         for rede in redes:
             curto = rede in ("x", "bluesky", "mastodon", "threads")
@@ -259,12 +260,12 @@ def newsletter_agent(payload: dict) -> dict:
     if arts:
         edicao = {"assunto": f"AION · {arts[0]['title']}",
                   "materias": arts,
-                  "rodape": "Você recebe porque se inscreveu. Cancele quando quiser."}
+                  "rodape": "You are receiving this because you subscribed. Unsubscribe anytime."}
         mem_set("agent:newsletter", "edicao_diaria", edicao)
         semanais = db.query("SELECT title, slug, excerpt FROM contents WHERE status='published' "
                             "AND published_at > datetime('now','-7 days') ORDER BY published_at DESC LIMIT 12")
         mem_set("agent:newsletter", "edicao_semanal",
-                {"assunto": "AION · Resumo da semana em IA", "materias": semanais})
+                {"assunto": "AION · This week in AI", "materias": semanais})
     return {"inscritos_por_segmento": subs, "edicao_preparada": bool(arts),
             "limitacao": "Envio real requer provedor de e-mail (SMTP/Resend/SES) — pendência humana; "
                          "métricas de abertura só existirão após envios reais"}
@@ -336,13 +337,13 @@ def qa_agent(payload: dict) -> dict:
     # saúde de indexação: links internos quebrados e imagens ausentes
     quebrados = 0
     for c in db.query("SELECT id, body FROM contents WHERE status='published'"):
-        for slug in re.findall(r"/conteudo/([a-z0-9-]+)", c["body"] or ""):
+        for slug in re.findall(r"/article/([a-z0-9-]+)", c["body"] or ""):
             if not db.query_one("SELECT 1 x FROM contents WHERE slug=? AND status='published'", (slug,)):
                 quebrados += 1
     if quebrados:
         problemas.append(f"{quebrados} link(s) interno(s) quebrado(s)")
     sem_img = db.query_one("SELECT COUNT(*) n FROM contents WHERE status='published' "
-                           "AND image_url='' AND category != 'guias'")["n"]
+                           "AND image_url='' AND category != 'guides'")["n"]
     return {"aprovado": not problemas, "problemas": problemas,
             "noticias_sem_imagem_oficial": sem_img,
             "cobertura": "suite completa no CI cobre rotas/auth/CRUD/SEO/pipeline/agentes"}
@@ -400,22 +401,23 @@ def publisher_agent(payload: dict) -> dict:
 
     # --- Radar diário ---
     manchetes = mem_get("agent:discovery", "manchetes_do_dia", []) or []
-    slug_hoje = "radar-ia-" + db.query_one("SELECT date('now') AS d")["d"]
+    slug_hoje = "ai-radar-" + db.query_one("SELECT date('now') AS d")["d"]
     if manchetes and not db.query_one("SELECT id FROM contents WHERE slug = ?", (slug_hoje,)):
-        data_br = db.query_one("SELECT strftime('%d/%m/%Y','now') AS d")["d"]
+        from datetime import datetime as _dt
+        data_br = _dt.utcnow().strftime("%b %d, %Y")
         linhas = []
         for m in manchetes[:12]:
             fonte = _fonte_amigavel(m.get("link") or m.get("source", ""))
             link = m.get("link") or m.get("source", "")
-            linhas.append(f"**{m['title']}** — via {fonte}. [Ler na fonte]({link})")
+            linhas.append(f"**{m['title']}** — via {fonte}. [Read the source]({link})")
         corpo = (
-            f"## O que movimentou a IA hoje\n\n"
-            f"Curadoria diária do AION: os destaques publicados pelas principais fontes do setor "
-            f"em {data_br}, com link direto para a matéria original de cada uma.\n\n"
+            f"## What moved AI today\n\n"
+            f"AION's daily curation: the top stories published by the industry's leading sources "
+            f"on {data_br}, each linking straight to the original article.\n\n"
             + "\n\n".join(linhas)
-            + "\n\n## Sobre o Radar\n\nO Radar IA é gerado automaticamente pelo Discovery Agent "
-              "do AION a partir de feeds oficiais. Os títulos pertencem às respectivas fontes; "
-              "a curadoria e o texto de apresentação são originais."
+            + "\n\n## About the Radar\n\nThe AI Radar is generated automatically by AION's Discovery Agent "
+              "from official feeds. Headlines belong to their respective sources; "
+              "the curation and framing are original."
         )
         img_oficial = next((m.get("image") for m in manchetes if m.get("image")), "")
         cid = db.execute(
@@ -424,9 +426,9 @@ def publisher_agent(payload: dict) -> dict:
                VALUES (?,?,?,?, 'published',
                        (SELECT id FROM agents WHERE slug='discovery'), ?, ?, 'radar',
                        'radar,noticias,ia', ?, datetime('now'))""",
-            (f"Radar IA — {data_br}: os destaques do dia", slug_hoje, corpo,
-             f"As {min(len(manchetes),12)} manchetes de IA mais relevantes de {data_br}, com fontes.",
-             f"Radar IA {data_br}",
+            (f"AI Radar — {data_br}: today's top stories", slug_hoje, corpo,
+             f"The {min(len(manchetes),12)} most relevant AI headlines of {data_br}, with sources.",
+             f"AI Radar {data_br}",
              f"Curadoria diária de notícias de IA de {data_br} com links para as fontes.",
              img_oficial))
         resultado["radar"] = {"id": cid, "slug": slug_hoje, "manchetes": min(len(manchetes), 12)}
@@ -453,22 +455,30 @@ def publisher_agent(payload: dict) -> dict:
         base_slug, k = art["slug"], 2
         while db.query_one("SELECT id FROM contents WHERE slug = ?", (art["slug"],)):
             art["slug"] = f"{base_slug}-{k}"; k += 1
-        img = art["image"] or editorial_data_uri(art["title"], "noticias")
-        credit = _fonte_amigavel(art["source_url"]) if art["image"] else "Arte editorial AION"
-        alt = (f"Imagem: {art['title'][:80]}" if art["image"]
-               else f"Arte editorial AION: {art['title'][:80]}")
+        img = art["image"] or editorial_data_uri(art["title"], "news")
+        credit = _fonte_amigavel(art["source_url"]) if art["image"] else "AION editorial artwork"
+        alt = (f"Image: {art['title'][:80]}" if art["image"]
+               else f"AION editorial artwork: {art['title'][:80]}")
         db.execute(
             """INSERT INTO contents (title, slug, body, excerpt, status, agent_id,
                seo_title, seo_description, category, tags, image_url, image_alt,
                image_credit, image_width, image_height, source_url, published_at)
                VALUES (?,?,?,?, 'published',
-                       (SELECT id FROM agents WHERE slug='content'), ?, ?, 'noticias',
+                       (SELECT id FROM agents WHERE slug='content'), ?, ?, 'news',
                        ?, ?, ?, ?, '1200', '630', ?, datetime('now'))""",
             (art["title"], art["slug"], art["body"], art["excerpt"],
              art["title"][:60], art["excerpt"][:160], art["tags"], img, alt,
              credit, art["source_url"]))
         sintetizadas += 1
     resultado["noticias_sintetizadas"] = sintetizadas
+
+    # --- Publicação agendada (Editorial Studio) ---
+    agendados = db.query("SELECT id FROM contents WHERE status='draft' "
+                         "AND scheduled_at != '' AND scheduled_at <= datetime('now')")
+    for c in agendados:
+        db.execute("UPDATE contents SET status='published', published_at=datetime('now'), "
+                   "scheduled_at='' WHERE id=?", (c["id"],))
+    resultado["agendados_publicados"] = len(agendados)
 
     # --- Auto-publicação de artigos IA aprovados ---
     bloqueados = {b["id"] for b in (mem_get("agent:fact-check", "bloqueados", []) or [])}
@@ -531,10 +541,10 @@ def trend_hunter_agent(payload: dict) -> dict:
         falta = meta - na_fila_hoje.get(template, 0)
         for i in range(max(0, falta)):
             base = (kws + ["inteligência artificial"])[i % max(len(kws), 1)]
-            topico = {"noticia_curta": f"Panorama do dia: {base} em destaque",
-                      "guia_pratico": f"Guia AION: como aplicar {base}",
-                      "comparativo": f"Comparativo AION: abordagens de {base} em {hoje[:4]}",
-                      "evergreen": f"Fundamentos: o que é {base} e por que importa"}[template]
+            topico = {"noticia_curta": f"Daily briefing: {base} in the spotlight",
+                      "guia_pratico": f"AION guide: how to apply {base}",
+                      "comparativo": f"AION comparison: {base} approaches in {hoje[:4]}",
+                      "evergreen": f"Fundamentals: what {base} is and why it matters"}[template]
             if not db.query_one("SELECT id FROM content_queue WHERE topic = ?", (topico,)):
                 db.execute("INSERT INTO content_queue (topic, template) VALUES (?,?)",
                            (topico, template))
@@ -709,10 +719,10 @@ def hero_ranking() -> dict | None:
     decaimento por idade em horas. Nunca artigo aleatório."""
     breaking = mem_get("agent:breaking-news", "hero") or {}
     rows = db.query(
-        """SELECT slug, category, image_url,
+        """SELECT slug, category, image_url, featured, pinned, breaking_flag,
                   (julianday('now') - julianday(published_at)) * 24 AS idade_h
            FROM contents WHERE status='published'
-           AND published_at > datetime('now','-3 days')""")
+           AND (published_at > datetime('now','-3 days') OR featured=1 OR pinned=1)""")
     if not rows:
         row = db.query_one("SELECT slug FROM contents WHERE status='published' "
                            "ORDER BY published_at DESC LIMIT 1")
@@ -720,6 +730,9 @@ def hero_ranking() -> dict | None:
     melhor, melhor_score = None, -1e9
     for r in rows:
         score = 0.0
+        if r["featured"] in (1, "1"): score += 12
+        if r["pinned"] in (1, "1"): score += 10
+        if r["breaking_flag"] in (1, "1"): score += 8
         if r["slug"] == breaking.get("slug"): score += 5
         if r["category"] == "radar": score += 2
         if r["image_url"]: score += 1
@@ -741,7 +754,7 @@ def google_health_report() -> dict:
     sem_taxonomia = [c["slug"] for c in pub if not (c["category"] and c["tags"])]
     links_quebrados = []
     for c in pub:
-        for slug in re.findall(r"/conteudo/([a-z0-9-]+)", c["body"] or ""):
+        for slug in re.findall(r"/article/([a-z0-9-]+)", c["body"] or ""):
             if not db.query_one("SELECT 1 x FROM contents WHERE slug=? AND status='published'", (slug,)):
                 links_quebrados.append({"em": c["slug"], "para": slug})
     dups = db.query("SELECT slug, COUNT(*) c FROM contents GROUP BY slug HAVING c>1")

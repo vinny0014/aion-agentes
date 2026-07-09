@@ -18,7 +18,7 @@ export function AppNav({ user }: { user: User | null }) {
             <Link to="/admin" className="px-2 py-1 text-slateui hover:text-ink">Administração</Link>
           )}
           <span className="hidden font-mono text-xs text-slateui sm:inline">{user?.email}</span>
-          <button onClick={sair} className="btn-ghost !px-3 !py-1.5 text-sm">Sair</button>
+          <button onClick={sair} className="btn-ghost !px-3 !py-1.5 text-sm">Sign out</button>
         </div>
       </div>
     </nav>
@@ -48,10 +48,10 @@ export default function Dashboard() {
     })();
   }, []);
 
-  if (!user) return <div className="p-10 font-mono text-sm text-slateui">carregando…</div>;
+  if (!user) return <div className="p-10 font-mono text-sm text-slateui">loading…</div>;
 
   const abertas = tasks.filter((t) => t.status !== "done").length;
-  const publicados = contents.filter((c) => c.status === "published").length;
+  const publisheds = contents.filter((c) => c.status === "published").length;
 
   return (
     <div className="min-h-screen">
@@ -77,8 +77,8 @@ export default function Dashboard() {
             <p className="mt-1 font-display text-2xl font-bold">{abertas}</p>
           </div>
           <div className="card">
-            <p className="tag">conteúdos publicados</p>
-            <p className="mt-1 font-display text-2xl font-bold">{publicados}</p>
+            <p className="tag">conteúdos publisheds</p>
+            <p className="mt-1 font-display text-2xl font-bold">{publisheds}</p>
           </div>
         </div>
 
@@ -101,7 +101,7 @@ export default function Dashboard() {
           <h2 className="font-display text-xl font-bold">Últimos conteúdos</h2>
           {contents.length === 0 ? (
             <p className="mt-3 text-sm text-slateui">
-              Nenhum conteúdo ainda. Crie o primeiro na Administração ou adicione um tópico à fila de publicação.
+              No content yet. Create the first one in Admin or add a topic to the publishing queue.
             </p>
           ) : (
             <ul className="mt-4 space-y-2">

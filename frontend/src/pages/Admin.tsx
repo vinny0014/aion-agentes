@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { AppNav } from "./Dashboard";
 
-const ABAS = ["Usuários", "Agentes", "Conteúdo", "Tarefas", "Fila", "Logs", "Memória", "Configurações"] as const;
+const ABAS = ["Users", "Agents", "Content", "Tasks", "Queue", "Logs", "Memory", "Settings"] as const;
 type Aba = (typeof ABAS)[number];
 
 function Tabela({ cols, rows, onDelete }: { cols: string[]; rows: any[]; onDelete?: (id: any) => void }) {
@@ -26,7 +26,7 @@ function Tabela({ cols, rows, onDelete }: { cols: string[]; rows: any[]; onDelet
               {onDelete && (
                 <td className="px-4 py-2.5 text-right">
                   <button onClick={() => onDelete(r.id ?? r.key)}
-                    className="text-xs font-medium text-red-400 hover:underline">Excluir</button>
+                    className="text-xs font-medium text-red-400 hover:underline">Delete</button>
                 </td>
               )}
             </tr>
@@ -68,13 +68,13 @@ function Form({ campos, onSubmit, rotulo }: {
 export default function Admin() {
   const nav = useNavigate();
   const [user, setUser] = useState<any>(null);
-  const [aba, setAba] = useState<Aba>("Usuários");
+  const [aba, setAba] = useState<Aba>("Users");
   const [dados, setDados] = useState<any[]>([]);
 
   const rotas: Record<Aba, string> = {
-    Usuários: "/api/users", Agentes: "/api/agents", Conteúdo: "/api/contents",
-    Tarefas: "/api/tasks", Fila: "/api/content-queue", Logs: "/api/logs",
-    Memória: "/api/memory", Configurações: "/api/settings",
+    Users: "/api/users", Agents: "/api/agents", Content: "/api/contents",
+    Tasks: "/api/tasks", Queue: "/api/content-queue", Logs: "/api/logs",
+    Memory: "/api/memory", Settings: "/api/settings",
   };
 
   async function carregar(a: Aba = aba) {
@@ -99,14 +99,14 @@ export default function Admin() {
     await carregar();
   }
 
-  if (!user) return <div className="p-10 font-mono text-sm text-slateui">carregando…</div>;
+  if (!user) return <div className="p-10 font-mono text-sm text-slateui">loading…</div>;
 
   return (
     <div className="min-h-screen">
       <AppNav user={user} />
       <main className="mx-auto max-w-6xl px-6 py-10">
         <p className="tag mb-1">administração</p>
-        <h1 className="font-display text-3xl font-bold">Painel administrativo</h1>
+        <h1 className="font-display text-3xl font-bold">Dashboard administrativo</h1>
 
         <div className="mt-6 flex flex-wrap gap-1 border-b border-line" role="tablist">
           {ABAS.map((a) => (
@@ -118,15 +118,15 @@ export default function Admin() {
           ))}
         </div>
 
-        {aba === "Usuários" && (
+        {aba === "Users" && (
           <Tabela cols={["id", "name", "email", "role", "is_active"]} rows={dados}
             onDelete={(id) => excluir("/api/users", id)} />
         )}
 
-        {aba === "Agentes" && (<>
+        {aba === "Agents" && (<>
           <Form rotulo="Criar agente" campos={[
             { name: "slug", label: "Slug", placeholder: "meu-agente" },
-            { name: "name", label: "Nome" }, { name: "role", label: "Função" },
+            { name: "name", label: "Name" }, { name: "role", label: "Role" },
           ]} onSubmit={async (v) => {
             await api("/api/agents", { method: "POST", body: JSON.stringify(v) });
             await carregar();
@@ -135,8 +135,8 @@ export default function Admin() {
             onDelete={(id) => excluir("/api/agents", id)} />
         </>)}
 
-        {aba === "Conteúdo" && (<>
-          <Link to="/admin/editor/novo" className="btn-primary mt-6 !py-2 text-sm">Novo artigo</Link>
+        {aba === "Content" && (<>
+          <Link to="/admin/editor/new" className="btn-primary mt-6 !py-2 text-sm">New article</Link>
           {dados.length === 0 ? <p className="mt-4 text-sm text-slateui">Nenhum conteúdo ainda.</p> : (
             <div className="mt-4 overflow-x-auto rounded-lg border border-line bg-surface">
               <table className="w-full text-left text-sm">
@@ -153,9 +153,9 @@ export default function Admin() {
                     <td className="px-4 py-2.5">{r.status}</td>
                     <td className="px-4 py-2.5">{r.published_at ?? "—"}</td>
                     <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                      <Link to={`/admin/editor/${r.id}`} className="mr-3 text-xs font-medium text-ultra hover:underline">Editar</Link>
+                      <Link to={`/admin/editor/${r.id}`} className="mr-3 text-xs font-medium text-ultra hover:underline">Edit</Link>
                       <button onClick={() => excluir("/api/contents", r.id)}
-                        className="text-xs font-medium text-red-400 hover:underline">Excluir</button>
+                        className="text-xs font-medium text-red-400 hover:underline">Delete</button>
                     </td>
                   </tr>))}
                 </tbody>
@@ -164,9 +164,9 @@ export default function Admin() {
           )}
         </>)}
 
-        {aba === "Tarefas" && (<>
+        {aba === "Tasks" && (<>
           <Form rotulo="Criar tarefa" campos={[
-            { name: "title", label: "Título" }, { name: "description", label: "Descrição" },
+            { name: "title", label: "Title" }, { name: "description", label: "Description" },
           ]} onSubmit={async (v) => {
             await api("/api/tasks", { method: "POST", body: JSON.stringify(v) });
             await carregar();
@@ -175,9 +175,9 @@ export default function Admin() {
             onDelete={(id) => excluir("/api/tasks", id)} />
         </>)}
 
-        {aba === "Fila" && (<>
-          <Form rotulo="Adicionar à fila" campos={[
-            { name: "topic", label: "Tópico do artigo", placeholder: "Tendências de IA em 2026" },
+        {aba === "Queue" && (<>
+          <Form rotulo="Add to queue" campos={[
+            { name: "topic", label: "Article topic", placeholder: "AI trends in 2026" },
           ]} onSubmit={async (v) => {
             await api("/api/content-queue", { method: "POST", body: JSON.stringify(v) });
             await carregar();
@@ -194,8 +194,8 @@ export default function Admin() {
           <Tabela cols={["id", "level", "source", "message", "created_at"]} rows={dados} />
         )}
 
-        {aba === "Memória" && (<>
-          <Form rotulo="Salvar memória" campos={[
+        {aba === "Memory" && (<>
+          <Form rotulo="Save memory" campos={[
             { name: "scope", label: "Escopo", placeholder: "global" },
             { name: "key", label: "Chave" }, { name: "value", label: "Valor" },
           ]} onSubmit={async (v) => {
@@ -206,9 +206,9 @@ export default function Admin() {
             onDelete={(id) => excluir("/api/memory", id)} />
         </>)}
 
-        {aba === "Configurações" && (<>
+        {aba === "Settings" && (<>
           <p className="mt-4 rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-            Segredos e chaves de API não são aceitos aqui — configure-os no arquivo .env do backend.
+            Secrets and API keys are not accepted here — set them in the backend .env file.
           </p>
           <Form rotulo="Salvar" campos={[
             { name: "key", label: "Chave", placeholder: "posts_por_dia" },

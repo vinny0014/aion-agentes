@@ -1,3 +1,4 @@
+import os
 """AION AGENTES — API principal (FastAPI)."""
 import time as _time
 from collections import defaultdict
@@ -47,6 +48,8 @@ async def lifespan(app: FastAPI):
     yield
     scheduler.shutdown(wait=False)
 
+
+SITE_URL = os.environ.get("SITE_URL", "https://wordbet.com.br").rstrip("/")
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -99,13 +102,13 @@ for r in (auth_router, users_router, agents_router, content_router, tasks_router
 @app.get("/robots.txt", response_class=PlainTextResponse, tags=["seo"])
 def robots():
     return ("User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /admin\nDisallow: /dashboard\n"
-            "Sitemap: https://aion-agentes.vercel.app/sitemap.xml\n"
-            "Sitemap: https://aion-agentes.vercel.app/news-sitemap.xml\n")
+            f"Sitemap: {SITE_URL}/sitemap.xml\n"
+            f"Sitemap: {SITE_URL}/news-sitemap.xml\n")
 
 
 @app.get("/sitemap.xml", tags=["seo"])
 def sitemap():
-    base = "https://aion-agentes.vercel.app"
+    base = SITE_URL
     static = ["", "/sobre", "/conteudos", "/categorias", "/tags",
               "/privacidade", "/termos", "/contato"]
     urls = [f"<url><loc>{base}{p}</loc></url>" for p in static]
@@ -126,7 +129,7 @@ def sitemap():
 def image_sitemap():
     """Sitemap de imagens — só URLs http(s) (data-URIs de arte editorial ficam de fora
     do sitemap, mas renderizam normalmente no site)."""
-    base = "https://aion-agentes.vercel.app"
+    base = SITE_URL
     rows = db.query("SELECT slug, image_url, title FROM contents "
                     "WHERE status='published' AND image_url LIKE 'http%'")
     urls = "".join(
@@ -144,7 +147,7 @@ def image_sitemap():
 @app.get("/rss.xml", tags=["seo"])
 def rss_feed():
     """Feed RSS 2.0 do portal — atualiza sozinho a cada publicação."""
-    base = "https://aion-agentes.vercel.app"
+    base = SITE_URL
     rows = db.query("SELECT title, slug, excerpt, published_at FROM contents "
                     "WHERE status='published' ORDER BY published_at DESC LIMIT 30")
     def esc(t): return (t or "").replace("&", "&amp;").replace("<", "&lt;")
@@ -165,7 +168,7 @@ def rss_feed():
 @app.get("/news-sitemap.xml", tags=["seo"])
 def news_sitemap():
     """Google News sitemap: artigos publicados nas últimas 48 horas."""
-    base = "https://aion-agentes.vercel.app"
+    base = SITE_URL
     rows = db.query(
         """SELECT slug, title, published_at FROM contents
            WHERE status='published' AND published_at > datetime('now','-2 days')

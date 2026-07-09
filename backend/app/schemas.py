@@ -64,11 +64,29 @@ class ContentIn(BaseModel):
     seo_title: str = ""
     seo_description: str = ""
     category: str = ""
-    tags: str = ""  # separadas por vírgula
+    tags: str = ""  # comma separated
+    author: str = "AION Editorial"
+    image_url: str = ""
+    image_alt: str = ""
+    featured: int = 0
+    pinned: int = 0
+    breaking_flag: int = 0
+    editors_pick: int = 0
+    scheduled_at: str = ""
+    source_url: str = ""
 
 
 class ContentUpdate(BaseModel):
     title: str | None = None
+    author: str | None = None
+    image_url: str | None = None
+    image_alt: str | None = None
+    featured: int | None = None
+    pinned: int | None = None
+    breaking_flag: int | None = None
+    editors_pick: int | None = None
+    scheduled_at: str | None = None
+    source_url: str | None = None
     body: str | None = None
     excerpt: str | None = None
     status: str | None = Field(default=None, pattern="^(draft|queued|published)$")

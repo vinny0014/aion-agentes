@@ -144,11 +144,11 @@ def test_content_queue_pipeline_offline_draft():
     done = [i for i in items if i["topic"] == "Tendências de IA em 2026"][0]
     assert done["status"] == "done" and done["result_content_id"]
     draft = client.get(f"/api/contents/{done['result_content_id']}", headers=h).json()
-    assert draft["status"] == "draft" and "Rascunho automático" in draft["body"]
+    assert draft["status"] == "draft" and "[Auto draft" in draft["body"]
     assert draft["slug"].startswith("tendencias-de-ia-em-2026")
     # pendência humana registrada em log
     logs = client.get("/api/logs", headers=h).json()
-    assert any("PENDÊNCIA HUMANA" in l["message"] for l in logs)
+    assert any("HUMAN ACTION" in l["message"] for l in logs)
 
 
 def test_pipeline_unique_slug():
@@ -388,7 +388,7 @@ def test_discovery_parses_items_and_publisher_creates_radar(monkeypatch):
     slug = pub["radar"]["slug"]
     art = client.get(f"/api/public/articles/{slug}").json()
     assert art["status_code"] if False else True
-    assert "Ler na fonte](https://exemplo.org/a1" in art["body"]
+    assert "Read the source](https://exemplo.org/a1" in art["body"]
     assert art["category"] == "radar"
     # idempotente no mesmo dia
     assert team.publisher_agent({})["radar"] is None
@@ -401,10 +401,10 @@ def test_publisher_respects_fact_check_and_setting():
     # rascunho de agente com placeholder segue bloqueado
     fact_check_agent({})
     drafts_placeholder = db2.query(
-        "SELECT COUNT(*) AS n FROM contents WHERE status='draft' AND body LIKE '%Rascunho automático%'")[0]["n"]
+        "SELECT COUNT(*) AS n FROM contents WHERE status='draft' AND body LIKE '%Auto draft%'")[0]["n"]
     publisher_agent({})
     ainda = db2.query(
-        "SELECT COUNT(*) AS n FROM contents WHERE status='draft' AND body LIKE '%Rascunho automático%'")[0]["n"]
+        "SELECT COUNT(*) AS n FROM contents WHERE status='draft' AND body LIKE '%Auto draft%'")[0]["n"]
     assert ainda == drafts_placeholder  # nada com placeholder foi publicado
     # setting desliga tudo
     db2.execute("INSERT INTO app_settings (key,value) VALUES ('publicacao_automatica','off') "
@@ -571,7 +571,7 @@ def test_qa_detects_broken_internal_link():
     ha, _ = auth(ADMIN["email"], ADMIN["password"])
     client.post("/api/contents", headers=ha, json={
         "title": "Com link quebrado", "slug": "com-link-quebrado",
-        "body": "Veja também /conteudo/slug-que-nao-existe neste texto longo o bastante "
+        "body": "Veja também /article/slug-that-does-not-exist neste texto longo o bastante "
                 "para passar nas outras regras do fact check sem problemas adicionais.",
         "excerpt": "x", "status": "published"})
     from app.agents.team import qa_agent
@@ -600,7 +600,7 @@ def test_image_agent_guarantees_image_on_all():
 
 def test_editorial_art_is_valid_dimensions():
     from app.agents.imagegen import editorial_data_uri, editorial_svg
-    uri = editorial_data_uri("Um título de teste para arte editorial", "noticias")
+    uri = editorial_data_uri("Um título de teste para arte editorial", "news")
     assert uri.startswith("data:image/svg+xml;base64,")
     svg = editorial_svg("Um título", "ia")
     assert 'width="1200"' in svg and 'height="630"' in svg
@@ -626,7 +626,7 @@ def test_fact_check_blocks_ai_article_without_image():
     from app.agents.core import mem_get
     db7.execute("""INSERT INTO contents (title, slug, body, excerpt, status, agent_id,
         category, image_url) VALUES ('IA sem imagem','ia-sem-imagem',?, 'resumo ok',
-        'draft',(SELECT id FROM agents WHERE slug='content'),'noticias','')""",
+        'draft',(SELECT id FROM agents WHERE slug='content'),'news','')""",
         ("palavra " * 600,))
     fact_check_agent({})
     bloq = mem_get("agent:fact-check", "bloqueados") or []
@@ -662,10 +662,10 @@ def test_synthesizer_creates_original_news():
     art = sintetizar(grupo)
     assert art and art["fontes"] == 2
     assert "techcrunch" in art["body"] and "venturebeat" in art["body"].lower() or "Venturebeat" in art["body"]
-    assert "## Fontes" in art["body"] and "## O que se sabe" in art["body"]
-    assert "leia na fonte" in art["body"].lower()
+    assert "## Sources" in art["body"] and "## What we know" in art["body"]
+    assert "read the source" in art["body"].lower()
     # não é cópia literal de uma única fonte: combina blocos atribuídos
-    assert art["body"].count("Segundo a") >= 2
+    assert art["body"].count("According to") >= 2
 
 
 def test_synthesizer_clusters_related():
@@ -702,7 +702,7 @@ def test_publisher_synthesizes_from_feeds():
     ])
     rep = publisher_agent({})
     assert rep.get("noticias_sintetizadas", 0) >= 1
-    art = db8.query_one("SELECT * FROM contents WHERE category='noticias' "
+    art = db8.query_one("SELECT * FROM contents WHERE category='news' "
                         "AND status='published' ORDER BY id DESC LIMIT 1")
     assert art and art["image_url"] and art["source_url"]  # imagem garantida + atribuição
 
@@ -719,3 +719,54 @@ def test_google_health_endpoint_and_scores():
     assert "aviso" in body  # honestidade: scores internos, não métricas do Google
     from app.agents.team import dashboard_agent
     assert "scores" in dashboard_agent({})
+
+
+# ====================== v6.0 — INTERNACIONAL + EDITORIAL STUDIO ======================
+def test_v6_bootstrap_english_guides():
+    from app.bootstrap import ARTIGOS
+    assert all(cat == "guides" for _, _, cat, _, _, _ in ARTIGOS)
+    assert ARTIGOS[0][1] == "what-ai-agents-are"
+
+
+def test_v6_editorial_studio_flags_and_hero():
+    ha, _ = auth(ADMIN["email"], ADMIN["password"])
+    r = client.post("/api/contents", headers=ha, json={
+        "title": "Editorial featured test", "slug": "editorial-featured-test",
+        "body": "## L\n\nLong enough body to satisfy every quality gate in the pipeline today.",
+        "excerpt": "e", "status": "published", "category": "analysis", "tags": "t",
+        "author": "Vinicio Alves", "featured": 1})
+    assert r.status_code == 201
+    h = client.get("/api/public/hero").json()
+    assert h["slug"] == "editorial-featured-test" and h["author"] == "Vinicio Alves"
+    # limpar destaque para não afetar outros testes
+    client.patch(f"/api/contents/{r.json()['id']}", headers=ha, json={"featured": 0})
+
+
+def test_v6_scheduled_publish():
+    ha, _ = auth(ADMIN["email"], ADMIN["password"])
+    r = client.post("/api/contents", headers=ha, json={
+        "title": "Scheduled test piece", "slug": "scheduled-test-piece",
+        "body": "## X\n\nbody with enough words to be acceptable in validation.",
+        "excerpt": "s", "status": "draft", "category": "news", "tags": "t",
+        "scheduled_at": "2020-01-01 00:00:00"})
+    assert r.status_code == 201
+    from app.agents.team import publisher_agent
+    publisher_agent({})
+    assert client.get("/api/public/articles/scheduled-test-piece").status_code == 200
+
+
+def test_v6_cover_endpoint_requires_admin():
+    assert client.get("/api/orchestrator/cover?title=X").status_code == 401
+    ha, _ = auth(ADMIN["email"], ADMIN["password"])
+    r = client.get("/api/orchestrator/cover?title=Test cover&category=news", headers=ha).json()
+    assert r["image_url"].startswith("data:image/svg+xml") and r["width"] == 1200
+
+
+def test_v6_manual_article_gets_editorial_cover_automatically():
+    ha, _ = auth(ADMIN["email"], ADMIN["password"])
+    r = client.post("/api/contents", headers=ha, json={
+        "title": "No image provided", "slug": "no-image-provided",
+        "body": "## B\n\ncontent body sized well enough for the checks to pass here.",
+        "excerpt": "n", "status": "published", "category": "news", "tags": "t"})
+    art = client.get("/api/public/articles/no-image-provided").json()
+    assert art["image_url"].startswith("data:image/svg+xml")  # regra absoluta mantida

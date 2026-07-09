@@ -161,6 +161,16 @@ def google_health(user: dict = Depends(require_admin)):
     return google_health_report()
 
 
+@orchestrator_router.get("/cover")
+def generate_cover(title: str, category: str = "news",
+                   user: dict = Depends(require_admin)):
+    """Editorial Studio: gera capa editorial 1200x630 para o título (data URI)."""
+    from ..agents.imagegen import editorial_data_uri
+    return {"image_url": editorial_data_uri(title, category),
+            "image_alt": f"AION editorial artwork: {title[:90]}",
+            "width": 1200, "height": 630}
+
+
 @orchestrator_router.get("/metrics")
 def orchestrator_metrics(user: dict = Depends(require_admin)):
     from ..agents.core import agent_metrics, budget_remaining

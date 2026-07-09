@@ -65,22 +65,21 @@ def sintetizar(grupo: list[dict]) -> dict | None:
         if not pontos:
             continue
         texto = " ".join(pontos)
-        blocos.append(f"Segundo a {fonte}, {texto[0].lower() + texto[1:]} "
-                      f"([leia na fonte]({link}))" if link else
-                      f"Segundo a {fonte}, {texto[0].lower() + texto[1:]}.")
+        blocos.append(f"According to {fonte}, {texto[0].lower() + texto[1:]} "
+                      f"([read the source]({link}))" if link else
+                      f"According to {fonte}, {texto[0].lower() + texto[1:]}.")
         fontes_citadas.append({"fonte": fonte, "link": link})
     if not blocos:
         return None
     kws = extract_keywords(titulo + " " + principal["resumo"], top=5)
     corpo = (
         f"{lead}\n\n"
-        f"## O que se sabe\n\n" + "\n\n".join(blocos) + "\n\n"
-        f"## Contexto\n\n"
-        f"Este resumo foi produzido pelo AION a partir da cobertura de "
-        f"{len(fontes_citadas)} fonte(s) sobre o tema, com links para as matérias originais. "
-        f"Os fatos pertencem às respectivas publicações; a organização e a redação de "
-        f"apresentação são do AION.\n\n"
-        f"## Fontes\n\n" +
+        f"## What we know\n\n" + "\n\n".join(blocos) + "\n\n"
+        f"## Context\n\n"
+        f"This briefing was produced by AION from the coverage of "
+        f"{len(fontes_citadas)} source(s) on this topic, with links to the original stories. "
+        f"The facts belong to the respective publications; the curation and framing are AION's.\n\n"
+        f"## Sources\n\n" +
         "\n\n".join(f"- {f['fonte']}: [{f['link']}]({f['link']})" for f in fontes_citadas if f['link'])
     )
     return {

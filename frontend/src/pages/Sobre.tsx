@@ -4,29 +4,37 @@ export default function Sobre() {
   return (
     <div className="min-h-screen">
       <Nav />
-      <main className="mx-auto max-w-3xl px-6 py-14">
-        <p className="tag mb-3">institucional</p>
-        <h1 className="font-display text-4xl font-bold tracking-tight">Sobre o AION AGENTES</h1>
-        <div className="mt-6 space-y-5 text-slateui leading-relaxed">
+      <main className="mx-auto max-w-3xl px-6 py-16">
+        <p className="tag mb-2">about</p>
+        <h1 className="font-display text-4xl font-bold">About <span className="grad-text">AION</span></h1>
+        <div className="prose-body mt-8 space-y-4 text-slateui">
           <p>
-            O AION AGENTES é um portal de inteligência artificial construído sobre uma ideia
-            simples: um veículo de conteúdo pode ser operado, do rascunho à publicação, por uma
-            equipe de agentes de IA com responsabilidades bem definidas — sob supervisão humana.
+            AION AI NEWS OS is an artificial-intelligence news portal built on a simple idea:
+            a publication can be operated, from draft to publication, by a team of AI agents
+            with well-defined responsibilities — under human supervision.
           </p>
           <p>
-            A plataforma reúne um pipeline de produção diária de conteúdo (fila, agendador e
-            templates), um painel administrativo completo e uma API REST preparada para conectar
-            os principais provedores de IA do mercado: OpenAI, Anthropic, OpenRouter e Gemini.
+            The platform runs a daily production pipeline (queue, scheduler and templates)
+            coordinated by an orchestrator of 25+ agents: Discovery, Research, Writer,
+            Fact Check, SEO, Image, Publisher, QA, Security, Monitor and Cost Guard, among
+            others. Each covers one stage of the operation, from sourcing to shipping.
           </p>
           <p>
-            Nove agentes formam a equipe: CEO Master, Developer, QA, Content, SEO, GitHub,
-            Deploy, Monitor e Cost Guard. Cada um cobre uma etapa da operação, do código ao
-            controle de custos.
+            <strong>Editorial team.</strong> Content is published under three bylines:
+            AION Editorial (agent-produced, human-supervised), Vinicio Alves (founder's
+            research and analysis) and Guest Author (invited contributors). Every story
+            carries its author, date, category and — whenever it draws on external
+            reporting — explicit attribution and links to the original sources.
           </p>
           <p>
-            O projeto nasceu preparado para produção: autenticação com JWT e refresh token,
-            senhas com hash, segredos fora do banco, SEO técnico completo e arquitetura pronta
-            para migrar de SQLite para PostgreSQL quando a escala pedir.
+            <strong>Editorial policy.</strong> We never copy third-party articles, never
+            invent facts, and always cite sources. Curation pieces such as the daily AI
+            Radar clearly separate what the sources reported from AION's own framing.
+          </p>
+          <p>
+            The project was built production-ready: JWT authentication, rate limiting,
+            security headers, automated tests and a strict monthly AI budget enforced by
+            the Cost Guard agent.
           </p>
         </div>
       </main>

@@ -121,25 +121,25 @@ def resolve_provider(requested: str) -> str:
 
 TEMPLATES = {
     "artigo_padrao": (
-        "Escreva um artigo ORIGINAL em português (pt-BR) para o portal AION sobre: {topic}. "
-        "Entre 800 e 1500 palavras. Estrutura obrigatória em markdown: "
-        "lead de 2 frases; ## subtítulos para 3-4 seções de desenvolvimento; "
-        "## FAQ com 3 perguntas e respostas; ## Conclusão com CTA de leitura. "
-        "Cite as fontes com links markdown quando fornecidas no contexto. "
-        "Nunca copie texto de terceiros; nunca use lorem ipsum ou placeholders."
+        "Write an ORIGINAL article in English (US) para o portal AION sobre: {topic}. "
+        "Between 800 and 1500 words. Required markdown structure: "
+        "a 2-sentence lead; ## subheadings for 3-4 body sections; "
+        "## FAQ with 3 questions and answers; ## Conclusion with a reading CTA. "
+        "Cite sources with markdown links when provided in context. "
+        "Never copy third-party text; never use lorem ipsum or placeholders."
     ),
     "noticia_curta": (
         "Escreva uma notícia curta (até 300 palavras) sobre: {topic}. "
         "Lead direto, contexto e fecho."
     ),
     "comparativo": (
-        "Escreva um COMPARATIVO original em pt-BR (800-1500 palavras) sobre: {topic}. "
+        "Write an original COMPARISON article in English (US) (800-1500 palavras) sobre: {topic}. "
         "Estrutura markdown: lead; ## critérios de comparação; ## análise de cada opção; "
         "## tabela-resumo em texto; ## FAQ (3 perguntas); ## Conclusão com recomendação e CTA. "
         "Nunca invente números; cite fontes fornecidas no contexto."
     ),
     "evergreen": (
-        "Escreva um artigo EVERGREEN atemporal em pt-BR (800-1500 palavras) sobre: {topic}. "
+        "Write a timeless EVERGREEN article in English (US) (800-1500 palavras) sobre: {topic}. "
         "Estrutura: lead; ## conceitos fundamentais; ## como funciona; ## aplicações; "
         "## FAQ (3 perguntas); ## Conclusão com CTA. Didático, sem referências datadas."
     ),
@@ -157,9 +157,9 @@ def _unique_slug(base: str) -> str:
     return slug
 
 
-_TEMPLATE_CATEGORIA = {"noticia_curta": "noticias", "artigo_padrao": "noticias",
-                        "guia_pratico": "guias", "comparativo": "comparativos",
-                        "evergreen": "fundamentos"}
+_TEMPLATE_CATEGORIA = {"noticia_curta": "news", "artigo_padrao": "news",
+                        "guia_pratico": "guides", "comparativo": "comparisons",
+                        "evergreen": "fundamentals"}
 
 
 def _save_draft(item: dict, title: str, slug: str, body: str, excerpt: str,
@@ -167,7 +167,7 @@ def _save_draft(item: dict, title: str, slug: str, body: str, excerpt: str,
     from .core import mem_get as _mg
     brief = _mg("agent:research", f"briefing:{item['id']}") or {}
     tags = ",".join((brief.get("keywords") or ["ia"])[:5])
-    categoria = _TEMPLATE_CATEGORIA.get(item.get("template", ""), "noticias")
+    categoria = _TEMPLATE_CATEGORIA.get(item.get("template", ""), "news")
     cid = db.execute(
         """INSERT INTO contents (title, slug, body, excerpt, status, agent_id,
            seo_title, seo_description, category, tags)
@@ -248,7 +248,7 @@ def process_queue_once() -> dict:
             _save_draft(item, draft["title"], draft["slug"], draft["body"], draft["excerpt"])
             db.execute(
                 "INSERT INTO logs (level, source, message, meta_json) VALUES ('warn','content-pipeline',?,?)",
-                ("Rascunho gerado em modo offline (PENDÊNCIA HUMANA: configurar API de IA no .env)",
+                ("Offline draft generated (HUMAN ACTION: configure an AI API key in .env)",
                  json.dumps({"queue_id": item["id"], "topic": item["topic"], "detalhe": str(exc)})),
             )
             offline += 1

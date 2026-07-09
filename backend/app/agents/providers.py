@@ -1,3 +1,4 @@
+import os
 """Provedores de IA — chamadas reais via httpx, prontas para ativar com API key.
 
 Sem nenhuma chave configurada, o pipeline usa o modo offline: gera um rascunho
@@ -76,7 +77,7 @@ def generate(provider: str, prompt: str) -> str:
         return _openai_compat(
             "https://openrouter.ai/api/v1/chat/completions",
             settings.OPENROUTER_API_KEY, "anthropic/claude-sonnet-4",
-            prompt, {"HTTP-Referer": "https://aion-agentes.vercel.app"})
+            prompt, {"HTTP-Referer": os.environ.get("SITE_URL", "https://wordbet.com.br")})
     if provider == "anthropic":
         return _anthropic(prompt)
     if provider == "gemini":
@@ -88,15 +89,15 @@ def offline_draft(topic: str, template: str) -> dict:
     """Rascunho estruturado gerado localmente — mantém a produção diária ativa
     mesmo sem provedor de IA configurado."""
     corpo = (
-        f"## Introdução\n\n"
-        f"[Rascunho automático — aguardando redação final] Contextualize por que \"{topic}\" "
-        f"importa agora e o que o leitor vai aprender.\n\n"
-        f"## Panorama\n\n"
-        f"[Desenvolva os fatos e conceitos centrais de {topic}.]\n\n"
-        f"## Na prática\n\n"
-        f"[Traga exemplos, aplicações ou implicações concretas.]\n\n"
-        f"## Conclusão\n\n"
-        f"[Resuma os pontos principais e indique próximos passos para o leitor.]"
+        f"## Introduction\n\n"
+        f"[Auto draft — awaiting final copy] Explain why \"{topic}\" "
+        f"matters now and what the reader will learn.\n\n"
+        f"## Overview\n\n"
+        f"[Develop the core facts and concepts of {topic}.]\n\n"
+        f"## In practice\n\n"
+        f"[Bring concrete examples, applications or implications.]\n\n"
+        f"## Conclusion\n\n"
+        f"[Summarize the key points and suggest next steps for the reader.]"
     )
     return {
         "title": topic.strip().capitalize(),

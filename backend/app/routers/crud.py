@@ -112,14 +112,25 @@ def create_content(data: ContentIn, user: dict = Depends(get_current_user)):
     if db.query_one("SELECT id FROM contents WHERE slug = ?", (data.slug,)):
         raise HTTPException(status.HTTP_409_CONFLICT, "Slug já existe")
     pub = "datetime('now')" if data.status == "published" else "NULL"
+    img, alt = data.image_url, data.image_alt
+    if not img:  # regra absoluta: nenhum artigo sem imagem
+        from ..agents.imagegen import editorial_data_uri
+        img = editorial_data_uri(data.title, data.category or "news")
+        alt = alt or f"AION editorial artwork: {data.title[:90]}"
     cid = db.execute(
         f"""INSERT INTO contents (title, slug, body, excerpt, status, author_id, agent_id,
-            seo_title, seo_description, category, tags, published_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,{pub})""",
+            seo_title, seo_description, category, tags, author, image_url, image_alt,
+            image_credit, image_width, image_height, featured, pinned, breaking_flag,
+            editors_pick, scheduled_at, source_url, published_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'1200','630',?,?,?,?,?,?,{pub})""",
         (data.title, data.slug, data.body, data.excerpt, data.status,
          user["id"], data.agent_id, data.seo_title or data.title,
          data.seo_description or data.excerpt, data.category.strip().lower(),
-         ",".join(t.strip().lower() for t in data.tags.split(",") if t.strip())),
+         ",".join(t.strip().lower() for t in data.tags.split(",") if t.strip()),
+         data.author or "AION Editorial", img, alt or f"Image: {data.title[:90]}",
+         "AION editorial artwork" if not data.image_url else "",
+         data.featured, data.pinned, data.breaking_flag, data.editors_pick,
+         data.scheduled_at, data.source_url),
     )
     return _get_or_404("contents", cid, "Conteúdo")
 

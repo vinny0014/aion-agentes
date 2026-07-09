@@ -2,6 +2,9 @@
 from pydantic_settings import BaseSettings
 
 
+SITE_URL_DEFAULT = "https://wordbet.com.br"
+
+
 class Settings(BaseSettings):
     APP_NAME: str = "AION AGENTES"
     ENV: str = "development"
