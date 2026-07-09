@@ -770,3 +770,40 @@ def test_v6_manual_article_gets_editorial_cover_automatically():
         "excerpt": "n", "status": "published", "category": "news", "tags": "t"})
     art = client.get("/api/public/articles/no-image-provided").json()
     assert art["image_url"].startswith("data:image/svg+xml")  # regra absoluta mantida
+
+
+# ====================== v6.1 QUALIDADE ======================
+def test_v61_editorial_art_has_no_title_text():
+    from app.agents.imagegen import editorial_svg
+    svg = editorial_svg("A very long unique headline that must not appear", "news")
+    assert "unique headline" not in svg  # fim da duplicação hero/card
+    assert "NEWS" in svg and "AION" in svg and 'width="1200"' in svg
+
+
+def test_v61_html_entities_unescaped(monkeypatch):
+    import app.agents.team as team
+    class R:
+        status_code = 200
+        text = ('<rss><channel><title>F</title><item>'
+                '<title>OpenAI&#8217;s new model &amp; benchmark wins</title>'
+                '<link>https://x.org/a</link>'
+                '<description>It&#8217;s a big week. The launch drew wide praise. '
+                'Analysts called it a turning point for open models.</description>'
+                '</item></channel></rss>')
+        def raise_for_status(self): pass
+    monkeypatch.setattr(team.httpx, "get", lambda *a, **k: R())
+    team.discovery_agent({"max_sources": 1})
+    from app.agents.core import mem_get
+    m = mem_get("agent:discovery", "manchetes_do_dia")[0]
+    assert "&#8217;" not in m["title"] and "OpenAI’s" in m["title"] and "&" in m["title"]
+    assert "It’s" in m["resumo"]
+
+
+def test_v61_synthesizer_why_it_matters():
+    from app.agents.synthesizer import sintetizar
+    art = sintetizar([{"title": "Model launch draws praise", "link": "https://x.org/a",
+                       "resumo": "The launch happened this week with new weights. "
+                                 "Developers can download them under a permissive license. "
+                                 "Analysts called it a turning point for open models."}])
+    assert art and "## Why it matters" in art["body"]
+    assert "turning point" in art["body"]  # frase real da fonte, não inventada

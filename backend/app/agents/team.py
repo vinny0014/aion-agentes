@@ -4,6 +4,7 @@ Regra de honestidade: nenhum agente inventa dados. Onde uma credencial ou
 serviço externo falta, o agente registra a limitação real na memória/logs
 e devolve o que É possível fazer localmente.
 """
+import html
 import json
 import re
 
@@ -46,11 +47,11 @@ def discovery_agent(payload: dict) -> dict:
                 l = re.search(r'<link[^>]*href="([^"]+)"|<link>(.*?)</link>', item, re.S)
                 if not t:
                     continue
-                titulo = re.sub(r"<[^>]+>", "", t.group(1)).strip()
+                titulo = html.unescape(re.sub(r"<[^>]+>", "", t.group(1))).strip()
                 link = (l.group(1) or l.group(2) or "").strip() if l else ""
                 img = re.search(r'<(?:enclosure|media:content|media:thumbnail)[^>]*url="([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"', item)
                 desc_m = re.search(r"<(?:description|summary)[^>]*>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</(?:description|summary)>", item, re.S)
-                desc = re.sub(r"<[^>]+>", " ", desc_m.group(1)).strip() if desc_m else ""
+                desc = html.unescape(re.sub(r"<[^>]+>", " ", desc_m.group(1))).strip() if desc_m else ""
                 desc = re.sub(r"\s+", " ", desc)[:600]
                 if titulo:
                     found.append({"source": url, "title": titulo, "link": link,

@@ -50,11 +50,10 @@ def editorial_svg(titulo: str, categoria: str = "IA") -> str:
 <circle cx="{bx}" cy="{by}" r="260" fill="url(#g1)"/>
 <circle cx="{bx-380}" cy="{by+260}" r="240" fill="url(#g2)"/>
 <rect width="1200" height="630" fill="url(#fade)"/>
-<g transform="translate(72,300)">
-<text x="0" y="0" font-family="Georgia,serif" font-size="26" fill="{c2}" font-weight="bold" letter-spacing="4">{cat}</text>
-<text x="0" y="70" font-family="Georgia,serif" font-size="58" fill="#ffffff" font-weight="bold" style="font-family:Georgia,'Times New Roman',serif">
-{_wrap(t, 30)}
-</text>
+<circle cx="{980 - (h % 120)}" cy="{470 + (h % 60)}" r="150" fill="url(#g2)" opacity="0.5"/>
+<line x1="0" y1="{500 + (h % 40)}" x2="1200" y2="{380 + (h % 60)}" stroke="{c2}" stroke-opacity="0.18" stroke-width="2"/>
+<g transform="translate(72,120)">
+<text x="0" y="0" font-family="Georgia,serif" font-size="24" fill="{c2}" font-weight="bold" letter-spacing="6">{cat}</text>
 </g>
 <g transform="translate(72,556)">
 <polygon points="0,0 22,0 11,-20" fill="{c1}"/>

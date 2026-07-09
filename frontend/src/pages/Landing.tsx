@@ -136,10 +136,10 @@ export default function Landing() {
             {destaque ? (
               <article className="thumb thumb-hero relative flex h-auto min-h-[380px] flex-col justify-end overflow-hidden rounded-xl border border-line p-8">
                 {destaque.image_url && (
-                  <img src={destaque.image_url} alt={destaque.image_alt || destaque.title}
+                  <img onError={(e) => { e.currentTarget.style.display = "none"; }} src={destaque.image_url} alt={destaque.image_alt || destaque.title}
                     width={1200} height={630}
                     className="absolute inset-0 h-full w-full object-cover opacity-45"
-                    fetchPriority="high" decoding="async" />
+                    decoding="async" {...({ fetchpriority: "high" } as any)} />
                 )}
                 <div className="orb h-56 w-56 bg-ultra/40" style={{ top: "-30px", right: "6%" }} />
                 <div className="relative z-10">
@@ -181,9 +181,12 @@ export default function Landing() {
                 {ultimas.map((a) => (
                   <Link key={a.id} to={`/article/${a.slug}`} className="card card-hover !p-3">
                     <div className="thumb mb-3">
-                      <img src={a.image_url} alt={a.image_alt || a.title}
+                      <span className="grad-text relative z-0 font-display text-3xl font-bold">
+                        {(a.category || "ai").slice(0, 1).toUpperCase()}
+                      </span>
+                      <img onError={(e) => { e.currentTarget.style.display = "none"; }} src={a.image_url} alt={a.image_alt || a.title}
                         loading="lazy" decoding="async" width={1200} height={630}
-                        className="absolute inset-0 h-full w-full object-cover" />
+                        className="absolute inset-0 z-10 h-full w-full object-cover" />
                     </div>
                     {a.category && <p className="tag text-signal">{a.category}</p>}
                     <p className="mt-1 text-sm font-medium leading-snug">{a.title}</p>
@@ -227,7 +230,7 @@ export default function Landing() {
                   <li key={a.id} className="flex gap-3">
                     <div className="thumb !h-12 !w-12 shrink-0 !rounded-md">
                       {a.image_url
-                        ? <img src={a.image_url} alt={a.image_alt || a.title} loading="lazy"
+                        ? <img onError={(e) => { e.currentTarget.style.display = "none"; }} src={a.image_url} alt={a.image_alt || a.title} loading="lazy"
                             className="absolute inset-0 h-full w-full rounded-md object-cover" />
                         : <span className="grad-text relative z-10 font-display text-sm font-bold">▲</span>}
                     </div>

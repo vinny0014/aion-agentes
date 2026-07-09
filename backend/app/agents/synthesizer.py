@@ -72,9 +72,19 @@ def sintetizar(grupo: list[dict]) -> dict | None:
     if not blocos:
         return None
     kws = extract_keywords(titulo + " " + principal["resumo"], top=5)
+    # Why it matters: frases adicionais das fontes (nunca análise inventada)
+    extras = []
+    for m in com_resumo[:3]:
+        fr = _frases(m["resumo"])
+        if len(fr) > 2:
+            extras.append(fr[2])
+    why = (" ".join(extras[:2]) if extras else
+           "The full details live in the sources below; AION will keep tracking this story "
+           "as the coverage develops.")
     corpo = (
         f"{lead}\n\n"
         f"## What we know\n\n" + "\n\n".join(blocos) + "\n\n"
+        f"## Why it matters\n\n{why}\n\n"
         f"## Context\n\n"
         f"This briefing was produced by AION from the coverage of "
         f"{len(fontes_citadas)} source(s) on this topic, with links to the original stories. "
@@ -83,7 +93,7 @@ def sintetizar(grupo: list[dict]) -> dict | None:
         "\n\n".join(f"- {f['fonte']}: [{f['link']}]({f['link']})" for f in fontes_citadas if f['link'])
     )
     return {
-        "title": titulo[:200],
+        "title": __import__("html").unescape(titulo)[:200],
         "slug": slugify(titulo),
         "body": corpo,
         "excerpt": (frases_p[0][:157] + "…") if len(frases_p[0]) > 158 else frases_p[0],

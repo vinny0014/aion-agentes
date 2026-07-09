@@ -205,8 +205,8 @@ export function Artigo() {
         </p>
         <h1 className="font-display text-4xl font-bold leading-tight tracking-tight">{artigo.title}</h1>
         {artigo.image_url && (
-          <img src={artigo.image_url} alt={artigo.image_alt || artigo.title}
-            width={1200} height={630} decoding="async" fetchPriority="high"
+          <img onError={(e) => { e.currentTarget.style.display = "none"; }} src={artigo.image_url} alt={artigo.image_alt || artigo.title}
+            width={1200} height={630} decoding="async" {...({ fetchpriority: "high" } as any)}
             className="mt-6 w-full rounded-xl border border-line object-cover" />
         )}
         {artigo.excerpt && <p className="mt-4 text-lg text-slateui">{artigo.excerpt}</p>}
@@ -231,7 +231,7 @@ export function Artigo() {
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               {relacionados.map((r) => (
                 <Link key={r.id} to={`/article/${r.slug}`} className="card card-hover !p-3">
-                  {r.image_url && <img src={r.image_url} alt={r.image_alt || r.title} loading="lazy"
+                  {r.image_url && <img onError={(e) => { e.currentTarget.style.display = "none"; }} src={r.image_url} alt={r.image_alt || r.title} loading="lazy"
                     className="mb-2 h-24 w-full rounded-md object-cover" />}
                   <p className="tag">{dataBr(r.published_at)}</p>
                   <p className="mt-1 text-sm font-medium leading-snug">{r.title}</p>
