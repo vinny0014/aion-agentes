@@ -880,3 +880,81 @@ def test_pro_quality_gate_zero_empty():
     from app.agents.team import image_quality_agent
     q = image_quality_agent({})
     assert q["vazios"] == 0 and q["formatos_invalidos"] == 0 and q["aprovado"] is True
+
+
+# ====================== HERO IMAGE PRIORITY ======================
+def _probe_fake(url):
+    # dimensões simuladas por URL (sem rede nos testes)
+    if "big" in url: return {"ok": True, "w": 1600, "h": 838}
+    if "small" in url: return {"ok": True, "w": 300, "h": 300}
+    return {"ok": None, "w": 0, "h": 0}
+
+
+def test_hero_radar_picks_best_photo_among_headlines(monkeypatch):
+    monkeypatch.setenv("IMAGE_PROVIDER", "none")
+    import app.agents.imagegen as ig, app.agents.team as team
+    monkeypatch.setattr(ig, "probe_image", _probe_fake)
+    monkeypatch.setattr(team, "_og_image", lambda u: "")
+    from app.core import database as dbh
+    from app.agents.core import mem_set
+    mem_set("agent:discovery", "manchetes_do_dia", [
+        {"title": "Story one", "link": "https://a.com/1", "image": "https://a.com/small-thumb.jpg", "resumo": "x. y. z."},
+        {"title": "Story two", "link": "https://b.com/2", "image": "https://b.com/big-press.jpg", "resumo": "x. y. z."},
+    ])
+    cid = dbh.execute("""INSERT INTO contents (title, slug, body, excerpt, status, category)
+        VALUES ('Radar hero test','radar-hero-test','body','e','published','radar')""")
+    rep = team.compute_hero_image(cid)
+    assert rep["hero_image"] == "https://b.com/big-press.jpg"  # 1600px vence a miniatura
+    row = dbh.query_one("SELECT hero_image_url, hero_image_width, hero_image_source FROM contents WHERE id=?", (cid,))
+    assert row["hero_image_width"] == "1600" and row["hero_image_source"] == "feed"
+
+
+def test_hero_never_svg_when_photo_exists(monkeypatch):
+    monkeypatch.setenv("IMAGE_PROVIDER", "pollinations")
+    import app.agents.imagegen as ig, app.agents.team as team
+    monkeypatch.setattr(ig, "probe_image", lambda u: {"ok": None, "w": 0, "h": 0})
+    monkeypatch.setattr(team, "_og_image", lambda u: "")
+    from app.core import database as dbh
+    cid = dbh.execute("""INSERT INTO contents (title, slug, body, excerpt, status, image_url)
+        VALUES ('SVG never wins','svg-never-wins','body','e','published',
+        'data:image/svg+xml;base64,AA')""")
+    rep = team.compute_hero_image(cid)
+    assert rep["hero_image"].startswith("https://image.pollinations.ai/")  # foto vence a arte
+
+
+def test_hero_endpoint_returns_ranked_image(monkeypatch):
+    monkeypatch.setenv("IMAGE_PROVIDER", "none")
+    ha, _ = auth(ADMIN["email"], ADMIN["password"])
+    import app.agents.imagegen as ig, app.agents.team as team
+    monkeypatch.setattr(ig, "probe_image", _probe_fake)
+    monkeypatch.setattr(team, "_og_image", lambda u: "https://src.com/big-og.jpg")
+    r = client.post("/api/contents", headers=ha, json={
+        "title": "Featured with og", "slug": "featured-with-og",
+        "body": "long enough body for all the gates to accept during this validation.",
+        "excerpt": "e", "status": "published", "category": "news", "tags": "t",
+        "source_url": "https://src.com/story", "featured": 1})
+    assert r.status_code == 201  # PATCH/POST featured dispara compute? POST não — forçar:
+    from app.agents.team import compute_hero_image
+    compute_hero_image(r.json()["id"])
+    h = client.get("/api/public/hero").json()
+    assert h["slug"] == "featured-with-og" and h["image_url"] == "https://src.com/big-og.jpg"
+    assert h["hero_image_source"] == "og"
+    client.patch(f"/api/contents/{r.json()['id']}", headers=ha, json={"featured": 0})
+
+
+def test_hero_patch_featured_triggers_recompute(monkeypatch):
+    monkeypatch.setenv("IMAGE_PROVIDER", "none")
+    ha, _ = auth(ADMIN["email"], ADMIN["password"])
+    import app.agents.imagegen as ig, app.agents.team as team
+    monkeypatch.setattr(ig, "probe_image", _probe_fake)
+    monkeypatch.setattr(team, "_og_image", lambda u: "https://src.com/big-recompute.jpg")
+    r = client.post("/api/contents", headers=ha, json={
+        "title": "Recompute on featured", "slug": "recompute-on-featured",
+        "body": "sufficient body content to be accepted by validation gates easily.",
+        "excerpt": "e", "status": "published", "category": "news", "tags": "t",
+        "source_url": "https://src.com/story2"})
+    client.patch(f"/api/contents/{r.json()['id']}", headers=ha, json={"featured": 1})
+    from app.core import database as dbh
+    row = dbh.query_one("SELECT hero_image_url FROM contents WHERE id=?", (r.json()["id"],))
+    assert row["hero_image_url"] == "https://src.com/big-recompute.jpg"
+    client.patch(f"/api/contents/{r.json()['id']}", headers=ha, json={"featured": 0})

@@ -7,7 +7,7 @@ import AdSlot from "../lib/AdSlot";
 
 type Art = { id: number; title: string; slug: string; excerpt: string;
   category?: string; tags?: string; published_at: string; reading_time?: number;
-  image_url?: string; image_alt?: string; breaking?: boolean };
+  image_url?: string; image_alt?: string; image_credit?: string; breaking?: boolean };
 
 function dataBr(iso?: string | null) {
   if (!iso) return "";
@@ -136,10 +136,19 @@ export default function Landing() {
             {destaque ? (
               <article className="thumb thumb-hero relative flex h-auto min-h-[380px] flex-col justify-end overflow-hidden rounded-xl border border-line p-8">
                 {destaque.image_url && (
-                  <img onError={(e) => { e.currentTarget.style.display = "none"; }} src={destaque.image_url} alt={destaque.image_alt || destaque.title}
-                    width={1200} height={630}
-                    className="absolute inset-0 h-full w-full object-cover opacity-45"
-                    decoding="async" {...({ fetchpriority: "high" } as any)} />
+                  <>
+                    <img onError={(e) => { e.currentTarget.style.display = "none"; }}
+                      src={destaque.image_url} alt={destaque.image_alt || destaque.title}
+                      width={1200} height={630}
+                      className="absolute inset-0 h-full w-full object-cover object-center"
+                      decoding="async" {...({ fetchpriority: "high" } as any)} />
+                    <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/15" />
+                    {destaque.image_credit && (
+                      <span className="absolute right-3 top-3 z-10 rounded bg-black/50 px-2 py-0.5 font-mono text-[10px] text-white/70">
+                        {destaque.image_credit}
+                      </span>
+                    )}
+                  </>
                 )}
                 <div className="orb h-56 w-56 bg-ultra/40" style={{ top: "-30px", right: "6%" }} />
                 <div className="relative z-10">

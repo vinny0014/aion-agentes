@@ -118,3 +118,45 @@ def provider_photo_url(titulo: str, tags: str = "") -> tuple[str, str] | None:
         # apenas quando a chave existir — nunca simulamos o resultado.
         return None
     return None
+
+
+# ═══════════ HERO IMAGE RANKING ═══════════
+def probe_image(url: str) -> dict:
+    """Baixa a imagem (até 3MB) e mede dimensões reais via Pillow.
+    Falha graciosa (rede indisponível → dimensões desconhecidas)."""
+    if not url.startswith("http"):
+        return {"ok": False}
+    try:
+        import io
+        import httpx
+        from PIL import Image
+        r = httpx.get(url, timeout=8, follow_redirects=True,
+                      headers={"User-Agent": "AION-HeroImage/1.0"})
+        if r.status_code != 200 or not r.headers.get("content-type", "").startswith("image/"):
+            return {"ok": False}
+        img = Image.open(io.BytesIO(r.content[:3_000_000]))
+        return {"ok": True, "w": img.width, "h": img.height}
+    except Exception:
+        return {"ok": None, "w": 0, "h": 0}  # inconclusivo (sem rede): não reprova
+
+
+def score_hero_candidate(c: dict) -> float:
+    """Score de qualidade: oficial > og > provedor; 1200x630+; proporção 1.91."""
+    if not c.get("url") or c["url"].startswith("data:image/svg"):
+        return -100.0  # arte genérica: só como último recurso absoluto
+    s = 0.0
+    s += {"feed": 4, "og": 3, "provider": 1.5}.get(c.get("source", ""), 0)
+    w, h = c.get("w") or 0, c.get("h") or 0
+    if w >= 1200:
+        s += 2
+    elif 0 < w < 600:
+        s -= 3  # miniatura pequena
+    if w and h:
+        ratio = w / h
+        if 1.6 <= ratio <= 2.2:
+            s += 1  # próximo de 1.91:1
+        elif ratio < 1.0:
+            s -= 2  # retrato/avatar
+    if c.get("verificado") is False:
+        s -= 100  # não carregou (HTTP != 200)
+    return s

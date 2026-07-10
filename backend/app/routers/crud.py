@@ -144,6 +144,9 @@ def get_content(content_id: int, user: dict = Depends(get_current_user)):
 def update_content(content_id: int, data: ContentUpdate, user: dict = Depends(get_current_user)):
     row = _get_or_404("contents", content_id, "Conteúdo")
     _update("contents", content_id, data.model_dump(), touch=True)
+    if data.featured or data.breaking_flag:  # imagem do hero recalculada ao destacar
+        from ..agents.team import compute_hero_image
+        compute_hero_image(content_id)
     if data.status == "published" and row["status"] != "published":
         db.execute("UPDATE contents SET published_at = datetime('now') WHERE id = ?", (content_id,))
     return _get_or_404("contents", content_id, "Conteúdo")

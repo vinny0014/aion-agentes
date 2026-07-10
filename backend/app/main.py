@@ -130,8 +130,11 @@ def image_sitemap():
     """Sitemap de imagens — só URLs http(s) (data-URIs de arte editorial ficam de fora
     do sitemap, mas renderizam normalmente no site)."""
     base = SITE_URL
-    rows = db.query("SELECT slug, image_url, title FROM contents "
-                    "WHERE status='published' AND image_url LIKE 'http%'")
+    rows = db.query("""SELECT slug, title,
+                       CASE WHEN hero_image_url LIKE 'http%' THEN hero_image_url
+                            ELSE image_url END AS image_url
+                       FROM contents WHERE status='published'
+                       AND (image_url LIKE 'http%' OR hero_image_url LIKE 'http%')""")
     urls = "".join(
         f"<url><loc>{base}/conteudo/{r['slug']}</loc>"
         f"<image:image><image:loc>{r['image_url']}</image:loc>"

@@ -10,7 +10,7 @@ from ..schemas import ContactIn, EmailIn
 
 router = APIRouter(prefix="/api/public", tags=["public"])
 
-_FIELDS = "id, title, slug, excerpt, seo_title, seo_description, category, tags, image_url, image_alt, image_credit, image_width, image_height, source_url, author, featured, pinned, breaking_flag, editors_pick, published_at"
+_FIELDS = "id, title, slug, excerpt, seo_title, seo_description, category, tags, image_url, image_alt, image_credit, image_width, image_height, hero_image_url, hero_image_alt, hero_image_credit, hero_image_width, hero_image_height, hero_image_source, source_url, author, featured, pinned, breaking_flag, editors_pick, published_at"
 
 
 @router.get("/articles")
@@ -70,6 +70,10 @@ def get_hero():
         if row:
             row["breaking"] = rank["slug"] == breaking.get("slug")
             row["hero_score"] = rank["score"]
+            if row.get("hero_image_url"):  # imagem escolhida pelo ranking de qualidade
+                row["image_url"] = row["hero_image_url"]
+                row["image_alt"] = row["hero_image_alt"] or row["image_alt"]
+                row["image_credit"] = row["hero_image_credit"] or row["image_credit"]
             return row
     row = db.query_one(
         f"SELECT {_FIELDS} FROM contents WHERE status='published' "

@@ -231,6 +231,53 @@ def image_agent(payload: dict) -> dict:
             "garantia": "cadeia feed→og:image→foto→arte; image_url nunca fica vazio"}
 
 
+def compute_hero_image(content_id: int, manchetes: list | None = None) -> dict:
+    """Escolhe a MELHOR imagem para o hero deste conteúdo e grava hero_image_*.
+    Candidatos: imagem própria → og:image da fonte → imagens das manchetes
+    (Radar analisa todas) → foto do provedor. Arte SVG jamais vence uma foto."""
+    from .imagegen import probe_image, provider_photo_url, score_hero_candidate
+    c = db.query_one("SELECT * FROM contents WHERE id=?", (content_id,))
+    if not c:
+        return {"erro": "conteúdo inexistente"}
+    manchetes = manchetes if manchetes is not None else (
+        mem_get("agent:discovery", "manchetes_do_dia", []) or [])
+    cands = []
+    if (c["image_url"] or "").startswith("http"):
+        cands.append({"url": c["image_url"], "source": "feed",
+                      "credit": c["image_credit"] or _fonte_amigavel(c["source_url"])})
+    if c["source_url"]:
+        og = _og_image(c["source_url"])
+        if og:
+            cands.append({"url": og, "source": "og",
+                          "credit": _fonte_amigavel(c["source_url"])})
+    if c["category"] == "radar":  # Radar: melhor foto ENTRE as manchetes do dia
+        for m in manchetes:
+            if m.get("image"):
+                cands.append({"url": m["image"], "source": "feed",
+                              "credit": _fonte_amigavel(m.get("link") or m.get("source", ""))})
+    prov = provider_photo_url(c["title"], c["tags"] or "")
+    if prov:
+        cands.append({"url": prov[0], "source": "provider", "credit": prov[1]})
+    # medir dimensões reais (graciosa sem rede) e pontuar
+    for cand in cands:
+        pr = probe_image(cand["url"])
+        cand["w"], cand["h"] = pr.get("w") or 0, pr.get("h") or 0
+        cand["verificado"] = pr.get("ok")
+        cand["score"] = score_hero_candidate(cand)
+    cands = [x for x in cands if x["score"] > -50]
+    if not cands:
+        return {"hero_image": None, "motivo": "sem candidato fotográfico; arte permanece"}
+    melhor = max(cands, key=lambda x: x["score"])
+    db.execute("""UPDATE contents SET hero_image_url=?, hero_image_alt=?,
+                  hero_image_credit=?, hero_image_width=?, hero_image_height=?,
+                  hero_image_source=? WHERE id=?""",
+               (melhor["url"], f"{c['title'][:90]}", melhor["credit"],
+                str(melhor["w"] or 1200), str(melhor["h"] or 630),
+                melhor["source"], content_id))
+    return {"hero_image": melhor["url"], "source": melhor["source"],
+            "score": round(melhor["score"], 1), "candidatos": len(cands)}
+
+
 def image_quality_agent(payload: dict) -> dict:
     """Quality Check: bloqueia vazio/formatos inválidos; conta capas genéricas
     (SVG) e as re-enfileira para virar foto quando houver provedor."""
@@ -499,6 +546,7 @@ def publisher_agent(payload: dict) -> dict:
              f"Curadoria diária de notícias de IA de {data_br} com links para as fontes.",
              img_oficial))
         resultado["radar"] = {"id": cid, "slug": slug_hoje, "manchetes": min(len(manchetes), 12)}
+        resultado["radar_hero_image"] = compute_hero_image(cid, manchetes)
         # Hero imediato se houver manchete quente (Breaking News rodou antes do Radar existir)
         quentes = [m for m in manchetes if any(t in m["title"].lower() for t in _BREAKING_TERMS)]
         if quentes:
@@ -647,6 +695,11 @@ def image_repair_agent(payload: dict) -> dict:
     vazios = db.query("SELECT COUNT(*) n FROM contents WHERE image_url=''")[0]["n"]
     rep = image_agent({})
     restantes = db.query("SELECT COUNT(*) n FROM contents WHERE image_url=''")[0]["n"]
+    atual = hero_ranking()
+    if atual:
+        row = db.query_one("SELECT id FROM contents WHERE slug=?", (atual["slug"],))
+        if row:
+            compute_hero_image(row["id"])
     if vazios and not restantes:
         db.execute("INSERT INTO logs (level, source, message) VALUES ('info','image-repair',?)",
                    (f"Reparadas {vazios} imagem(ns) ausente(s); acervo 100% com imagem",))

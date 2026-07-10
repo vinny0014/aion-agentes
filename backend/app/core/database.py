@@ -59,6 +59,12 @@ CREATE TABLE IF NOT EXISTS contents (
     breaking_flag INTEGER NOT NULL DEFAULT 0,
     editors_pick INTEGER NOT NULL DEFAULT 0,
     scheduled_at TEXT NOT NULL DEFAULT '',
+    hero_image_url TEXT NOT NULL DEFAULT '',
+    hero_image_alt TEXT NOT NULL DEFAULT '',
+    hero_image_credit TEXT NOT NULL DEFAULT '',
+    hero_image_width TEXT NOT NULL DEFAULT '',
+    hero_image_height TEXT NOT NULL DEFAULT '',
+    hero_image_source TEXT NOT NULL DEFAULT '',
     published_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -165,7 +171,8 @@ def init_db():
         conn.executescript(SCHEMA)
         # Migração leve para bancos criados antes de category/tags
         for col in ("category", "tags", "source_url", "image_url", "author",
-                    "featured", "pinned", "breaking_flag", "editors_pick", "scheduled_at",
+                    "featured", "pinned", "breaking_flag", "editors_pick", "scheduled_at", "hero_image_url", "hero_image_alt",
+                    "hero_image_credit", "hero_image_width", "hero_image_height", "hero_image_source",
                     "image_alt", "image_credit", "image_width", "image_height"):
             try:
                 conn.execute(f"ALTER TABLE contents ADD COLUMN {col} TEXT NOT NULL DEFAULT ''")
