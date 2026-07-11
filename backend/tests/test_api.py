@@ -261,7 +261,7 @@ def test_robots_blocks_private_areas():
     assert "Disallow: /admin" in txt and "Disallow: /dashboard" in txt
     assert "Disallow: /api/" in txt and "Allow: /" in txt
     sm = client.get("/sitemap.xml").text
-    for p in ["/conteudos", "/categorias", "/tags", "/privacidade", "/termos", "/contato"]:
+    for p in ["/articles", "/categories", "/tags", "/privacy", "/terms", "/contact"]:
         assert p in sm, f"faltou no sitemap: {p}"
     assert "/admin" not in sm and "/dashboard" not in sm
 
@@ -958,3 +958,58 @@ def test_hero_patch_featured_triggers_recompute(monkeypatch):
     row = dbh.query_one("SELECT hero_image_url FROM contents WHERE id=?", (r.json()["id"],))
     assert row["hero_image_url"] == "https://src.com/big-recompute.jpg"
     client.patch(f"/api/contents/{r.json()['id']}", headers=ha, json={"featured": 0})
+
+
+# ====================== v6.4 — DOMINIO OFICIAL (regressão obrigatória) ======================
+_PROIBIDOS = ("wordbet.com.br", "aion-agentes.vercel.app", "aion-agentes-api.onrender.com")
+_ATIVOS = ["app", "../frontend/src", "../frontend/index.html", "../frontend/public",
+           "../vercel.json"]
+
+
+def test_v64_no_forbidden_domains_in_active_code():
+    import os
+    achados = []
+    for raiz in _ATIVOS:
+        alvo = os.path.join(os.path.dirname(__file__), "..", raiz)
+        if os.path.isfile(alvo):
+            arquivos = [alvo]
+        else:
+            arquivos = [os.path.join(dp, f) for dp, _, fs in os.walk(alvo) for f in fs
+                        if f.endswith((".py", ".ts", ".tsx", ".html", ".json", ".txt"))]
+        for a in arquivos:
+            try:
+                conteudo = open(a, encoding="utf-8", errors="ignore").read()
+            except Exception:
+                continue
+            for dom in _PROIBIDOS:
+                if dom in conteudo:
+                    achados.append(f"{a}: {dom}")
+    assert not achados, f"Referências antigas em código ativo: {achados}"
+
+
+def test_v64_sitemap_only_official_domain_and_english_routes():
+    xml = client.get("/sitemap.xml").text
+    assert "aion-news-os.vercel.app" in xml
+    for proibido in _PROIBIDOS + ("/conteudo", "/sobre", "/privacidade", "/admin", "/dashboard"):
+        assert proibido not in xml, f"sitemap contém {proibido}"
+    for rota in ("/articles", "/about", "/privacy", "/terms", "/contact", "/article/"):
+        assert rota in xml
+
+
+def test_v64_robots_official_with_three_sitemaps():
+    txt = client.get("/robots.txt").text
+    assert txt.count("Sitemap: https://aion-news-os.vercel.app/") == 3
+    assert "Disallow: /api/" in txt and "Disallow: /admin" in txt
+    for dom in _PROIBIDOS:
+        assert dom not in txt
+
+
+def test_v64_rss_and_newssitemap_use_article_route():
+    assert "aion-news-os.vercel.app/article/" in client.get("/rss.xml").text
+    assert "aion-news-os.vercel.app/article/" in client.get("/news-sitemap.xml").text
+
+
+def test_v64_home_canonical_official():
+    html = open(__file__.replace("backend/tests/test_api.py", "frontend/index.html")).read()
+    assert '<link rel="canonical" href="https://aion-news-os.vercel.app/" />' in html
+    assert "wordbet" not in html

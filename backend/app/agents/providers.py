@@ -77,7 +77,7 @@ def generate(provider: str, prompt: str) -> str:
         return _openai_compat(
             "https://openrouter.ai/api/v1/chat/completions",
             settings.OPENROUTER_API_KEY, "anthropic/claude-sonnet-4",
-            prompt, {"HTTP-Referer": os.environ.get("SITE_URL", "https://wordbet.com.br")})
+            prompt, {"HTTP-Referer": os.environ.get("SITE_URL", "https://aion-news-os.vercel.app")})
     if provider == "anthropic":
         return _anthropic(prompt)
     if provider == "gemini":

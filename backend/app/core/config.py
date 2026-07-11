@@ -2,7 +2,7 @@
 from pydantic_settings import BaseSettings
 
 
-SITE_URL_DEFAULT = "https://wordbet.com.br"
+SITE_URL_DEFAULT = "https://aion-news-os.vercel.app"
 
 
 class Settings(BaseSettings):

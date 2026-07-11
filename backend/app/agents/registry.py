@@ -214,7 +214,7 @@ def process_queue_once() -> dict:
                            f"{'; '.join(m['title'] for m in brief.get('manchetes_correlatas', []))}. "
                            f"Fontes: {fontes}. "
                            f"Linke internamente: "
-                           f"{'; '.join('/conteudo/'+a['slug'] for a in brief.get('artigos_internos', []))}.")
+                           f"{'; '.join('/article/'+a['slug'] for a in brief.get('artigos_internos', []))}.")
             db.execute(
                 "UPDATE content_queue SET status = 'processing', provider = ? WHERE id = ?",
                 (provider, item["id"]),

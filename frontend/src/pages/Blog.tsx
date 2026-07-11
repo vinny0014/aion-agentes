@@ -1,3 +1,4 @@
+import { SITE } from "../lib/site";
 import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { Nav } from "./Landing";
@@ -146,16 +147,16 @@ export function Artigo() {
         setMeta('meta[name="description"]', "content", a.seo_description || a.excerpt || "");
         setMeta('meta[property="og:title"]', "content", a.seo_title || a.title);
         setMeta('meta[property="og:description"]', "content", a.seo_description || a.excerpt || "");
-        setMeta('meta[property="og:url"]', "content", `https://wordbet.com.br/conteudo/${a.slug}`);
-        setMeta('link[rel="canonical"]', "href", `https://wordbet.com.br/conteudo/${a.slug}`);
+        setMeta('meta[property="og:url"]', "content", `${SITE}/article/${a.slug}`);
+        setMeta('link[rel="canonical"]', "href", `${SITE}/article/${a.slug}`);
         const old = document.getElementById("jsonld-artigo");
         if (old) old.remove();
         const bc = document.createElement("script");
         bc.type = "application/ld+json"; bc.id = "jsonld-breadcrumb";
         document.getElementById("jsonld-breadcrumb")?.remove();
         bc.textContent = JSON.stringify({"@context":"https://schema.org","@type":"BreadcrumbList",
-          itemListElement:[{"@type":"ListItem",position:1,name:"Home",item:"https://wordbet.com.br/"},
-          {"@type":"ListItem",position:2,name:"Articles",item:"https://wordbet.com.br/conteudos"},
+          itemListElement:[{"@type":"ListItem",position:1,name:"Home",item:`${SITE}/`},
+          {"@type":"ListItem",position:2,name:"Articles",item:`${SITE}/articles`},
           {"@type":"ListItem",position:3,name:a.title}]});
         document.head.appendChild(bc);
         const ld = document.createElement("script");
@@ -165,7 +166,7 @@ export function Artigo() {
           "@context": "https://schema.org", "@type": "NewsArticle",
           headline: a.title, description: a.seo_description || a.excerpt,
           datePublished: a.published_at, inLanguage: "en-US",
-          mainEntityOfPage: `https://wordbet.com.br/conteudo/${a.slug}`,
+          mainEntityOfPage: `${SITE}/article/${a.slug}`,
           ...(a.image_url ? { image: [a.image_url] } : {}),
           publisher: { "@type": "Organization", name: "AION AGENTES" },
           author: { "@type": "Organization", name: "AION AGENTES" },

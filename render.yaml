@@ -11,8 +11,10 @@ services:
         value: production
       - key: SECRET_KEY
         generateValue: true
+      - key: SITE_URL
+        value: https://aion-news-os.vercel.app
       - key: CORS_ORIGINS
-        value: https://aion-agentes.vercel.app
+        value: https://aion-news-os.vercel.app
       - key: DATABASE_URL
         value: sqlite:////var/data/aion.db
     disk:

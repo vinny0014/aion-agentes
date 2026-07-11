@@ -351,7 +351,7 @@ def social_media_agent(payload: dict) -> dict:
         hashtags = " ".join(f"#{t.strip().replace(' ', '')}"
                             for t in (c["tags"] or "ia").split(",")[:4])
         import os as _os
-        url = f"{_os.environ.get('SITE_URL', 'https://wordbet.com.br').rstrip('/')}/article/{c['slug']}"
+        url = f"{_os.environ.get('SITE_URL', 'https://aion-news-os.vercel.app').rstrip('/')}/article/{c['slug']}"
         posts = {}
         for rede in redes:
             curto = rede in ("x", "bluesky", "mastodon", "threads")

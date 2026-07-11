@@ -6,19 +6,19 @@
   "rewrites": [
     {
       "source": "/robots.txt",
-      "destination": "https://aion-agentes-api.onrender.com/robots.txt"
+      "destination": "https://aion-news-api.onrender.com/robots.txt"
     },
     {
       "source": "/sitemap.xml",
-      "destination": "https://aion-agentes-api.onrender.com/sitemap.xml"
+      "destination": "https://aion-news-api.onrender.com/sitemap.xml"
     },
     {
       "source": "/news-sitemap.xml",
-      "destination": "https://aion-agentes-api.onrender.com/news-sitemap.xml"
+      "destination": "https://aion-news-api.onrender.com/news-sitemap.xml"
     },
     {
       "source": "/rss.xml",
-      "destination": "https://aion-agentes-api.onrender.com/rss.xml"
+      "destination": "https://aion-news-api.onrender.com/rss.xml"
     },
     {
       "source": "/((?!api/).*)",

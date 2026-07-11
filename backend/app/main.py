@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI):
     scheduler.shutdown(wait=False)
 
 
-SITE_URL = os.environ.get("SITE_URL", "https://wordbet.com.br").rstrip("/")
+SITE_URL = os.environ.get("SITE_URL", "https://aion-news-os.vercel.app").rstrip("/")
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -103,18 +103,19 @@ for r in (auth_router, users_router, agents_router, content_router, tasks_router
 def robots():
     return ("User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /admin\nDisallow: /dashboard\n"
             f"Sitemap: {SITE_URL}/sitemap.xml\n"
-            f"Sitemap: {SITE_URL}/news-sitemap.xml\n")
+            f"Sitemap: {SITE_URL}/news-sitemap.xml\n"
+            f"Sitemap: {SITE_URL}/image-sitemap.xml\n")
 
 
 @app.get("/sitemap.xml", tags=["seo"])
 def sitemap():
     base = SITE_URL
-    static = ["", "/sobre", "/conteudos", "/categorias", "/tags",
-              "/privacidade", "/termos", "/contato"]
+    static = ["", "/articles", "/categories", "/tags",
+              "/about", "/privacy", "/terms", "/contact"]
     urls = [f"<url><loc>{base}{p}</loc></url>" for p in static]
     for c in db.query("SELECT slug, updated_at FROM contents WHERE status = 'published'"):
         urls.append(
-            f"<url><loc>{base}/conteudo/{c['slug']}</loc>"
+            f"<url><loc>{base}/article/{c['slug']}</loc>"
             f"<lastmod>{c['updated_at'][:10]}</lastmod></url>"
         )
     xml = (
@@ -136,7 +137,7 @@ def image_sitemap():
                        FROM contents WHERE status='published'
                        AND (image_url LIKE 'http%' OR hero_image_url LIKE 'http%')""")
     urls = "".join(
-        f"<url><loc>{base}/conteudo/{r['slug']}</loc>"
+        f"<url><loc>{base}/article/{r['slug']}</loc>"
         f"<image:image><image:loc>{r['image_url']}</image:loc>"
         f"<image:title>{r['title'][:100].replace('&','&amp;').replace('<','&lt;')}</image:title>"
         f"</image:image></url>" for r in rows)
@@ -156,8 +157,8 @@ def rss_feed():
     def esc(t): return (t or "").replace("&", "&amp;").replace("<", "&lt;")
     items = "".join(
         f"<item><title>{esc(r['title'])}</title>"
-        f"<link>{base}/conteudo/{r['slug']}</link>"
-        f"<guid>{base}/conteudo/{r['slug']}</guid>"
+        f"<link>{base}/article/{r['slug']}</link>"
+        f"<guid>{base}/article/{r['slug']}</guid>"
         f"<description>{esc(r['excerpt'])}</description>"
         f"<pubDate>{r['published_at']}</pubDate></item>" for r in rows)
     xml = ('<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel>'
@@ -177,7 +178,7 @@ def news_sitemap():
            WHERE status='published' AND published_at > datetime('now','-2 days')
            ORDER BY published_at DESC LIMIT 100""")
     urls = "".join(
-        f"<url><loc>{base}/conteudo/{r['slug']}</loc>"
+        f"<url><loc>{base}/article/{r['slug']}</loc>"
         f"<news:news><news:publication><news:name>AION AI NEWS OS</news:name>"
         f"<news:language>pt</news:language></news:publication>"
         f"<news:publication_date>{r['published_at'].replace(' ', 'T')}Z</news:publication_date>"
