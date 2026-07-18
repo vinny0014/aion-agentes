@@ -1,5 +1,5 @@
 /** Cliente da API AION com renovação automática de token. */
-const BASE = import.meta.env.VITE_API_URL || "";
+export const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
 export function getTokens() {
   return {
@@ -21,7 +21,7 @@ export function clearTokens() {
 async function tryRefresh(): Promise<boolean> {
   const { refresh } = getTokens();
   if (!refresh) return false;
-  const r = await fetch(`${BASE}/api/auth/refresh`, {
+  const r = await fetch(`${API_BASE}/api/auth/refresh`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ refresh_token: refresh }),
@@ -34,30 +34,43 @@ async function tryRefresh(): Promise<boolean> {
 
 export async function api(path: string, options: RequestInit = {}, retry = true): Promise<any> {
   const { access } = getTokens();
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(options.headers as Record<string, string>),
-  };
+  const headers: Record<string, string> = { ...(options.headers as Record<string, string>) };
+  if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
   if (access) headers.Authorization = `Bearer ${access}`;
-  const res = await fetch(`${BASE}${path}`, { ...options, headers });
+  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
   if (res.status === 401 && retry && (await tryRefresh())) {
     return api(path, options, false);
   }
   if (res.status === 204) return null;
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.detail || `Erro ${res.status}`);
+  if (!res.ok) throw new Error(body.detail || `Request failed (${res.status})`);
   return body;
 }
 
 export async function login(email: string, password: string) {
   const form = new URLSearchParams({ username: email, password });
-  const r = await fetch(`${BASE}/api/auth/login`, {
+  const r = await fetch(`${API_BASE}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: form,
   });
   const body = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(body.detail || "Falha no login");
+  if (!r.ok) throw new Error(body.detail || "Sign-in failed");
   setTokens(body.access_token, body.refresh_token);
   return body;
+}
+
+export async function uploadEditorialImage(file: File, title: string) {
+  const { access } = getTokens();
+  const body = new FormData();
+  body.append("image", file);
+  const response = await fetch(
+    `${API_BASE}/api/orchestrator/upload-image?title=${encodeURIComponent(title || "AION")}`,
+    { method: "POST", headers: access ? { Authorization: `Bearer ${access}` } : {}, body },
+  );
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.detail || `Upload failed (${response.status})`);
+  return payload;
 }

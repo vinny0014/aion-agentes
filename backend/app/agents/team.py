@@ -11,12 +11,11 @@ import re
 import httpx
 
 from ..core import database as db
-from ..core.config import settings
+from ..core.config import settings, site_url
 from .core import budget_remaining, mem_get, mem_set
 from .discovery import extract_keywords, reading_time_minutes
 from .providers import slugify
 from .registry import process_queue_once, resolve_provider, ProviderNotConfigured
-from ..core.config import site_url as _site_url
 
 # Fontes padrão do Discovery (RSS/Atom oficiais) — configuráveis via memória
 DEFAULT_SOURCES = [
@@ -54,7 +53,8 @@ def discovery_agent(payload: dict) -> dict:
                 desc_m = re.search(r"<(?:description|summary)[^>]*>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</(?:description|summary)>", item, re.S)
                 desc = html.unescape(re.sub(r"<[^>]+>", " ", desc_m.group(1))).strip() if desc_m else ""
                 desc = re.sub(r"\s+", " ", desc)[:600]
-                if titulo:
+                from ..content_rules import looks_english
+                if titulo and looks_english(titulo, desc):
                     found.append({"source": url, "title": titulo, "link": link,
                                   "image": img.group(1) if img else "", "resumo": desc})
         except Exception as exc:
@@ -90,20 +90,21 @@ def fact_check_agent(payload: dict) -> dict:
     aprovados, bloqueados = [], []
     for c in drafts:
         problemas = []
-        if "[Rascunho automático" in (c["body"] or "") or "[Desenvolva" in (c["body"] or ""):
+        if any(marker in (c["body"] or "") for marker in
+               ("[Rascunho automático", "[Desenvolva", "[Auto draft", "[Develop")):
             problemas.append("placeholders de rascunho no corpo")
         palavras = len((c["body"] or "").split())
         if len(c["body"] or "") < 200:
             problemas.append("corpo muito curto (<200 caracteres)")
-        elif c.get("agent_id") and palavras < 500:
-            problemas.append(f"artigo de IA com só {palavras} palavras (mínimo 500 p/ publicação automática)")
+        elif c.get("agent_id") and palavras < (250 if c.get("category") in {"news", "radar"} else 500):
+            problemas.append("AI content is below the minimum editorial word count")
         if c.get("agent_id"):
             if not (c.get("category") or "").strip():
                 problemas.append("artigo de IA sem categoria")
             if not (c.get("excerpt") or "").strip():
                 problemas.append("artigo de IA sem resumo")
-            if not (c.get("image_url") or "").strip():
-                problemas.append("artigo de IA sem imagem")
+        from ..content_rules import publication_issues
+        problemas.extend(publication_issues(c))
         dup = db.query_one(
             "SELECT id FROM contents WHERE title = ? AND id != ? AND status = 'published'",
             (c["title"], c["id"]))
@@ -118,6 +119,7 @@ def fact_check_agent(payload: dict) -> dict:
         else:
             aprovados.append(c["id"])
     mem_set("agent:fact-check", "bloqueados", bloqueados)
+    mem_set("agent:fact-check", "aprovados", aprovados)
     if bloqueados:
         db.execute(
             "INSERT INTO logs (level, source, message, meta_json) VALUES ('warn','fact-check',?,?)",
@@ -146,7 +148,7 @@ def seo_agent(payload: dict) -> dict:
     for c in rows:
         seo_title = (c["seo_title"] or c["title"])[:60]
         desc = (c["seo_description"] or c["excerpt"] or (c["body"] or "")[:157])[:160]
-        alt = f"Ilustração do artigo: {c['title'][:80]}"
+        alt = f"Editorial image for: {c['title'][:80]}"
         if seo_title != c["seo_title"] or desc != c["seo_description"]:
             db.execute("UPDATE contents SET seo_title = ?, seo_description = ? WHERE id = ?",
                        (seo_title, desc, c["id"]))
@@ -174,135 +176,160 @@ def _og_image(page_url: str) -> str:
         return ""
 
 
-def _needs_image(c, provider_on: bool) -> bool:
-    if not c["image_url"]:
-        return True
-    # capa SVG genérica é substituída por foto quando há provedor
-    return provider_on and c["image_url"].startswith("data:image/svg")
+def _needs_image(c) -> bool:
+    from .imagegen import managed_image_path
+    return managed_image_path(c["image_url"] or "") is None
 
 
 def image_agent(payload: dict) -> dict:
-    """IMAGE AGENT PRO — REGRA ABSOLUTA: nenhum artigo sem imagem boa.
-    Cadeia: (1) imagem do feed → (2) og:image da fonte → (3) foto do provedor
-    (Pollinations grátis / Gemini via ENV) → (4) arte editorial SVG (último recurso).
-    Alimenta e processa a image_queue; atualiza url/alt/credit/width/height."""
-    from .imagegen import editorial_data_uri, provider_photo_url
+    """Acquire and persist a verified raster image before publication.
+
+    Chain: existing URL -> feed image -> source Open Graph -> configured photo
+    provider. If every candidate fails, the article remains a draft.
+    """
+    from .imagegen import materialize_remote_image, provider_photo_url
     manchetes = mem_get("agent:discovery", "manchetes_do_dia", []) or []
     provider_on = provider_photo_url("probe", "") is not None
-    stats = {"feed": 0, "og_image": 0, "foto_provedor": 0, "arte_editorial": 0}
+    stats = {"existing": 0, "feed": 0, "og_image": 0, "photo_provider": 0, "blocked": 0}
 
     # 1) enfileirar quem precisa
     for c in db.query("SELECT id, image_url FROM contents WHERE status IN ('draft','published')"):
-        if _needs_image(c, provider_on) and not db.query_one(
-                "SELECT id FROM image_queue WHERE content_id=? AND status='queued'", (c["id"],)):
+        if not _needs_image(c):
+            continue
+        queued = db.query_one(
+            "SELECT id FROM image_queue WHERE content_id=? AND status='queued' ORDER BY id DESC LIMIT 1",
+            (c["id"],),
+        )
+        if queued:
+            continue
+        failed = db.query_one(
+            "SELECT id FROM image_queue WHERE content_id=? AND status='failed' ORDER BY id DESC LIMIT 1",
+            (c["id"],),
+        )
+        if failed:
+            db.execute("UPDATE image_queue SET status='queued', note='retry scheduled' WHERE id=?",
+                       (failed["id"],))
+        else:
             db.execute("INSERT INTO image_queue (content_id) VALUES (?)", (c["id"],))
 
     # 2) processar a fila
     fila = db.query("SELECT q.id qid, c.* FROM image_queue q JOIN contents c ON c.id=q.content_id "
                     "WHERE q.status='queued' LIMIT 40")
     for c in fila:
-        img = alt = credit = ""
+        prepared = None
+        alt = credit = source = ""
+        candidates = []
+        if (c["image_url"] or "").startswith(("http://", "https://")):
+            candidates.append((c["image_url"], c["image_credit"] or "Original source", "existing"))
         oficial = next((m.get("image") for m in manchetes
                         if m.get("image") and m["title"][:20] in (c["title"] or "")), "")
         if oficial:
-            img, credit = oficial, _fonte_amigavel(c["source_url"])
-            alt = f"Official image: {c['title'][:90]}"; stats["feed"] += 1
-        if not img and c["source_url"]:
+            candidates.append((oficial, _fonte_amigavel(c["source_url"]), "feed"))
+        if c["source_url"]:
             og = _og_image(c["source_url"])
             if og:
-                img, credit = og, _fonte_amigavel(c["source_url"])
-                alt = f"Official image: {c['title'][:90]}"; stats["og_image"] += 1
-        if not img and provider_on:
+                candidates.append((og, _fonte_amigavel(c["source_url"]), "og_image"))
+        if provider_on:
             prov = provider_photo_url(c["title"], c["tags"] or "")
             if prov:
-                img, credit = prov
-                alt = f"Editorial photo: {c['title'][:90]}"; stats["foto_provedor"] += 1
-        if not img:
-            img = editorial_data_uri(c["title"], c["category"] or "news")
-            credit, alt = "AION editorial artwork", f"AION editorial artwork: {c['title'][:90]}"
-            stats["arte_editorial"] += 1
-        db.execute("""UPDATE contents SET image_url=?, image_alt=?, image_credit=?,
-                      image_width='1200', image_height='630' WHERE id=?""",
-                   (img, alt, credit, c["id"]))
-        db.execute("UPDATE image_queue SET status='done', attempts=attempts+1, note=? WHERE id=?",
-                   (alt[:60], c["qid"]))
-    restantes = db.query_one("SELECT COUNT(*) n FROM contents WHERE image_url=''")["n"]
+                candidates.append((prov[0], prov[1], "photo_provider"))
+        for url, candidate_credit, candidate_source in candidates:
+            prepared = materialize_remote_image(url, c["title"])
+            if prepared:
+                credit, source = candidate_credit, candidate_source
+                break
+        if prepared:
+            alt = c["image_alt"] or f"Editorial image for {c['title'][:90]}"
+            db.execute("""UPDATE contents SET image_url=?, image_alt=?, image_credit=?,
+                          image_width='1200', image_height='630', hero_image_url=?,
+                          hero_image_alt=?, hero_image_credit=?, hero_image_width='1200',
+                          hero_image_height='630', hero_image_source=? WHERE id=?""",
+                       (prepared["image_url"], alt, credit, prepared["image_url"], alt,
+                        credit, source, c["id"]))
+            db.execute("UPDATE image_queue SET status='done', attempts=attempts+1, note=? WHERE id=?",
+                       (f"verified {source}"[:60], c["qid"]))
+            stats[source] += 1
+        else:
+            db.execute("UPDATE contents SET image_url='', hero_image_url='' WHERE id=?", (c["id"],))
+            db.execute("UPDATE image_queue SET status='failed', attempts=attempts+1, "
+                       "note='no valid raster candidate' WHERE id=?", (c["qid"],))
+            stats["blocked"] += 1
+    restantes = db.query_one("SELECT COUNT(*) n FROM contents WHERE image_url='' OR "
+                              "image_url NOT LIKE 'http%'")["n"]
     return {"processados": len(fila), **stats, "sem_imagem_restantes": restantes,
             "provedor_ativo": provider_on,
-            "garantia": "cadeia feed→og:image→foto→arte; image_url nunca fica vazio"}
+            "publication_gate": "articles without a verified raster image remain drafts"}
 
 
 def compute_hero_image(content_id: int, manchetes: list | None = None) -> dict:
     """Escolhe a MELHOR imagem para o hero deste conteúdo e grava hero_image_*.
     Candidatos: imagem própria → og:image da fonte → imagens das manchetes
     (Radar analisa todas) → foto do provedor. Arte SVG jamais vence uma foto."""
-    from .imagegen import probe_image, provider_photo_url, score_hero_candidate
+    from .imagegen import managed_image_path, materialize_remote_image, provider_photo_url
     c = db.query_one("SELECT * FROM contents WHERE id=?", (content_id,))
     if not c:
         return {"erro": "conteúdo inexistente"}
     manchetes = manchetes if manchetes is not None else (
         mem_get("agent:discovery", "manchetes_do_dia", []) or [])
+    if managed_image_path(c["image_url"] or ""):
+        db.execute("""UPDATE contents SET hero_image_url=image_url, hero_image_alt=image_alt,
+                      hero_image_credit=image_credit, hero_image_width='1200',
+                      hero_image_height='630', hero_image_source='primary' WHERE id=?""",
+                   (content_id,))
+        return {"hero_image": c["image_url"], "source": "primary", "score": 10, "candidatos": 1}
     cands = []
     if (c["image_url"] or "").startswith("http"):
-        cands.append({"url": c["image_url"], "source": "feed",
-                      "credit": c["image_credit"] or _fonte_amigavel(c["source_url"])})
+        cands.append((c["image_url"], "primary", c["image_credit"] or "Original source"))
     if c["source_url"]:
         og = _og_image(c["source_url"])
         if og:
-            cands.append({"url": og, "source": "og",
-                          "credit": _fonte_amigavel(c["source_url"])})
+            cands.append((og, "og", _fonte_amigavel(c["source_url"])))
     if c["category"] == "radar":  # Radar: melhor foto ENTRE as manchetes do dia
         for m in manchetes:
             if m.get("image"):
-                cands.append({"url": m["image"], "source": "feed",
-                              "credit": _fonte_amigavel(m.get("link") or m.get("source", ""))})
+                cands.append((m["image"], "feed",
+                              _fonte_amigavel(m.get("link") or m.get("source", ""))))
     prov = provider_photo_url(c["title"], c["tags"] or "")
     if prov:
-        cands.append({"url": prov[0], "source": "provider", "credit": prov[1]})
-    # medir dimensões reais (graciosa sem rede) e pontuar
-    for cand in cands:
-        pr = probe_image(cand["url"])
-        cand["w"], cand["h"] = pr.get("w") or 0, pr.get("h") or 0
-        cand["verificado"] = pr.get("ok")
-        cand["score"] = score_hero_candidate(cand)
-    cands = [x for x in cands if x["score"] > -50]
-    if not cands:
-        return {"hero_image": None, "motivo": "sem candidato fotográfico; arte permanece"}
-    melhor = max(cands, key=lambda x: x["score"])
-    db.execute("""UPDATE contents SET hero_image_url=?, hero_image_alt=?,
-                  hero_image_credit=?, hero_image_width=?, hero_image_height=?,
-                  hero_image_source=? WHERE id=?""",
-               (melhor["url"], f"{c['title'][:90]}", melhor["credit"],
-                str(melhor["w"] or 1200), str(melhor["h"] or 630),
-                melhor["source"], content_id))
-    return {"hero_image": melhor["url"], "source": melhor["source"],
-            "score": round(melhor["score"], 1), "candidatos": len(cands)}
+        cands.append((prov[0], "provider", prov[1]))
+    for url, source, credit in cands:
+        prepared = materialize_remote_image(url, c["title"])
+        if not prepared:
+            continue
+        db.execute("""UPDATE contents SET image_url=?, image_width='1200', image_height='630',
+                      hero_image_url=?, hero_image_alt=?, hero_image_credit=?,
+                      hero_image_width='1200', hero_image_height='630', hero_image_source=?
+                      WHERE id=?""",
+                   (prepared["image_url"], prepared["image_url"],
+                    c["image_alt"] or f"Editorial image for {c['title'][:90]}",
+                    credit, source, content_id))
+        return {"hero_image": prepared["image_url"], "source": source,
+                "score": 10, "candidatos": len(cands)}
+    return {"hero_image": None, "reason": "no verified raster candidate; content remains draft"}
 
 
 def image_quality_agent(payload: dict) -> dict:
     """Quality Check: bloqueia vazio/formatos inválidos; conta capas genéricas
     (SVG) e as re-enfileira para virar foto quando houver provedor."""
-    from .imagegen import provider_photo_url
+    from .imagegen import provider_photo_url, probe_image
     provider_on = provider_photo_url("probe", "") is not None
     vazios = db.query("SELECT id FROM contents WHERE status='published' AND image_url=''")
     invalidos = db.query("SELECT id FROM contents WHERE status='published' "
-                         "AND image_url NOT LIKE 'http%' AND image_url NOT LIKE 'data:image/%' "
-                         "AND image_url != ''")
+                         "AND image_url NOT LIKE 'http%'")
     genericos = db.query("SELECT id FROM contents WHERE status='published' "
-                         "AND image_url LIKE 'data:image/svg%'")
+                         "AND (image_url LIKE 'data:%' OR image_url LIKE '%.svg%')")
     reenfileirados = 0
-    for c in (vazios + invalidos + (genericos if provider_on else [])):
+    broken_http = [c for c in db.query("SELECT id,image_url FROM contents WHERE status='published' "
+                                       "AND image_url LIKE 'http%'") if probe_image(c["image_url"])["ok"] is not True]
+    for c in (vazios + invalidos + genericos + broken_http):
         if not db.query_one("SELECT id FROM image_queue WHERE content_id=? AND status='queued'",
                             (c["id"],)):
             db.execute("INSERT INTO image_queue (content_id) VALUES (?)", (c["id"],))
             reenfileirados += 1
-    # P3: em producao, capa SVG/data-URI publicada e REPROVACAO (nao apenas aviso)
-    from ..core.config import settings as _cfg
-    _svg_no_ar = len(genericos) if _cfg.ENV == "production" else 0
     return {"vazios": len(vazios), "formatos_invalidos": len(invalidos),
             "capas_genericas_svg": len(genericos), "reenfileirados": reenfileirados,
-            "svg_publicado_em_producao": _svg_no_ar,
-            "aprovado": not vazios and not invalidos and not _svg_no_ar,
+            "broken_http": len(broken_http),
+            "aprovado": not vazios and not invalidos and not genericos and not broken_http,
             "limitacao": "Detecção de texto embutido em fotos exigiria OCR; nossas artes "
                          "geradas não contêm título desde a v6.1"}
 
@@ -315,11 +342,11 @@ def image_prompt_agent(payload: dict) -> dict:
         key = f"prompt:{c['slug']}"
         if mem_get("agent:image", key):
             continue
-        kws = ", ".join((c["tags"] or "ia").split(",")[:3])
-        prompt = (f"Ilustração editorial abstrata e original sobre '{c['title']}'. "
-                  f"Tema: {kws}. Estilo: gradientes violeta e roxo sobre fundo escuro, "
-                  f"formas geométricas luminosas, grade sutil, sem texto, sem logotipos, "
-                  f"sem pessoas reais, sem elementos de marcas. Proporção 16:9.")
+        kws = ", ".join((c["tags"] or "ai").split(",")[:3])
+        prompt = (f"Original abstract editorial illustration about '{c['title']}'. "
+                  f"Theme: {kws}. Violet and purple gradients on a dark background, "
+                  f"luminous geometric shapes and a subtle grid. No text, logos, "
+                  f"real people or brand elements. 16:9 aspect ratio.")
         mem_set("agent:image", key, prompt)
         gerados += 1
     return {"prompts_gerados": gerados,
@@ -328,19 +355,12 @@ def image_prompt_agent(payload: dict) -> dict:
 
 # ═══════════ 7. TRANSLATION AGENT ═══════════
 def translation_agent(payload: dict) -> dict:
-    pend = db.query("SELECT id, slug, title FROM contents WHERE status='published' "
-                    "ORDER BY id DESC LIMIT 20")
-    fila = []
-    for c in pend:
-        for lang in ("en", "es"):
-            key = f"{lang}:{c['slug']}"
-            if not mem_get("agent:translation", key):
-                fila.append({"slug": c["slug"], "lang": lang})
-                mem_set("agent:translation", key,
-                        {"status": "pendente-credencial", "title": c["title"]})
-    return {"na_fila": len(fila), "idiomas": ["en", "es", "pt(nativo)"],
-            "limitacao": None if _tem_provider() else
-            "Tradução automática requer API de IA configurada; fila registrada na memória"}
+    from ..content_rules import looks_english
+    published = db.query("SELECT id, title, excerpt, body FROM contents WHERE status='published'")
+    invalid = [row["id"] for row in published
+               if not looks_english(row["title"], row["excerpt"], row["body"])]
+    return {"public_language": "en-US", "translations_enabled": False,
+            "non_english_publications": invalid, "approved": not invalid}
 
 
 # ═══════════ 8. SOCIAL MEDIA AGENT ═══════════
@@ -354,17 +374,16 @@ def social_media_agent(payload: dict) -> dict:
         if mem_get("agent:social-media", key):
             continue
         hashtags = " ".join(f"#{t.strip().replace(' ', '')}"
-                            for t in (c["tags"] or "ia").split(",")[:4])
-        import os as _os
-        url = f"{_site_url()}/article/{c['slug']}"
+                            for t in (c["tags"] or "ai").split(",")[:4])
+        url = f"{site_url()}/article/{c['slug']}"
         posts = {}
         for rede in redes:
             curto = rede in ("x", "bluesky", "mastodon", "threads")
             texto = (c["title"] if curto else f"{c['title']}\n\n{c['excerpt']}")
             posts[rede] = {"texto": f"{texto}\n\n{hashtags}\n{url}"[:280 if rede == 'x' else 1000],
-                           "cta": "Leia a matéria completa 👇",
+                           "cta": "Read the full story 👇",
                            "imagem_sugerida": mem_get("agent:image", f"prompt:{c['slug']}",
-                                                      "prompt pendente")}
+                                                      "image prompt pending")}
         mem_set("agent:social-media", key, posts)
         gerados += 1
     return {"artigos_com_posts": gerados, "redes": redes,
@@ -462,9 +481,9 @@ def qa_agent(payload: dict) -> dict:
     if quebrados:
         problemas.append(f"{quebrados} link(s) interno(s) quebrado(s)")
     sem_img = db.query_one("SELECT COUNT(*) n FROM contents WHERE status='published' "
-                           "AND image_url='' AND category != 'guides'")["n"]
+                           "AND image_url NOT LIKE 'http%'")["n"]
     return {"aprovado": not problemas, "problemas": problemas,
-            "noticias_sem_imagem_oficial": sem_img,
+            "published_without_http_image": sem_img,
             "cobertura": "suite completa no CI cobre rotas/auth/CRUD/SEO/pipeline/agentes"}
 
 
@@ -516,14 +535,15 @@ def publisher_agent(payload: dict) -> dict:
     cfg = db.query_one("SELECT value FROM app_settings WHERE key='publicacao_automatica'")
     if cfg and cfg["value"].lower() in ("off", "0", "false"):
         return {"status": "desativado via settings"}
-    resultado = {"radar": None, "auto_publicados": 0}
+    from ..content_rules import publication_issues
+    resultado = {"radar": None, "auto_publicados": 0, "bloqueados": 0}
 
     # --- Radar diário ---
     manchetes = mem_get("agent:discovery", "manchetes_do_dia", []) or []
     slug_hoje = "ai-radar-" + db.query_one("SELECT date('now') AS d")["d"]
     if manchetes and not db.query_one("SELECT id FROM contents WHERE slug = ?", (slug_hoje,)):
-        from datetime import datetime as _dt
-        data_br = _dt.utcnow().strftime("%b %d, %Y")
+        from datetime import datetime as _dt, timezone as _timezone
+        data_br = _dt.now(_timezone.utc).strftime("%b %d, %Y")
         linhas = []
         for m in manchetes[:12]:
             fonte = _fonte_amigavel(m.get("link") or m.get("source", ""))
@@ -538,27 +558,17 @@ def publisher_agent(payload: dict) -> dict:
               "from official feeds. Headlines belong to their respective sources; "
               "the curation and framing are original."
         )
-        img_oficial = next((m.get("image") for m in manchetes if m.get("image")), "")
-        # P3: a capa do Radar e garantida pelo image_agent no fim deste mesmo ciclo,
-        # entao o gate aqui vale so para PRODUCAO: sem foto real (http, nao-SVG) o
-        # Radar nasce draft e o auto-publish o promove assim que houver foto.
-        from ..core.config import settings as _cfg
-        _radar_status = ('published'
-                         if (_cfg.ENV != "production" or publishable_image(img_oficial))
-                         else 'draft')
         cid = db.execute(
-            f"""INSERT INTO contents (title, slug, body, excerpt, status, agent_id,
+            """INSERT INTO contents (title, slug, body, excerpt, status, agent_id,
                seo_title, seo_description, category, tags, image_url, published_at)
-               VALUES (?,?,?,?, '{_radar_status}',
+               VALUES (?,?,?,?, 'draft',
                        (SELECT id FROM agents WHERE slug='discovery'), ?, ?, 'radar',
-                       'radar,ai,news', ?, datetime('now'))""",
+                       'radar,news,ai', '', NULL)""",
             (f"AI Radar — {data_br}: today's top stories", slug_hoje, corpo,
              f"The {min(len(manchetes),12)} most relevant AI headlines of {data_br}, with sources.",
              f"AI Radar {data_br}",
-             f"Daily AI news curation for {data_br}, with links to every original source.",
-             img_oficial))
-        resultado["radar"] = {"id": cid, "slug": slug_hoje, "status": _radar_status,
-                              "manchetes": min(len(manchetes), 12)}
+             f"Daily AI news curation for {data_br}, with links to the original sources."))
+        resultado["radar"] = {"id": cid, "slug": slug_hoje, "manchetes": min(len(manchetes), 12)}
         resultado["radar_hero_image"] = compute_hero_image(cid, manchetes)
         # Hero imediato se houver manchete quente (Breaking News rodou antes do Radar existir)
         quentes = [m for m in manchetes if any(t in m["title"].lower() for t in _BREAKING_TERMS)]
@@ -568,83 +578,70 @@ def publisher_agent(payload: dict) -> dict:
 
     # --- Notícias sintetizadas (custo zero, sem IA): 1 artigo por cluster de manchetes ---
     from .synthesizer import cluster_manchetes, sintetizar
-    from .imagegen import editorial_data_uri, publishable_image
     sintetizadas = 0
-    retidos_sem_foto = 0
     grupos = cluster_manchetes([m for m in manchetes if m.get("resumo")])
     for grupo in grupos[:6]:  # até 6 notícias por ciclo
         art = sintetizar(grupo)
         if not art:
             continue
-        # já publicado este tema hoje? (por título — rascunhos do Content Writer
-        # podem ter o mesmo slug e não devem bloquear a publicação da síntese)
-        if db.query_one("SELECT id FROM contents WHERE title = ? AND status='published'",
+        if db.query_one("SELECT id FROM contents WHERE title = ?",
                         (art["title"][:200],)):
             continue
         base_slug, k = art["slug"], 2
         while db.query_one("SELECT id FROM contents WHERE slug = ?", (art["slug"],)):
             art["slug"] = f"{base_slug}-{k}"; k += 1
-        img = art["image"] or editorial_data_uri(art["title"], "news")
-        credit = _fonte_amigavel(art["source_url"]) if art["image"] else "AION editorial artwork"
-        alt = (f"Image: {art['title'][:80]}" if art["image"]
-               else f"AION editorial artwork: {art['title'][:80]}")
-        # P3: em producao a arte editorial (data-URI/SVG) nao vai ao ar — o artigo
-        # fica em draft e o Image Agent busca foto real antes de publicar.
-        _status = 'published' if publishable_image(img) else 'draft'
-        if _status == 'draft':
-            retidos_sem_foto += 1
+        img = art["image"] if (art["image"] or "").startswith(("http://", "https://")) else ""
+        credit = _fonte_amigavel(art["source_url"]) if img else ""
+        alt = f"Editorial image for {art['title'][:80]}" if img else ""
         db.execute(
-            f"""INSERT INTO contents (title, slug, body, excerpt, status, agent_id,
+            """INSERT INTO contents (title, slug, body, excerpt, status, agent_id,
                seo_title, seo_description, category, tags, image_url, image_alt,
                image_credit, image_width, image_height, source_url, published_at)
-               VALUES (?,?,?,?, '{_status}',
+               VALUES (?,?,?,?, 'draft',
                        (SELECT id FROM agents WHERE slug='content'), ?, ?, 'news',
-                       ?, ?, ?, ?, '1200', '630', ?, datetime('now'))""",
+                       ?, ?, ?, ?, '', '', ?, NULL)""",
             (art["title"], art["slug"], art["body"], art["excerpt"],
              art["title"][:60], art["excerpt"][:160], art["tags"], img, alt,
              credit, art["source_url"]))
         sintetizadas += 1
     resultado["noticias_sintetizadas"] = sintetizadas
-    resultado["retidos_sem_foto"] = retidos_sem_foto
 
     # --- Publicação agendada (Editorial Studio) ---
-    agendados = db.query("SELECT id, image_url FROM contents WHERE status='draft' "
+    agendados = db.query("SELECT * FROM contents WHERE status='draft' "
                          "AND scheduled_at != '' AND scheduled_at <= datetime('now')")
-    _ag_pub = 0
+    agendados_publicados = 0
     for c in agendados:
-        if not publishable_image(c["image_url"]):  # P3: agendado sem foto espera o Image Agent
+        if publication_issues(c):
+            resultado["bloqueados"] += 1
             continue
         db.execute("UPDATE contents SET status='published', published_at=datetime('now'), "
                    "scheduled_at='' WHERE id=?", (c["id"],))
-        _ag_pub += 1
-    resultado["agendados_publicados"] = _ag_pub
-    resultado["agendados_retidos_sem_foto"] = len(agendados) - _ag_pub
+        agendados_publicados += 1
+    resultado["agendados_publicados"] = agendados_publicados
 
     # --- Auto-publicação de artigos IA aprovados ---
     bloqueados = {b["id"] for b in (mem_get("agent:fact-check", "bloqueados", []) or [])}
-    drafts = db.query(
-        "SELECT id, body, image_url FROM contents WHERE status='draft' AND agent_id IS NOT NULL")
-    _retidos = 0
+    aprovados = set(mem_get("agent:fact-check", "aprovados", []) or [])
+    drafts = db.query("SELECT * FROM contents WHERE status='draft' AND agent_id IS NOT NULL")
     for c in drafts:
-        if c["id"] in bloqueados or "[Rascunho automático" in (c["body"] or ""):
+        if (c["id"] not in aprovados or c["id"] in bloqueados
+                or "[Rascunho automático" in (c["body"] or "") or "[Auto draft" in (c["body"] or "")):
             continue
-        if not publishable_image(c["image_url"]):  # P3: nenhuma noticia publicada sem imagem
-            _retidos += 1
+        if publication_issues(c):
+            resultado["bloqueados"] += 1
             continue
         db.execute("UPDATE contents SET status='published', published_at=datetime('now') "
                    "WHERE id = ?", (c["id"],))
         resultado["auto_publicados"] += 1
-    resultado["drafts_retidos_sem_foto"] = _retidos
     if not manchetes:
         resultado["limitacao"] = ("Sem manchetes coletadas (fontes inacessíveis ou primeiro boot); "
                                   "Radar será criado no próximo ciclo com rede disponível")
-    image_agent({})  # garante imagem em tudo que acabou de ser publicado
-    resultado["imagens_garantidas"] = True
+    resultado["publication_gate"] = "Only English articles with verified HTTP raster images publish"
     return resultado
 
 
 # ═══════════ BREAKING NEWS AGENT ═══════════
-_BREAKING_TERMS = ("lança", "launch", "anuncia", "announce", "release", "apresenta",
+_BREAKING_TERMS = ("launch", "announce", "release", "unveil",
                    "gpt", "claude", "gemini", "llama", "open source", "breakthrough")
 
 
@@ -670,7 +667,7 @@ def trend_hunter_agent(payload: dict) -> dict:
     kws = extract_keywords(" ".join(m["title"] for m in manchetes), top=6)
     novas = 0
     for kw in kws[:3]:
-        topico = f"Guia AION: o que é {kw} e por que está em alta"
+        topico = f"AION guide: what {kw} is and why it is trending"
         if not db.query_one("SELECT id FROM content_queue WHERE topic = ?", (topico,)):
             db.execute("INSERT INTO content_queue (topic, template) VALUES (?, 'guia_pratico')",
                        (topico,))
@@ -685,7 +682,7 @@ def trend_hunter_agent(payload: dict) -> dict:
     for template, meta in plano.items():
         falta = meta - na_fila_hoje.get(template, 0)
         for i in range(max(0, falta)):
-            base = (kws + ["inteligência artificial"])[i % max(len(kws), 1)]
+            base = (kws + ["artificial intelligence"])[i % max(len(kws), 1)]
             topico = {"noticia_curta": f"Daily briefing: {base} in the spotlight",
                       "guia_pratico": f"AION guide: how to apply {base}",
                       "comparativo": f"AION comparison: {base} approaches in {hoje[:4]}",
@@ -703,15 +700,16 @@ def trend_hunter_agent(payload: dict) -> dict:
 # ═══════════ GOOGLE DISCOVER AGENT ═══════════
 def google_discover_agent(payload: dict) -> dict:
     """Audita requisitos reais do Discover; nunca inventa métricas de tráfego."""
-    sem_imagem = db.query_one("SELECT COUNT(*) AS n FROM contents "
-                              "WHERE status='published' AND image_url=''")["n"]
+    from .imagegen import probe_image
+    publicadas = db.query("SELECT image_url FROM contents WHERE status='published'")
+    sem_imagem = sum(1 for c in publicadas if probe_image(c["image_url"])["ok"] is not True)
     titulos_longos = db.query_one("SELECT COUNT(*) AS n FROM contents "
                                   "WHERE status='published' AND length(title) > 110")["n"]
     checks = {
         "max_image_preview_large": "meta robots configurada no frontend",
         "news_sitemap": "/news-sitemap.xml ativo (últimas 48h)",
         "artigos_sem_imagem_oficial": sem_imagem,
-        "fallback": "arte editorial em gradiente (nunca caixa vazia)",
+        "publication_gate": "invalid or missing images keep the article in draft",
         "titulos_acima_110_chars": titulos_longos,
     }
     return {"auditoria": checks,
@@ -722,9 +720,9 @@ def google_discover_agent(payload: dict) -> dict:
 def image_repair_agent(payload: dict) -> dict:
     """Repara o acervo: encontra artigos com image_url vazio e completa,
     sem duplicar. Roda no pipeline e é idempotente."""
-    vazios = db.query("SELECT COUNT(*) n FROM contents WHERE image_url=''")[0]["n"]
+    vazios = db.query("SELECT COUNT(*) n FROM contents WHERE image_url='' OR image_url NOT LIKE 'http%'")[0]["n"]
     rep = image_agent({})
-    restantes = db.query("SELECT COUNT(*) n FROM contents WHERE image_url=''")[0]["n"]
+    restantes = db.query("SELECT COUNT(*) n FROM contents WHERE image_url='' OR image_url NOT LIKE 'http%'")[0]["n"]
     atual = hero_ranking()
     if atual:
         row = db.query_one("SELECT id FROM contents WHERE slug=?", (atual["slug"],))
@@ -738,21 +736,23 @@ def image_repair_agent(payload: dict) -> dict:
 
 
 def image_optimization_agent(payload: dict) -> dict:
-    rows = db.query("SELECT id, image_url FROM contents WHERE status='published' AND image_url!=''")
-    invalidas = [c["id"] for c in rows
-                 if not c["image_url"].startswith(("https://", "data:image/"))]
+    from .imagegen import probe_image
+    rows = db.query("SELECT id, image_url FROM contents WHERE status='published'")
+    invalidas = [c["id"] for c in rows if not c["image_url"].startswith(("http://", "https://"))
+                 or probe_image(c["image_url"])["ok"] is not True]
     for cid in invalidas:
-        db.execute("UPDATE contents SET image_url='' WHERE id = ?", (cid,))
-    return {"com_imagem_oficial": len(rows) - len(invalidas),
-            "urls_invalidas_removidas": len(invalidas),
-            "frontend": "loading=lazy nas listas; hero com prioridade"}
+        db.execute("UPDATE contents SET image_url='', hero_image_url='', status='draft', "
+                   "published_at=NULL, featured=0, breaking_flag=0 WHERE id = ?", (cid,))
+    return {"verified_http_images": len(rows) - len(invalidas),
+            "invalid_publications_returned_to_draft": len(invalidas),
+            "frontend": "lazy loading on lists; high priority on hero"}
 
 
 # ═══════════ SEARCH CONSOLE / REVENUE / DASHBOARD / PERFORMANCE ═══════════
 def search_console_agent(payload: dict) -> dict:
-    cfg = mem_get("agent:search-console", "site_url") or "não configurado"
-    return {"site": cfg, "sitemaps": ["/sitemap.xml", "/news-sitemap.xml"],
-            "limitacao": "Impressões/cliques exigem SEARCH_CONSOLE_SITE_URL + verificação (pendência humana)"}
+    cfg = mem_get("agent:search-console", "site_url") or settings.SITE_URL
+    return {"site": cfg, "sitemaps": ["/sitemap.xml", "/news-sitemap.xml", "/image-sitemap.xml"],
+            "limitation": "Impressions and clicks require verified Google Search Console access"}
 
 
 def revenue_agent(payload: dict) -> dict:
@@ -899,7 +899,7 @@ def google_health_report() -> dict:
     pub = db.query("SELECT id, slug, title, body, excerpt, category, tags, image_url, "
                    "seo_title, seo_description FROM contents WHERE status='published'")
     total = len(pub) or 1
-    sem_imagem = [c["slug"] for c in pub if not c["image_url"]]
+    sem_imagem = [c["slug"] for c in pub if not (c["image_url"] or "").startswith(("http://", "https://"))]
     sem_seo = [c["slug"] for c in pub if not (c["seo_title"] and c["seo_description"])]
     sem_taxonomia = [c["slug"] for c in pub if not (c["category"] and c["tags"])]
     links_quebrados = []

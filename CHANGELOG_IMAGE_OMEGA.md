@@ -1,10 +1,10 @@
 # CHANGELOG — Operação Image Agent Omega (v5.3)
 
-## Regra absoluta atingida: nenhum artigo sem imagem
-- **Image Agent** (novo): garante imagem em todo artigo — oficial do feed (com image_alt, image_credit, image_width, image_height, source_url) ou **arte editorial SVG determinística 1200×630** gerada localmente (custo zero, sem IA, sem rede, data-URI que nunca quebra).
+## Histórico da fase Omega (substituído pelo gate atual)
+- A implementação original usava arte editorial SVG/data URI. Esse comportamento foi removido: a versão de produção exige imagem raster real, validada, convertida para WebP 1200×630 e persistida em URL HTTP/HTTPS; sem imagem válida, o conteúdo permanece em draft.
 - **Image Repair Agent** (novo): varre o acervo, completa qualquer image_url vazio, idempotente, sem duplicar. No pipeline.
-- **Publisher** chama o Image Agent ao publicar → Radar e artigos saem já com imagem.
-- **Bootstrap** cria os guias iniciais já com arte editorial.
+- **Publisher** só publica depois de Image Agent, Image Quality e Fact Check aprovarem.
+- **Bootstrap** cria guias iniciais como drafts bloqueados por imagem.
 - **Fact Check** bloqueia auto-publicação de artigo IA sem imagem (além de categoria/resumo/500 palavras).
 - **Banco**: colunas image_alt, image_credit, image_width, image_height (migração automática).
 - **Frontend**: hero, cards de últimas notícias, miniaturas da sidebar "Hoje em IA", imagem principal do artigo e cards "Leia também" consomem image_url real com alt correto, width/height (anti-CLS), loading=lazy e fetchPriority no hero. Placeholder roxo só aparece se, teoricamente, image_url fosse vazio — o que não ocorre mais.
@@ -16,4 +16,5 @@
 backend: core/database.py · agents/imagegen.py (novo) · agents/team.py · agents/registry.py · agents/orchestrator.py · routers/public.py · main.py · bootstrap.py · tests/test_api.py
 frontend: src/pages/Landing.tsx · src/pages/Blog.tsx
 
-## Testes: 55/55 (7 novos de imagem). Evidência: home renderiza arte editorial, 0 imagens quebradas.
+## Estado atual
+A suíte de produção cobre upload, bloqueio de SVG/data URI, persistência WebP, feeds e metadados por artigo.

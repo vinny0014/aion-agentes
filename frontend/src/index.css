@@ -17,6 +17,25 @@ body {
 
 ::selection { background: rgba(139, 92, 246, 0.35); }
 
+a:focus-visible, button:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 3px;
+}
+
+.skip-link {
+  position: fixed;
+  left: 1rem;
+  top: 0.75rem;
+  z-index: 100;
+  transform: translateY(-160%);
+  border-radius: 0.5rem;
+  background: #ececf4;
+  color: #08080f;
+  padding: 0.6rem 1rem;
+  font-weight: 600;
+}
+.skip-link:focus { transform: translateY(0); }
+
 @layer components {
   .btn-primary {
     @apply relative inline-flex items-center justify-center rounded-lg px-5 py-2.5 font-medium text-white transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ultra;
@@ -31,7 +50,7 @@ body {
   .btn-primary:disabled { @apply opacity-60; }
 
   .btn-ghost {
-    @apply inline-flex items-center justify-center rounded-lg border border-line bg-surface/70 px-5 py-2.5 font-medium text-ink backdrop-blur transition-all duration-200 hover:-translate-y-px hover:border-ultra/60 hover:text-ultra hover:shadow-[0_8px_20px_-10px_rgba(32,54,199,0.35)];
+    @apply inline-flex items-center justify-center rounded-lg border border-line bg-surface/70 px-5 py-2.5 font-medium text-ink backdrop-blur transition-all duration-200 hover:-translate-y-px hover:border-ultra/60 hover:text-ultra hover:shadow-[0_8px_20px_-10px_rgba(32,54,199,0.35)] disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   .field {

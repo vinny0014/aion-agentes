@@ -5,22 +5,25 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
+import jwt
+from jwt.exceptions import InvalidTokenError
 
 from . import database as db
 from .config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("ascii")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    try:
+        return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("ascii"))
+    except (ValueError, TypeError, UnicodeError):
+        return False
 
 
 def create_access_token(user_id: int, role: str) -> str:
@@ -47,11 +50,11 @@ def rotate_refresh_token(raw: str) -> dict:
         "SELECT * FROM refresh_tokens WHERE token_hash = ? AND revoked = 0", (token_hash,)
     )
     if not row or datetime.fromisoformat(row["expires_at"]) < datetime.now(timezone.utc):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Refresh token inválido ou expirado")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired refresh token")
     db.execute("UPDATE refresh_tokens SET revoked = 1 WHERE id = ?", (row["id"],))
     user = db.query_one("SELECT * FROM users WHERE id = ? AND is_active = 1", (row["user_id"],))
     if not user:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Usuário inativo")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Inactive user")
     return {
         "access_token": create_access_token(user["id"], user["role"]),
         "refresh_token": create_refresh_token(user["id"]),
@@ -61,14 +64,14 @@ def rotate_refresh_token(raw: str) -> dict:
 
 def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     cred_exc = HTTPException(
-        status.HTTP_401_UNAUTHORIZED, "Credenciais inválidas", {"WWW-Authenticate": "Bearer"}
+        status.HTTP_401_UNAUTHORIZED, "Invalid credentials", {"WWW-Authenticate": "Bearer"}
     )
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         if payload.get("type") != "access":
             raise cred_exc
         user_id = int(payload["sub"])
-    except (JWTError, KeyError, ValueError):
+    except (InvalidTokenError, KeyError, ValueError):
         raise cred_exc
     user = db.query_one(
         "SELECT id, email, name, role, is_active, created_at FROM users WHERE id = ?", (user_id,)
@@ -80,5 +83,5 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
 
 def require_admin(user: dict = Depends(get_current_user)) -> dict:
     if user["role"] != "admin":
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Acesso restrito a administradores")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Administrator access required")
     return user

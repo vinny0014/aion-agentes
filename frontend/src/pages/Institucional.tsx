@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { Nav } from "./Landing";
-
-const BASE = import.meta.env.VITE_API_URL || "";
+import { API_BASE } from "../lib/api";
+import { usePageMetadata } from "../lib/seo";
 
 function Pagina({ tag, titulo, children }: { tag: string; titulo: string; children: React.ReactNode }) {
   return (
     <div className="min-h-screen">
       <Nav />
-      <main className="mx-auto max-w-3xl px-6 py-14">
+      <main id="main-content" className="mx-auto max-w-3xl px-6 py-14">
         <p className="tag mb-2">{tag}</p>
         <h1 className="font-display text-4xl font-bold tracking-tight">{titulo}</h1>
         <div className="mt-6 space-y-4 leading-relaxed text-slateui">{children}</div>
@@ -17,6 +17,7 @@ function Pagina({ tag, titulo, children }: { tag: string; titulo: string; childr
 }
 
 export function Privacy() {
+  usePageMetadata({ title: "Privacy Policy", description: "How AION AI NEWS OS handles account, contact and analytics data.", path: "/privacy" });
   return (
     <Pagina tag="legal" titulo="Privacy Policy">
       <p>AION collects only the data needed to operate the platform: your name and email at sign-up, and the messages sent through the contact form.</p>
@@ -28,6 +29,7 @@ export function Privacy() {
 }
 
 export function Terms() {
+  usePageMetadata({ title: "Terms of Use", description: "Terms governing use of the AION AI NEWS OS website and editorial content.", path: "/terms" });
   return (
     <Pagina tag="legal" titulo="Terms of Use">
       <p>By using AION you agree to these terms. The portal provides informational content about artificial intelligence, produced with the support of AI agents under human supervision.</p>
@@ -39,31 +41,32 @@ export function Terms() {
 }
 
 export function Contact() {
+  usePageMetadata({ title: "Contact", description: "Contact the AION AI NEWS OS newsroom with questions, story tips or partnership proposals.", path: "/contact" });
   const [v, setV] = useState({ name: "", email: "", message: "" });
   const [ok, setOk] = useState("");
-  const [errMsg, setErrMsg] = useState("");
-  const [sending, setSending] = useState(false);
+  const [erro, setErro] = useState("");
+  const [enviando, setEnviando] = useState(false);
 
-  async function submit(e: React.FormEvent) {
+  async function enviar(e: React.FormEvent) {
     e.preventDefault();
-    setOk(""); setErrMsg(""); setSending(true);
+    setOk(""); setErro(""); setEnviando(true);
     try {
-      const r = await fetch(`${BASE}/api/public/contact`, {
+      const r = await fetch(`${API_BASE}/api/public/contact`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(v),
       });
       const b = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(b.detail || "Could not send your message.");
+      if (!r.ok) throw new Error(b.detail || "Failed to send the message");
       setOk(b.detail); setV({ name: "", email: "", message: "" });
-    } catch (err: any) { setErrMsg(err.message); }
-    finally { setSending(false); }
+    } catch (err: any) { setErro(err.message); }
+    finally { setEnviando(false); }
   }
 
   return (
-    <Pagina tag="contact" titulo="Contact">
+    <Pagina tag="get in touch" titulo="Contact">
       <p>Questions, story tips or partnerships? Send us a message.</p>
-      <form onSubmit={submit} className="mt-2 max-w-md space-y-4 text-ink">
+      <form onSubmit={enviar} className="mt-2 max-w-md space-y-4 text-ink">
         <label className="block text-sm font-medium">Name
           <input className="field mt-1.5" required minLength={2} value={v.name}
             onChange={(e) => setV({ ...v, name: e.target.value })} />
@@ -76,26 +79,37 @@ export function Contact() {
           <textarea className="field mt-1.5 min-h-[120px]" required minLength={5} value={v.message}
             onChange={(e) => setV({ ...v, message: e.target.value })} />
         </label>
-        {ok && <p className="rounded-md bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">{ok}</p>}
-        {errMsg && <p className="rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-300">{errMsg}</p>}
-        <button className="btn-primary" disabled={sending}>{sending ? "Sending…" : "Send message"}</button>
+        {ok && <p className="rounded-md bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300" aria-live="polite">{ok}</p>}
+        {erro && <p className="rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-300" role="alert">{erro}</p>}
+        <button className="btn-primary" disabled={enviando}>{enviando ? "Sending…" : "Send message"}</button>
       </form>
     </Pagina>
   );
 }
 
 export function Taxonomia({ tipo }: { tipo: "categories" | "tags" }) {
+  const isCategories = tipo === "categories";
+  usePageMetadata({
+    title: isCategories ? "AI categories" : "AI topics",
+    description: isCategories ? "Explore AION artificial intelligence coverage by category." : "Explore AION artificial intelligence coverage by topic and tag.",
+    path: isCategories ? "/categories" : "/tags",
+  });
   const [itens, setItens] = useState<any[] | null>(null);
+  const [erro, setErro] = useState("");
   useEffect(() => {
-    fetch(`${BASE}/api/public/${tipo === "categories" ? "categories" : "tags"}`)
-      .then((r) => r.json()).then(setItens);
+    setErro(""); setItens(null);
+    fetch(`${API_BASE}/api/public/${tipo === "categories" ? "categories" : "tags"}`)
+      .then((r) => { if (!r.ok) throw new Error("Topics are temporarily unavailable."); return r.json(); })
+      .then(setItens)
+      .catch((error: Error) => { setItens([]); setErro(error.message); });
   }, [tipo]);
   const chave = tipo === "categories" ? "category" : "tag";
   return (
     <Pagina tag="explore" titulo={tipo === "categories" ? "Categories" : "Tags"}>
       {itens === null ? <p className="font-mono text-sm">loading…</p>
+        : erro ? <p className="rounded-md bg-red-500/10 px-4 py-3 text-sm text-red-300" role="alert">{erro}</p>
         : itens.length === 0 ? (
-          <p>No {tipo === "categories" ? "categories" : "tags"} yet — they appear here once published articles start using them.</p>
+          <p>No {tipo === "categories" ? "categories" : "tags"} yet — they will appear when published articles use them.</p>
         ) : (
           <div className="flex flex-wrap gap-2">
             {itens.map((i) => (

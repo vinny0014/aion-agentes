@@ -1,4 +1,4 @@
-# AION AGENTES
+# AION AI NEWS OS
 
 Portal moderno de Inteligência Artificial com publicação diária de conteúdo, operado por uma equipe de agentes inteligentes com responsabilidades definidas.
 
@@ -6,7 +6,7 @@ Portal moderno de Inteligência Artificial com publicação diária de conteúdo
 
 | Camada | Tecnologia |
 |---|---|
-| Frontend | React 18 · Vite 5 · TypeScript · TailwindCSS |
+| Frontend | React 18 · Vite 8 · TypeScript · TailwindCSS |
 | Backend | FastAPI · Python 3.12 |
 | Banco | SQLite (arquitetura preparada para PostgreSQL) |
 | Auth | JWT + Refresh Token com rotação · bcrypt |
@@ -22,14 +22,14 @@ aion-agentes/
 │   │   ├── schemas.py           # Contratos Pydantic
 │   │   ├── core/                # config (.env), database, security (JWT/bcrypt)
 │   │   ├── routers/             # auth, CRUDs, logs, memória, settings, fila, health
-│   │   └── agents/registry.py   # 9 agentes + pipeline de conteúdo plugável
-│   ├── tests/test_api.py        # 11 testes de integração
+│   │   └── agents/registry.py   # 35 agentes + pipeline de conteúdo plugável
+│   ├── tests/test_api.py        # testes de integração e prontidão de produção
 │   ├── requirements.txt
 │   └── .env.example
 ├── frontend/
 │   ├── src/pages/               # Landing, Sobre, Login, Cadastro, Dashboard, Admin
 │   ├── src/lib/api.ts           # Cliente com refresh automático de token
-│   └── public/                  # robots.txt, sitemap.xml
+│   └── public/                  # manifest, service worker e verificação Google
 ├── vercel.json                  # Deploy do frontend (Vercel)
 ├── render.yaml                  # Deploy do backend (Render)
 └── PENDENCIAS_HUMANAS.md
@@ -56,21 +56,22 @@ npm run dev                 # proxy /api -> localhost:8000
 ### Testes
 ```bash
 cd backend && python -m pytest tests/ -v
+cd ../frontend && npm run build && npm run test:e2e
 ```
 
 ## Módulos
 
 - **Landing + Institucional** — página pública com quadro de operação dos agentes
-- **Auth** — cadastro (primeiro usuário vira admin), login, refresh token com rotação
+- **Auth** — cadastro, bootstrap explícito do primeiro admin com `ADMIN_SETUP_TOKEN`, login e refresh token com rotação
 - **Dashboard** — status do sistema, agentes, tarefas e conteúdos
 - **Painel Administrativo** — CRUD de Usuários, Agentes, Conteúdo, Tarefas + Fila, Logs, Memória e Configurações
-- **Sistema de Conteúdo** — fila (`content_queue`), scheduler horário, templates e provedores plugáveis (OpenAI, Anthropic, OpenRouter, Gemini). Sem API key configurada, itens ficam `blocked` com pendência registrada em log — o restante do sistema segue operando
+- **Sistema de Conteúdo** — fila (`content_queue`), scheduler horário, templates e provedores plugáveis (OpenAI, Anthropic, OpenRouter, Gemini). Sem API key configurada, o pipeline cria rascunhos offline estruturados e registra a pendência em log; nada é publicado sem passar pelos gates editoriais
 - **SEO** — meta tags, Open Graph, Twitter Cards, Schema.org, canonical, slugs, robots.txt e sitemap.xml dinâmico (inclui conteúdos publicados)
 - **Health Check** — `GET /api/health` (status do banco, uptime, provedores configurados)
 - **Portal público** — `/articles` e `/article/:slug` consomem `GET /api/public/articles` (paginada, apenas publicados)
-- **Editor** — `/admin/editor/novo` e `/admin/editor/:id` com slug automático, SEO e publicar/despublicar
+- **Editor** — `/admin/editor/new` e `/admin/editor/:id` com slug automático, SEO e publicar/despublicar
 - **Pipeline de IA** — com API key gera artigos completos; sem key gera rascunhos offline estruturados (a produção diária nunca para)
-- **Seed** — `python scripts_seed.py` popula artigos de demonstração
+- **Seed** — `python scripts_seed.py` cria rascunhos em inglês; só publicam após receber imagem raster validada
 - **CI** — GitHub Actions roda testes e build a cada push
 
 ## Documentação
@@ -91,9 +92,9 @@ CEO Master (orquestração) · Developer · QA · Content · SEO · GitHub · De
 
 ## Deploy
 
-**Frontend (Vercel):** importe o repositório, root `frontend/`, build `npm run build`, output `dist/`. Defina `VITE_API_URL` com a URL do backend. O `vercel.json` já cuida do rewrite de SPA.
+**Frontend (Vercel):** projeto oficial `https://aion-news-os.vercel.app`. Importe o repositório com root `frontend/`, build `npm run build` e output `dist/`. `frontend/vercel.json` encaminha API, artigos SSR, RSS e sitemaps ao backend oficial; `VITE_API_URL` pode permanecer vazio para usar o mesmo domínio.
 
-**Backend (Render):** o `render.yaml` cria o serviço automaticamente (Blueprint). Defina `SECRET_KEY`, `CORS_ORIGINS` e, quando quiser ativar o pipeline, as chaves de IA.
+**Backend (Render):** `https://aion-news-api.onrender.com`. O `render.yaml` cria `aion-news-api`, disco persistente, `SECRET_KEY` e `ADMIN_SETUP_TOKEN`; CORS aceita somente o frontend oficial.
 
 ## Migração para PostgreSQL
 

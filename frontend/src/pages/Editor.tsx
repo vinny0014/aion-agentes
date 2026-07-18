@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, uploadEditorialImage } from "../lib/api";
 import { AppNav } from "./Dashboard";
+import { usePageMetadata } from "../lib/seo";
 
 function slugify(t: string) {
   return t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -12,9 +13,10 @@ const AUTHORS = ["AION Editorial", "Vinicio Alves", "Guest Author"];
 const CATEGORIES = ["news", "guides", "comparisons", "fundamentals", "radar", "analysis"];
 
 export default function Editor() {
+  usePageMetadata({ title: "Editorial Studio", description: "AION Editorial Studio.", path: "/admin", robots: "noindex,nofollow" });
   const nav = useNavigate();
   const { id } = useParams(); // "new" or numeric id
-  const novo = id === "new" || id === "novo";
+  const novo = id === "new";
   const [user, setUser] = useState<any>(null);
   const [v, setV] = useState({
     title: "", slug: "", excerpt: "", body: "", seo_title: "", seo_description: "",
@@ -60,16 +62,20 @@ export default function Editor() {
   async function generateCover() {
     setErro("");
     try {
-      const r = await api(`/api/orchestrator/cover?title=${encodeURIComponent(v.title || "AION")}&category=${encodeURIComponent(v.category)}`);
+      const r = await api(`/api/orchestrator/cover?title=${encodeURIComponent(v.title || "AION")}&category=${encodeURIComponent(v.category)}`, { method: "POST" });
       set("image_url", r.image_url); set("image_alt", r.image_alt);
-      setMsg("Editorial cover generated (1200×630)");
+      setMsg("Real editorial cover generated and verified (1200×630)");
     } catch (e: any) { setErro(e.message); }
   }
 
-  function uploadImage(file: File) {
-    const rd = new FileReader();
-    rd.onload = () => { set("image_url", rd.result as string); set("image_alt", `Image: ${v.title}`); };
-    rd.readAsDataURL(file);
+  async function uploadImage(file: File) {
+    setErro(""); setMsg("");
+    try {
+      const uploaded = await uploadEditorialImage(file, v.title || "AION");
+      set("image_url", uploaded.image_url);
+      set("image_alt", uploaded.image_alt);
+      setMsg("Image uploaded, optimized and verified (1200×630)");
+    } catch (e: any) { setErro(e.message); }
   }
 
   async function salvar(status?: string) {
@@ -90,14 +96,14 @@ export default function Editor() {
     finally { setSalvando(false); }
   }
 
-  if (!user) return <div className="p-10 font-mono text-sm text-slateui">loading…</div>;
+  if (!user) return <div className="p-10 font-mono text-sm text-slateui">Loading…</div>;
 
   const paras = v.body.split(/\n\s*\n/).filter(Boolean);
 
   return (
     <div className="min-h-screen">
       <AppNav user={user} />
-      <main className="mx-auto max-w-4xl px-6 py-10">
+      <main id="main-content" className="mx-auto max-w-4xl px-6 py-10">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="tag mb-1">editorial studio · {v.status === "published" ? "published" : v.status === "queued" ? "queued" : "draft"}</p>
@@ -122,8 +128,8 @@ export default function Editor() {
           </div>
         </div>
 
-        {msg && <p className="mt-4 rounded-md bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">{msg}</p>}
-        {erro && <p className="mt-4 rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-300">{erro}</p>}
+        {msg && <p className="mt-4 rounded-md bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300" aria-live="polite">{msg}</p>}
+        {erro && <p className="mt-4 rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-300" role="alert">{erro}</p>}
 
         {preview ? (
           <article className="mt-8">
@@ -167,13 +173,14 @@ export default function Editor() {
               </button>
               <label className="btn-ghost !py-2 cursor-pointer text-sm">
                 Upload image
-                <input type="file" accept="image/*" className="hidden"
+                <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden"
                   onChange={(e) => e.target.files?.[0] && uploadImage(e.target.files[0])} />
               </label>
               <input className="field !mt-0 flex-1 font-mono text-xs" placeholder="…or paste an image URL"
-                value={v.image_url.startsWith("data:") ? "(embedded editorial cover)" : v.image_url}
+                value={v.image_url}
                 onChange={(e) => set("image_url", e.target.value)} />
             </div>
+            <p className="mt-2 text-xs text-slateui">Publishing is blocked until this is a verified HTTP/HTTPS raster image.</p>
             <label className="mt-3 block text-sm font-medium">
               Alt text
               <input className="field mt-1.5" value={v.image_alt} onChange={(e) => set("image_alt", e.target.value)} />

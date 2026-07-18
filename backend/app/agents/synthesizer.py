@@ -39,7 +39,7 @@ def _frases(texto: str) -> list[str]:
 
 def _fonte(url: str) -> str:
     m = re.search(r"https?://(?:www\.|blogs?\.|export\.)?([^/]+)", url or "")
-    return (m.group(1).split(".")[0].capitalize() if m else "Fonte")
+    return (m.group(1).split(".")[0].capitalize() if m else "Source")
 
 
 def sintetizar(grupo: list[dict]) -> dict | None:

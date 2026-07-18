@@ -1,18 +1,14 @@
 {
   "name": "AION AI NEWS OS",
-  "lang": "en-US",
   "short_name": "AION",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#08080F",
   "theme_color": "#8B5CF6",
-  "description": "Daily artificial intelligence news, guides and analysis produced and reviewed by intelligent agents.",
+  "description": "Daily AI news, guides and analysis from an autonomous newsroom.",
+  "lang": "en-US",
   "icons": [
-    {
-      "src": "/logo.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    }
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }

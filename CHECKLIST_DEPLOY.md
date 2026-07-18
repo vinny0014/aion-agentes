@@ -1,11 +1,12 @@
-# CHECKLIST DE DEPLOY — AION AGENTES
-- [ ] 1. Repositório criado no GitHub e `git push -u origin main` feito
-- [ ] 2. CI (aba Actions) verde
-- [ ] 3. Render: Blueprint aplicado, serviço no ar, `/api/health` = ok
-- [ ] 4. Vercel: projeto importado, Root `frontend`, `VITE_API_URL` definida
-- [ ] 5. Render: `CORS_ORIGINS` = URL da Vercel
-- [ ] 6. Cadastro do 1º usuário (vira admin) e senha guardada
-- [ ] 7. Seed opcional: `python scripts_seed.py` no Shell do Render
-- [ ] 8. Teste do fluxo: publicar artigo → visível em /conteudos
-- [ ] 9. Opcional monetização: `VITE_GA_MEASUREMENT_ID`, `VITE_ADSENSE_CLIENT`, `VITE_CF_ANALYTICS_TOKEN` na Vercel; `ANTHROPIC_API_KEY` (ou similar) no Render
-- [ ] 10. Search Console/Bing: verificar propriedade e enviar sitemap.xml
+# Checklist de deploy — AION AI NEWS OS
+
+- [ ] GitHub Actions verde na `main`.
+- [ ] Render Blueprint aplicado com o serviço `aion-news-api` saudável em `/api/health`.
+- [ ] Disco Render `/var/data` montado e persistindo banco e uploads.
+- [ ] Vercel com Root Directory `frontend`, deploy automático e domínio `https://aion-news-os.vercel.app`.
+- [ ] `/api/health`, `/robots.txt`, os três sitemaps e `/rss.xml` respondendo pelo domínio da Vercel.
+- [ ] Primeiro administrador criado com o `ADMIN_SETUP_TOKEN` do Render; token guardado fora do Git.
+- [ ] Fluxo editorial validado: upload/geração de imagem raster → salvar → publicar → artigo visível em `/articles`.
+- [ ] Artigo direto apresenta canonical, Open Graph, Twitter Card e `NewsArticle` próprios.
+- [ ] Search Console: propriedade verificada e os três sitemaps enviados (etapa humana).
+- [ ] Google News/Discover e Core Web Vitals acompanhados após tráfego real (etapa externa).

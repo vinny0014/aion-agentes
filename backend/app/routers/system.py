@@ -1,7 +1,7 @@
 """Routers de sistema — Logs, Memória, Configurações, Fila de Conteúdo, Health."""
 import time
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
 from ..core import database as db
 from ..core.config import settings
@@ -60,7 +60,7 @@ def upsert_memory(data: MemoryIn, user: dict = Depends(get_current_user)):
 @memory_router.delete("/{memory_id}", status_code=204)
 def delete_memory(memory_id: int, user: dict = Depends(get_current_user)):
     if not db.query_one("SELECT id FROM memories WHERE id = ?", (memory_id,)):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Memória não encontrada")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Memory entry not found")
     db.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
 
 
@@ -83,7 +83,7 @@ def upsert_setting(data: SettingIn):
     if any(p in low for p in _PROTECTED_PREFIXES):
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "Segredos e chaves de API devem ficar em variáveis de ambiente (.env), nunca no banco",
+            "Secrets and API keys must stay in environment variables, never in the database",
         )
     db.execute(
         """INSERT INTO app_settings (key, value) VALUES (?,?)
@@ -119,7 +119,7 @@ def enqueue(data: QueueIn, user: dict = Depends(get_current_user)):
 @queue_router.delete("/{item_id}", status_code=204)
 def dequeue(item_id: int, user: dict = Depends(get_current_user)):
     if not db.query_one("SELECT id FROM content_queue WHERE id = ?", (item_id,)):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Item não encontrado")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Queue item not found")
     db.execute("DELETE FROM content_queue WHERE id = ?", (item_id,))
 
 
@@ -161,14 +161,39 @@ def google_health(user: dict = Depends(require_admin)):
     return google_health_report()
 
 
-@orchestrator_router.get("/cover")
+@orchestrator_router.post("/cover")
 def generate_cover(title: str, category: str = "news",
                    user: dict = Depends(require_admin)):
-    """Editorial Studio: gera capa editorial 1200x630 para o título (data URI)."""
-    from ..agents.imagegen import editorial_data_uri
-    return {"image_url": editorial_data_uri(title, category),
-            "image_alt": f"AION editorial artwork: {title[:90]}",
-            "width": 1200, "height": 630}
+    """Generate and persist a real 1200x630 raster cover for Editorial Studio."""
+    from ..agents.imagegen import materialize_remote_image, provider_photo_url
+    candidate = provider_photo_url(title, category)
+    prepared = materialize_remote_image(candidate[0], title) if candidate else None
+    if not prepared:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "A real cover image could not be generated. Keep the article in draft and retry later.",
+        )
+    return {**prepared, "image_alt": f"Editorial image for {title[:90]}",
+            "image_credit": candidate[1]}
+
+
+@orchestrator_router.post("/upload-image")
+async def upload_editorial_image(title: str, image: UploadFile = File(...),
+                                 user: dict = Depends(require_admin)):
+    """Validate an editor upload and persist it as a public WebP image."""
+    if image.content_type == "image/svg+xml" or not (image.content_type or "").startswith("image/"):
+        raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                            "Only PNG, JPEG, WebP or GIF raster images are accepted")
+    raw = await image.read(8_000_001)
+    from ..agents.imagegen import materialize_uploaded_image
+    prepared = materialize_uploaded_image(raw, title)
+    if not prepared:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "Image rejected: use a raster image up to 8 MB and at least 600x315 pixels",
+        )
+    return {**prepared, "image_alt": f"Editorial image for {title[:90]}",
+            "image_credit": "Uploaded by AION Editorial"}
 
 
 @orchestrator_router.get("/metrics")

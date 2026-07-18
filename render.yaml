@@ -4,17 +4,28 @@ services:
     runtime: python
     rootDir: backend
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips=*
     healthCheckPath: /api/health
+    autoDeployTrigger: checksPass
     envVars:
       - key: ENV
         value: production
+      - key: PYTHON_VERSION
+        value: 3.12.13
       - key: SECRET_KEY
+        generateValue: true
+      - key: ADMIN_SETUP_TOKEN
         generateValue: true
       - key: SITE_URL
         value: https://aion-news-os.vercel.app
+      - key: PUBLIC_API_URL
+        value: https://aion-news-api.onrender.com
       - key: CORS_ORIGINS
         value: https://aion-news-os.vercel.app
+      - key: IMAGE_PROVIDER
+        value: pollinations
+      - key: UPLOAD_DIR
+        value: /var/data/uploads
       - key: DATABASE_URL
         value: sqlite:////var/data/aion.db
     disk:

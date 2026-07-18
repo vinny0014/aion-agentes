@@ -1,33 +1,29 @@
-# AION AGENTES — RELEASE v1.0 (Operação OMEGA)
+# AION AI NEWS OS — release de produção
 
 ## Arquitetura
-Monorepo com frontend SPA (React 18 + Vite 5 + TypeScript + Tailwind) e backend API REST (FastAPI + Python 3.12). Comunicação via JSON/HTTPS; auth JWT Bearer com refresh token rotativo. Scheduler interno (APScheduler) processa a fila de conteúdo a cada hora.
 
-## Banco
-SQLite com camada de acesso isolada (`core/database.py`) e migrações leves automáticas — pronto para PostgreSQL trocando a conexão. Tabelas: users, agents, contents (com category/tags), tasks, logs, memories, app_settings, refresh_tokens, content_queue.
+Monorepo existente com SPA React 18, Vite 8, TypeScript e Tailwind; API FastAPI em Python 3.12; SQLite em disco persistente; autenticação JWT Bearer com refresh rotativo; e scheduler APScheduler. O registro contém 35 agentes e o orquestrador executa um pipeline de 30 etapas.
 
-## Backend / APIs
-- Auth: register (1º usuário = admin), login, refresh rotativo, me
-- CRUDs protegidos: users (admin), agents, contents, tasks
-- Sistema: logs, memory (upsert por escopo), settings (recusa segredos), content-queue, pipeline/run, health
-- Público (SEO/monetização): articles (paginação, busca, filtro por categoria/tag), article por slug (+reading_time), related, categories, tags, contact (rate-limited)
-- Discovery: `GET /api/growth/report` (admin)
-- SEO server-side: robots.txt e sitemap.xml dinâmicos
+## Superfícies públicas
 
-## Frontend
-14 rotas: Home, Sobre, Conteúdos (busca/filtros), Artigo (JSON-LD NewsArticle, OG dinâmico, tempo de leitura, tags, relacionados), Categorias, Tags, Privacidade, Termos, Contato, Login, Cadastro, Dashboard, Admin (8 abas), Editor, 404. Design system premium: gradiente ultramarino→ciano, glass nav, glow, micro-animações com prefers-reduced-motion, skeletons, empty states.
+As rotas públicas são exclusivamente em inglês: Home, Articles, Article, Categories, Tags, About, Privacy, Terms e Contact. Artigos diretos são renderizados no backend para entregar canonical, Open Graph, Twitter Card, `NewsArticle`, `BreadcrumbList`, publisher e `ImageObject` antes do JavaScript.
 
-## Agentes (10)
-CEO Master, Developer, QA, Content, SEO, GitHub, Deploy, Monitor, Cost Guard e **Discovery Growth Agent** — calendário editorial, extração de palavras-chave, clusters por categoria, detecção de artigos >30 dias para atualização, e arquitetura pronta para GSC, GA4, AdSense, Trends, Bing e Cloudflare (ativam via variáveis de ambiente; nenhum resultado é garantido — o objetivo é maximizar chances).
+O domínio canônico único é `https://aion-news-os.vercel.app`; o backend oficial é `https://aion-news-api.onrender.com`. A Vercel encaminha API, HTML de artigos, imagens, `robots.txt`, três sitemaps e RSS ao Render.
 
-## Fluxo de publicação diária
-Tópico → fila → scheduler/`pipeline/run` → com API key: artigo por IA; sem: rascunho estruturado offline → revisão no editor → publicar → aparece no portal, sitemap e relacionados.
+## Publicação e imagens
 
-## SEO
-Meta tags, OG, Twitter Cards, canonical, Schema.org (WebSite + NewsArticle por artigo), slugs, robots (bloqueia /admin e /dashboard), sitemap com todas as páginas públicas + artigos.
+Com um provedor configurado, a fila produz rascunhos completos; sem provedor, produz rascunhos offline estruturados e registra a pendência. Nada publica automaticamente sem aprovação do Fact Check, texto público em inglês e imagem raster real.
 
-## Deploy
-Vercel (frontend, `vercel.json`) + Render (backend, `render.yaml` Blueprint com disco e SECRET_KEY gerada). CI GitHub Actions.
+Imagens remotas e uploads passam por validação de formato, dimensão, tamanho e destino de rede, são normalizados para WebP 1200×630 e persistidos no disco Render. SVG, data URI, imagem vazia, placeholder ou URL não materializada mantêm o conteúdo em draft. A imagem validada alimenta thumbnail, hero, Open Graph, Twitter e image sitemap.
 
-## Roadmap / melhorias futuras
-Imagens destacadas por artigo (OG image dinâmica), menu mobile hambúrguer, edição inline nos CRUDs, "esqueci minha senha" (requer e-mail transacional), PostgreSQL, RSS feed, PWA, i18n, testes E2E Playwright no CI, dark mode.
+## SEO e Google
+
+O projeto fornece canonical, hreflang `en-US`/`x-default`, Open Graph, Twitter Cards, `WebSite`, `NewsMediaOrganization`, `SearchAction`, `NewsArticle`, `BreadcrumbList`, publisher e `ImageObject`. `robots.txt`, sitemap geral, news sitemap de 48 horas, image sitemap e RSS 2.0 são dinâmicos e usam somente o domínio oficial.
+
+Isso estabelece prontidão técnica, sem prometer rastreamento, indexação, Google News, Discover ou Core Web Vitals de campo, que dependem dos serviços externos e do conteúdo publicado.
+
+## Segurança e entrega
+
+Senhas usam bcrypt; refresh tokens são rotativos e revogáveis; CORS aceita somente a origem oficial em produção; endpoints editoriais críticos exigem administrador; há rate limits, CSP, HSTS e demais headers de segurança. Segredos ficam em variáveis protegidas e `render.yaml` gera `SECRET_KEY` e `ADMIN_SETUP_TOKEN`.
+
+O GitHub Actions executa compilação e testes do backend, auditoria de dependências Python, instalação reproduzível, auditoria npm, type-check/build Vite, smoke do preview e validação das configurações de deploy. O Render só implanta depois que os checks vinculados passam.

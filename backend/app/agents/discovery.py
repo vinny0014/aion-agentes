@@ -12,12 +12,15 @@ from collections import Counter
 
 from ..core import database as db
 
-WPM = 200  # palavras por minuto (leitura média em pt-BR)
+WPM = 200
 
 STOPWORDS = {
     "a", "o", "e", "de", "da", "do", "das", "dos", "em", "um", "uma", "para",
     "com", "que", "por", "os", "as", "no", "na", "nos", "nas", "ao", "se",
     "sobre", "como", "mais", "ou", "são", "ser", "seu", "sua", "este", "esta",
+    "the", "and", "that", "this", "with", "from", "into", "about", "what", "when",
+    "where", "which", "their", "they", "will", "have", "has", "for", "are", "was",
+    "were", "your", "you", "how", "why", "its", "can", "could", "would", "should",
 }
 
 INTEGRATIONS = {
@@ -48,7 +51,7 @@ def related_articles(slug: str, limit: int = 3) -> list[dict]:
     if not base:
         return []
     rows = db.query(
-        """SELECT id, title, slug, excerpt, category, tags, published_at
+        """SELECT id, title, slug, excerpt, category, tags, image_url, image_alt, published_at
            FROM contents WHERE status = 'published' AND id != ?""", (base["id"],))
     base_tags = set(t for t in (base["tags"] or "").split(",") if t)
     scored = []

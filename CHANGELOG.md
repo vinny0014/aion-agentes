@@ -1,9 +1,9 @@
-# Changelog — AION AGENTES
+# Changelog — AION AI NEWS OS
 
 ## [1.1.0] — 2026-07-03
 ### Fase 2 — Portal público
 - API pública paginada de artigos (`/api/public/articles`, detalhe por slug; rascunhos protegidos)
-- Páginas `/conteudos` e `/conteudo/:slug` com título e meta description dinâmicos
+- Páginas públicas em `/articles` e `/article/:slug`, com metadados dinâmicos
 
 ### Fase 3 — Editor de conteúdo
 - Editor completo no admin: criar, editar, publicar e despublicar

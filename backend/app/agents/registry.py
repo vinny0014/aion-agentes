@@ -1,10 +1,8 @@
-"""Arquitetura de Agentes AION.
+"""AION agent registry and pluggable content pipeline.
 
-Cada agente tem responsabilidade única. Nesta fase, os agentes são registrados
-no banco e o pipeline de conteúdo roda sem provedores externos (fila fica em
-'blocked' com pendência humana registrada até que uma API key seja configurada).
-Quando as chaves forem adicionadas ao .env, `providers.generate()` passa a
-gerar conteúdo real sem mudanças de arquitetura.
+Without an external AI provider, the queue produces structured offline drafts
+and records the missing credential. Every draft still needs fact checking, an
+English-language gate and a persisted raster image before publication.
 """
 import json
 
@@ -12,89 +10,90 @@ from ..core import database as db
 from ..core.config import settings
 
 AGENT_DEFINITIONS = [
-    ("ceo-master", "CEO MASTER", "orquestracao",
-     "Coordena todos os agentes, define prioridades e aprova entregas."),
-    ("developer", "Developer", "engenharia",
-     "Implementa funcionalidades, corrige bugs e mantém a base de código."),
-    ("qa", "QA", "qualidade",
-     "Executa testes, valida fluxos críticos e bloqueia regressões."),
-    ("content", "Content", "conteudo",
-     "Produz e revisa o conteúdo diário do portal a partir da fila."),
+    ("ceo-master", "CEO MASTER", "orchestration",
+     "Coordinates agents, prioritizes work and approves deliverables."),
+    ("developer", "Developer", "engineering",
+     "Implements features, fixes bugs and maintains the codebase."),
+    ("qa", "QA", "quality",
+     "Runs tests, validates critical flows and blocks regressions."),
+    ("content", "Content", "content",
+     "Produces and reviews the newsroom's daily content queue."),
     ("seo", "SEO", "seo",
-     "Otimiza títulos, meta descriptions, slugs, schema e sitemap."),
-    ("github", "GitHub", "versionamento",
-     "Organiza commits, branches, PRs e documentação do repositório."),
+     "Optimizes titles, descriptions, slugs, structured data and sitemaps."),
+    ("github", "GitHub", "version-control",
+     "Organizes commits, branches, pull requests and repository documentation."),
     ("deploy", "Deploy", "devops",
-     "Prepara e executa deploys no Vercel (frontend) e Render (backend)."),
-    ("monitor", "Monitor", "observabilidade",
-     "Acompanha health check, logs e alertas de erro."),
-    ("cost-guard", "Cost Guard", "custos",
-     "Monitora consumo de APIs de IA e impede estouro de orçamento."),
-    ("discovery", "Discovery Agent", "pesquisa",
-     "Varre fontes oficiais (RSS de OpenAI, Google, Anthropic, HF, arXiv...) e enfileira pautas."),
-    ("fact-check", "Fact Check Agent", "verificacao",
-     "Verifica placeholders, duplicidade, links internos e bloqueia publicação com problemas."),
-    ("image", "Image Agent", "imagens",
-     "Garante imagem em todo artigo: oficial (com metadados) ou arte editorial 1200x630."),
-    ("image-quality", "Image Quality Check", "qualidade-imagens",
-     "Bloqueia vazio/invalido e re-enfileira capas genericas para virar foto."),
-    ("image-repair", "Image Repair Agent", "reparo-imagens",
-     "Varre o acervo e completa qualquer image_url vazio, sem duplicar."),
-    ("image-prompt", "Image Prompt Agent", "imagens",
-     "Cria prompts de imagens originais por artigo, sem marcas nem material protegido."),
-    ("translation", "Translation Agent", "idiomas",
-     "Prepara versões EN/ES; fila registrada até haver provedor de IA."),
-    ("social-media", "Social Media Agent", "distribuicao",
-     "Gera posts com texto, hashtags e CTA para X, LinkedIn, IG, Threads, Bluesky e Mastodon."),
+     "Prepares deployments to Vercel and Render."),
+    ("monitor", "Monitor", "observability",
+     "Monitors health checks, logs and error alerts."),
+    ("cost-guard", "Cost Guard", "cost-control",
+     "Monitors AI API spend and enforces the budget."),
+    ("discovery", "Discovery Agent", "research",
+     "Scans reputable AI RSS sources and queues story ideas."),
+    ("fact-check", "Fact Check Agent", "verification",
+     "Checks placeholders, duplicates, internal links, language and publication images."),
+    ("image", "Image Agent", "images",
+     "Validates and persists a real 1200x630 raster image before publication."),
+    ("image-quality", "Image Quality Check", "image-quality",
+     "Blocks invalid images and requeues content for a verified raster asset."),
+    ("image-repair", "Image Repair Agent", "image-repair",
+     "Scans the archive and repairs missing images without duplication."),
+    ("image-prompt", "Image Prompt Agent", "images",
+     "Creates original editorial image prompts without brands or protected material."),
+    ("translation", "Public Language Agent", "languages",
+     "Audits and enforces English as the only public language."),
+    ("social-media", "Social Media Agent", "distribution",
+     "Drafts attributed social posts for supported networks."),
     ("newsletter", "Newsletter Agent", "email",
-     "Segmenta inscritos e prepara edições; envio real aguarda provedor de e-mail."),
-    ("analytics", "Analytics Agent", "metricas",
-     "Métricas internas reais e recomendações; GA4/Cloudflare quando conectados."),
-    ("adsense-opt", "AdSense Optimization Agent", "monetizacao",
-     "Audita conformidade e posições de anúncio; nunca aplica práticas proibidas."),
-    ("security", "Security Agent", "seguranca",
-     "Audita rate limit, headers, SQLi, XSS, CSRF, segredos e senhas."),
-    ("research", "Research Agent", "pesquisa-profunda",
-     "Monta briefing factual por pauta: manchetes correlatas, fontes e links internos."),
-    ("breaking-news", "Breaking News Agent", "urgencia",
-     "Detecta a manchete mais quente e troca o hero automaticamente."),
-    ("trend-hunter", "Trend Hunter Agent", "tendencias",
-     "Extrai tendências das manchetes e cria pautas de guias."),
+     "Segments subscribers and prepares editions; delivery requires an email provider."),
+    ("analytics", "Analytics Agent", "metrics",
+     "Reports real internal metrics and uses external analytics only when connected."),
+    ("adsense-opt", "AdSense Optimization Agent", "monetization",
+     "Audits advertising compliance and placements."),
+    ("security", "Security Agent", "security",
+     "Audits rate limits, headers, injection, XSS, secrets and passwords."),
+    ("research", "Research Agent", "deep-research",
+     "Builds factual briefs with related headlines, sources and internal links."),
+    ("breaking-news", "Breaking News Agent", "breaking-news",
+     "Detects urgent headlines and updates the homepage hero."),
+    ("trend-hunter", "Trend Hunter Agent", "trends",
+     "Extracts trends from headlines and creates English story ideas."),
     ("google-discover", "Google Discover Agent", "discover",
-     "Audita requisitos do Discover: imagens grandes, títulos, news sitemap."),
-    ("image-optimization", "Image Optimization Agent", "imagens",
-     "Valida URLs de imagens oficiais e garante fallback editorial."),
-    ("search-console", "Search Console Agent", "indexacao",
-     "Gerencia sitemaps e prepara integração com o Search Console."),
-    ("revenue", "Revenue Agent", "receita",
-     "Consolida custo de IA vs receita AdSense (real, nunca estimada)."),
-    ("dashboard", "Dashboard Agent", "executivo",
-     "Consolida o painel executivo: agentes, orçamento, conteúdo, erros."),
+     "Audits Discover requirements including large images, titles and news sitemap."),
+    ("image-optimization", "Image Optimization Agent", "images",
+     "Returns publications with invalid images to draft."),
+    ("search-console", "Search Console Agent", "indexing",
+     "Audits sitemaps and Search Console readiness."),
+    ("revenue", "Revenue Agent", "revenue",
+     "Compares real AI spend with real advertising revenue."),
+    ("dashboard", "Dashboard Agent", "executive",
+     "Consolidates agents, budget, content and errors for the dashboard."),
     ("performance", "Performance Agent", "performance",
-     "Audita code splitting, cache, imagens e metas de Core Web Vitals."),
-    ("publisher", "Publisher Agent", "publicacao",
-     "Publica o Radar IA diário (curadoria original com atribuição) e artigos aprovados."),
+     "Audits code splitting, cache, images and Core Web Vitals readiness."),
+    ("publisher", "Publisher Agent", "publishing",
+     "Publishes attributed AI Radar editions and approved articles."),
     ("rss", "RSS Agent", "feeds",
-     "Valida e mantém o feed RSS 2.0 do portal."),
+     "Validates the newsroom's RSS 2.0 feed."),
     ("google-news", "Google News Agent", "google-news",
-     "Valida o news-sitemap e a prontidão para o Publisher Center."),
-    ("scheduler", "Scheduler Agent", "automacao",
-     "Agenda pipelines, evita concorrência e impede loops."),
-    ("discovery-growth", "Discovery Growth Agent", "crescimento",
-     "Maximiza alcance orgânico: calendário editorial, tendências, palavras-chave, "
-     "clusters de conteúdo e preparação para Google Discover/Search Console/Analytics/"
-     "AdSense/Trends, Bing Webmaster e Cloudflare Analytics."),
+     "Validates the news sitemap and Publisher Center readiness."),
+    ("scheduler", "Scheduler Agent", "automation",
+     "Schedules pipelines, prevents concurrency and stops runaway loops."),
+    ("discovery-growth", "Discovery Growth Agent", "growth",
+     "Improves organic reach through editorial planning, trends, keywords, "
+     "content clusters and preparation for Google Discover/Search Console/Analytics/"
+     "AdSense/Trends, Bing Webmaster and Cloudflare Analytics."),
 ]
 
 
 def seed_agents() -> None:
     """Registra os agentes padrão (idempotente)."""
     for slug, name, role, desc in AGENT_DEFINITIONS:
-        if not db.query_one("SELECT id FROM agents WHERE slug = ?", (slug,)):
-            db.execute(
-                "INSERT INTO agents (slug, name, role, description) VALUES (?,?,?,?)",
-                (slug, name, role, desc),
-            )
+        db.execute(
+            """INSERT INTO agents (slug, name, role, description) VALUES (?,?,?,?)
+               ON CONFLICT(slug) DO UPDATE SET name=excluded.name, role=excluded.role,
+               description=excluded.description""",
+            (slug, name, role, desc),
+        )
 
 
 # ---------------- Provedores de IA (plugáveis) ----------------
@@ -116,14 +115,14 @@ def resolve_provider(requested: str) -> str:
         if key:
             return name
     raise ProviderNotConfigured(
-        "Nenhuma API de IA configurada. Adicione OPENAI_API_KEY, ANTHROPIC_API_KEY, "
-        "OPENROUTER_API_KEY ou GEMINI_API_KEY ao arquivo .env do backend."
+        "No AI provider is configured. Add OPENAI_API_KEY, ANTHROPIC_API_KEY, "
+        "OPENROUTER_API_KEY or GEMINI_API_KEY to the backend environment."
     )
 
 
 TEMPLATES = {
     "artigo_padrao": (
-        "Write an ORIGINAL article in English (US) para o portal AION sobre: {topic}. "
+        "Write an original article in US English for AION about: {topic}. "
         "Between 800 and 1500 words. Required markdown structure: "
         "a 2-sentence lead; ## subheadings for 3-4 body sections; "
         "## FAQ with 3 questions and answers; ## Conclusion with a reading CTA. "
@@ -131,22 +130,22 @@ TEMPLATES = {
         "Never copy third-party text; never use lorem ipsum or placeholders."
     ),
     "noticia_curta": (
-        "Escreva uma notícia curta (até 300 palavras) sobre: {topic}. "
-        "Lead direto, contexto e fecho."
+        "Write an original short news report in US English (up to 300 words) about: {topic}. "
+        "Use a direct lead, factual context, source links and a concise ending."
     ),
     "comparativo": (
-        "Write an original COMPARISON article in English (US) (800-1500 palavras) sobre: {topic}. "
-        "Estrutura markdown: lead; ## critérios de comparação; ## análise de cada opção; "
-        "## tabela-resumo em texto; ## FAQ (3 perguntas); ## Conclusão com recomendação e CTA. "
-        "Nunca invente números; cite fontes fornecidas no contexto."
+        "Write an original comparison article in US English (800-1500 words) about: {topic}. "
+        "Markdown structure: lead; ## comparison criteria; ## analysis of each option; "
+        "## summary table in text; ## FAQ (3 questions); ## Conclusion with recommendation and CTA. "
+        "Never invent numbers; cite every source supplied in context."
     ),
     "evergreen": (
-        "Write a timeless EVERGREEN article in English (US) (800-1500 palavras) sobre: {topic}. "
-        "Estrutura: lead; ## conceitos fundamentais; ## como funciona; ## aplicações; "
-        "## FAQ (3 perguntas); ## Conclusão com CTA. Didático, sem referências datadas."
+        "Write a timeless evergreen article in US English (800-1500 words) about: {topic}. "
+        "Structure: lead; ## fundamentals; ## how it works; ## applications; "
+        "## FAQ (3 questions); ## Conclusion with CTA. Be educational and avoid dated claims."
     ),
     "guia_pratico": (
-        "Escreva um guia prático passo a passo sobre: {topic}, com pré-requisitos e dicas."
+        "Write a practical step-by-step guide in US English about: {topic}, with prerequisites, safety notes and tips."
     ),
 }
 
@@ -168,7 +167,7 @@ def _save_draft(item: dict, title: str, slug: str, body: str, excerpt: str,
                 status: str = "draft") -> int:
     from .core import mem_get as _mg
     brief = _mg("agent:research", f"briefing:{item['id']}") or {}
-    tags = ",".join((brief.get("keywords") or ["ia"])[:5])
+    tags = ",".join((brief.get("keywords") or ["ai"])[:5])
     categoria = _TEMPLATE_CATEGORIA.get(item.get("template", ""), "news")
     cid = db.execute(
         """INSERT INTO contents (title, slug, body, excerpt, status, agent_id,
@@ -198,7 +197,11 @@ def process_queue_once() -> dict:
     tier = budget_tier()
     limite = {"normal": 10, "alerta": 10, "economico": 5,
               "reducao": 2, "apenas-principais": 1, "suspenso": 0}[tier["modo"]]
-    items = db.query("SELECT * FROM content_queue WHERE status = 'queued' ORDER BY id LIMIT ?", (max(limite, 10),))
+    if limite <= 0:
+        waiting = db.query_one("SELECT COUNT(*) AS n FROM content_queue WHERE status='queued'")["n"]
+        return {"processed": 0, "offline_drafts": 0, "failed": 0, "scanned": 0,
+                "waiting_for_budget": waiting}
+    items = db.query("SELECT * FROM content_queue WHERE status = 'queued' ORDER BY id LIMIT ?", (limite,))
     processed, offline, failed = 0, 0, 0
     for item in items:
         template = item["template"] if item["template"] in TEMPLATES else "artigo_padrao"
@@ -209,18 +212,16 @@ def process_queue_once() -> dict:
             brief = _mg("agent:research", f"briefing:{item['id']}")
             if brief:
                 fontes = "; ".join(brief.get("fontes", [])[:4])
-                prompt += (f"\nContexto factual (cite as fontes): "
-                           f"manchetes correlatas: "
+                prompt += (f"\nFactual context (cite these sources): "
+                           f"related headlines: "
                            f"{'; '.join(m['title'] for m in brief.get('manchetes_correlatas', []))}. "
-                           f"Fontes: {fontes}. "
-                           f"Linke internamente: "
+                           f"Sources: {fontes}. "
+                           f"Add relevant internal links: "
                            f"{'; '.join('/article/'+a['slug'] for a in brief.get('artigos_internos', []))}.")
             db.execute(
                 "UPDATE content_queue SET status = 'processing', provider = ? WHERE id = ?",
                 (provider, item["id"]),
             )
-            if limite <= 0:
-                continue  # IA suspensa pelo Cost Guard; item permanece na fila
             limite -= 1
             try:
                 prov.LAST_USAGE["tokens"] = 0
@@ -232,7 +233,7 @@ def process_queue_once() -> dict:
                 record_cost("content", prov.LAST_USAGE["tokens"], custo)
                 title = item["topic"].strip().capitalize()
                 _save_draft(item, title, prov.slugify(item["topic"]), body,
-                            f"Artigo sobre {item['topic']} gerado via {provider}.")
+                            f"Article about {item['topic']} generated via {provider}.")
                 processed += 1
             except Exception as exc:  # falha de rede/quota — não derruba a fila
                 db.execute(
@@ -254,17 +255,20 @@ def process_queue_once() -> dict:
                  json.dumps({"queue_id": item["id"], "topic": item["topic"], "detalhe": str(exc)})),
             )
             offline += 1
-    # Agendados vencidos (Editorial Studio) publicam também neste ciclo horário —
-    # sem esperar o orquestrador de 2h — respeitando o gate de imagem (P3).
-    from .imagegen import publishable_image
-    agendados = db.query("SELECT id, image_url FROM contents WHERE status='draft' "
+    # Due Editorial Studio items are evaluated during the hourly queue cycle too.
+    from ..content_rules import publication_issues
+    scheduled = db.query("SELECT * FROM contents WHERE status='draft' "
                          "AND scheduled_at != '' AND scheduled_at <= datetime('now')")
     scheduled_published = 0
-    for c in agendados:
-        if not publishable_image(c["image_url"]):
+    for content in scheduled:
+        if publication_issues(content):
             continue
-        db.execute("UPDATE contents SET status='published', published_at=datetime('now'), "
-                   "scheduled_at='' WHERE id=?", (c["id"],))
+        db.execute(
+            "UPDATE contents SET status='published', published_at=datetime('now'), scheduled_at='', "
+            "hero_image_url=image_url, hero_image_alt=image_alt, hero_image_credit=image_credit, "
+            "hero_image_width='1200', hero_image_height='630', hero_image_source='primary' WHERE id=?",
+            (content["id"],),
+        )
         scheduled_published += 1
     return {"processed": processed, "offline_drafts": offline, "failed": failed,
             "scheduled_published": scheduled_published,

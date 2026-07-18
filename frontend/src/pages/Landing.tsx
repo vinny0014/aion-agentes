@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-
-const BASE = import.meta.env.VITE_API_URL || "";
+import { API_BASE } from "../lib/api";
+import { usePageMetadata } from "../lib/seo";
 
 import AdSlot from "../lib/AdSlot";
 
@@ -23,7 +23,7 @@ function horaBr(iso?: string | null) {
 export function BottomNav() {
   const { pathname } = useLocation();
   const item = (to: string, rotulo: string, icone: string, ativo: boolean) => (
-    <Link to={to} className={ativo ? "ativo" : ""}>
+    <Link to={to} className={ativo ? "ativo" : ""} aria-current={ativo ? "page" : undefined}>
       <span aria-hidden className="text-base leading-none">{icone}</span>{rotulo}
     </Link>
   );
@@ -33,7 +33,7 @@ export function BottomNav() {
       {item("/categories", "Categories", "▤", pathname === "/categories")}
       {item("/tags", "Tags", "#", pathname === "/tags")}
       {item("/articles", "Search", "⌕", pathname.startsWith("/article"))}
-      {item("/login", "Conta", "◉", pathname === "/login" || pathname === "/dashboard")}
+      {item("/login", "Account", "◉", pathname === "/login" || pathname === "/dashboard")}
     </nav>
   );
 }
@@ -41,7 +41,8 @@ export function BottomNav() {
 export function Nav() {
   return (
     <>
-      <nav className="glass-nav">
+      <a href="#main-content" className="skip-link">Skip to main content</a>
+      <nav className="glass-nav" aria-label="Primary navigation">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <Link to="/" className="flex items-center gap-2 font-display text-xl font-bold tracking-tight">
             <span aria-hidden className="grad-text text-2xl leading-none">▲</span>
@@ -54,9 +55,9 @@ export function Nav() {
             <Link to="/tags" className="px-3 py-2 text-slateui hover:text-ink">Tags</Link>
             <Link to="/about" className="px-3 py-2 text-slateui hover:text-ink">About</Link>
             <Link to="/login" className="px-3 py-2 text-slateui hover:text-ink">Sign in</Link>
-            <Link to="/signup" className="btn-primary !px-4 !py-2 text-sm">Subscribe</Link>
+            <a href="/#newsletter" className="btn-primary !px-4 !py-2 text-sm">Subscribe</a>
           </div>
-          <Link to="/signup" className="btn-primary !px-4 !py-2 text-sm sm:hidden">Subscribe</Link>
+          <a href="/#newsletter" className="btn-primary !px-4 !py-2 text-sm sm:hidden">Subscribe</a>
         </div>
       </nav>
       <BottomNav />
@@ -87,6 +88,11 @@ function Ticker({ artigos }: { artigos: Art[] }) {
 }
 
 export default function Landing() {
+  usePageMetadata({
+    title: "AI news, guides and analysis",
+    description: "Daily AI news, guides and analysis from an autonomous newsroom.",
+    path: "/",
+  });
   const [artigos, setArtigos] = useState<Art[]>([]);
   const [tags, setTags] = useState<{ tag: string; total: number }[]>([]);
   const [email, setEmail] = useState("");
@@ -94,18 +100,18 @@ export default function Landing() {
 
   const [hero, setHero] = useState<Art | null>(null);
   useEffect(() => {
-    fetch(`${BASE}/api/public/hero`).then(r => r.ok ? r.json() : null).then(setHero).catch(() => {});
-    fetch(`${BASE}/api/public/articles?per_page=9`).then(r => r.json())
+    fetch(`${API_BASE}/api/public/hero`).then(r => r.ok ? r.json() : null).then(setHero).catch(() => {});
+    fetch(`${API_BASE}/api/public/articles?per_page=9`).then(r => r.json())
       .then(d => setArtigos(d.items)).catch(() => {});
-    fetch(`${BASE}/api/public/tags`).then(r => r.json()).then(setTags).catch(() => {});
+    fetch(`${API_BASE}/api/public/tags`).then(r => r.json()).then(setTags).catch(() => {});
   }, []);
 
   async function assinar(e: React.FormEvent) {
     e.preventDefault();
     try {
-      const r = await fetch(`${BASE}/api/public/contact`, {
+      const r = await fetch(`${API_BASE}/api/public/newsletter`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "Newsletter", email, message: `Newsletter subscription: ${email}` }),
+        body: JSON.stringify({ email }),
       });
       setNewsMsg(r.ok ? "Subscribed! ✓" : "Could not subscribe right now.");
       if (r.ok) setEmail("");
@@ -129,9 +135,9 @@ export default function Landing() {
       <Nav />
       <Ticker artigos={artigos.slice(0, 5)} />
 
-      <main id="main" className="mx-auto max-w-6xl px-6 py-8">
+      <main id="main-content" className="mx-auto max-w-6xl px-6 py-8">
         <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
-          {/* HERO — featured story (real) */}
+          {/* HERO — matéria em destaque (real) */}
           <section aria-label="Featured">
             {destaque ? (
               <article className="thumb thumb-hero relative flex h-auto min-h-[380px] flex-col justify-end overflow-hidden rounded-xl border border-line p-8">
@@ -174,7 +180,7 @@ export default function Landing() {
             ) : (
               <div className="empty-state min-h-[380px] justify-center">
                 <span className="font-mono text-2xl text-signal">▸_</span>
-                <p className="font-display font-bold text-ink">O primeiro destaque chega em breve</p>
+                <p className="font-display font-bold text-ink">The first featured story is coming soon</p>
               </div>
             )}
 
@@ -254,15 +260,15 @@ export default function Landing() {
               <Link to="/articles" className="btn-ghost mt-5 w-full !py-2 text-sm">View all updates →</Link>
             </section>
 
-            <section className="card" aria-label="Newsletter">
+            <section id="newsletter" className="card scroll-mt-24" aria-label="Newsletter">
               <h2 className="font-display font-bold uppercase tracking-wide">Newsletter</h2>
               <p className="mt-2 text-sm text-slateui">Get the best of AI, tools and analysis in your inbox.</p>
               <form onSubmit={assinar} className="mt-4 flex gap-2">
                 <input className="field !py-2" type="email" required placeholder="Your email"
-                  value={email} onChange={(e) => setEmail(e.target.value)} aria-label="Email para newsletter" />
+                  value={email} onChange={(e) => setEmail(e.target.value)} aria-label="Newsletter email" />
                 <button className="btn-primary !px-4 !py-2 text-sm">Subscribe</button>
               </form>
-              {newsMsg && <p className="mt-2 text-xs text-emerald-300">{newsMsg}</p>}
+              {newsMsg && <p className="mt-2 text-xs text-emerald-300" aria-live="polite">{newsMsg}</p>}
               <p className="mt-2 font-mono text-[10px] text-slateui">No spam. Unsubscribe anytime.</p>
             </section>
 
@@ -287,7 +293,7 @@ export default function Landing() {
       <footer className="border-t border-line">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-8 text-sm text-slateui">
           <span className="flex items-center gap-2 font-display font-bold text-ink">
-            <span aria-hidden className="grad-text">▲</span>AION·AGENTES
+            <span aria-hidden className="grad-text">▲</span>AION AI NEWS OS
           </span>
           <div className="flex gap-4 text-xs">
             <Link to="/categories" className="hover:text-ink">Categories</Link>

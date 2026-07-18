@@ -1,12 +1,22 @@
 """Schemas Pydantic — contratos da API REST."""
-from pydantic import BaseModel, EmailStr, Field
+from urllib.parse import urlparse
+
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 # ---------- Auth ----------
 class RegisterIn(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     email: EmailStr
-    password: str = Field(min_length=8, max_length=128)
+    password: str = Field(min_length=8, max_length=72)
+    setup_token: str = Field(default="", max_length=256)
+
+    @field_validator("password")
+    @classmethod
+    def bcrypt_length_limit(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password must not exceed 72 UTF-8 bytes")
+        return value
 
 
 class TokenOut(BaseModel):
@@ -61,8 +71,8 @@ class ContentIn(BaseModel):
     excerpt: str = ""
     status: str = Field(default="draft", pattern="^(draft|queued|published)$")
     agent_id: int | None = None
-    seo_title: str = ""
-    seo_description: str = ""
+    seo_title: str = Field(default="", max_length=60)
+    seo_description: str = Field(default="", max_length=160)
     category: str = ""
     tags: str = ""  # comma separated
     author: str = "AION Editorial"
@@ -74,6 +84,13 @@ class ContentIn(BaseModel):
     editors_pick: int = 0
     scheduled_at: str = ""
     source_url: str = ""
+
+    @field_validator("source_url")
+    @classmethod
+    def validate_source_url(cls, value: str) -> str:
+        if value and urlparse(value).scheme not in {"http", "https"}:
+            raise ValueError("Source URL must use HTTP or HTTPS")
+        return value
 
 
 class ContentUpdate(BaseModel):
@@ -90,10 +107,17 @@ class ContentUpdate(BaseModel):
     body: str | None = None
     excerpt: str | None = None
     status: str | None = Field(default=None, pattern="^(draft|queued|published)$")
-    seo_title: str | None = None
-    seo_description: str | None = None
+    seo_title: str | None = Field(default=None, max_length=60)
+    seo_description: str | None = Field(default=None, max_length=160)
     category: str | None = None
     tags: str | None = None
+
+    @field_validator("source_url")
+    @classmethod
+    def validate_source_url(cls, value: str | None) -> str | None:
+        if value and urlparse(value).scheme not in {"http", "https"}:
+            raise ValueError("Source URL must use HTTP or HTTPS")
+        return value
 
 
 # ---------- Tasks ----------

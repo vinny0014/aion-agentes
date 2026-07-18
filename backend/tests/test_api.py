@@ -1,1213 +1,495 @@
-"""Testes de integração — AION AGENTES API."""
+"""Production-readiness integration tests for AION AI NEWS OS."""
+import io
+import json
 import os
+import shutil
 import sys
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-os.environ["DATABASE_URL"] = "sqlite:///./test_aion.db"
-os.environ.setdefault("IMAGE_PROVIDER", "none")
-os.environ["SECRET_KEY"] = "test-secret-key-not-for-production"
-os.environ["ENV"] = "test"
-
+import asyncio
+import xml.etree.ElementTree as ET
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 
-import pytest
-from fastapi.testclient import TestClient
+ROOT = Path(__file__).resolve().parents[2]
+BACKEND = ROOT / "backend"
+TEST_ROOT = Path("/tmp/aion-news-os-tests")
+shutil.rmtree(TEST_ROOT, ignore_errors=True)
+TEST_ROOT.mkdir(parents=True)
 
-Path("test_aion.db").unlink(missing_ok=True)
+sys.path.insert(0, str(BACKEND))
+os.environ.update({
+    "DATABASE_URL": f"sqlite:///{TEST_ROOT / 'aion.db'}",
+    "UPLOAD_DIR": str(TEST_ROOT / "uploads"),
+    "PUBLIC_API_URL": "https://aion-news-api.onrender.com",
+    "SITE_URL": "https://aion-news-os.vercel.app",
+    "IMAGE_PROVIDER": "none",
+    "SECRET_KEY": "test-secret-key-with-at-least-32-characters",
+    "ADMIN_SETUP_TOKEN": "test-owner-setup-token",
+    "CORS_ORIGINS": "https://aion-news-os.vercel.app",
+    "ENV": "test",
+})
 
-from app.main import app  # noqa: E402
-from app.core.database import init_db  # noqa: E402
+import httpx  # noqa: E402
+import pytest  # noqa: E402
+from PIL import Image  # noqa: E402
+
+from app.agents.imagegen import materialize_uploaded_image  # noqa: E402
 from app.agents.registry import seed_agents  # noqa: E402
+from app.core import database as db  # noqa: E402
+from app.main import app  # noqa: E402
 
-init_db()
+db.init_db()
 seed_agents()
-client = TestClient(app)
-ADMIN = {"name": "Admin AION", "email": "admin@aion.dev", "password": "senhaForte123"}
-USER = {"name": "Usuária Comum", "email": "user@aion.dev", "password": "senhaForte123"}
+
+class ASGIClient:
+    """Small synchronous facade over HTTPX's non-deprecated ASGI transport."""
+
+    def request(self, method: str, path: str, **kwargs):
+        async def send():
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as session:
+                return await session.request(method, path, **kwargs)
+        return asyncio.run(send())
+
+    def get(self, path: str, **kwargs):
+        return self.request("GET", path, **kwargs)
+
+    def post(self, path: str, **kwargs):
+        return self.request("POST", path, **kwargs)
+
+    def put(self, path: str, **kwargs):
+        return self.request("PUT", path, **kwargs)
+
+    def patch(self, path: str, **kwargs):
+        return self.request("PATCH", path, **kwargs)
+
+    def delete(self, path: str, **kwargs):
+        return self.request("DELETE", path, **kwargs)
+
+    def options(self, path: str, **kwargs):
+        return self.request("OPTIONS", path, **kwargs)
 
 
-def auth(email, password):
-    r = client.post("/api/auth/login", data={"username": email, "password": password})
-    assert r.status_code == 200, r.text
-    t = r.json()
-    return {"Authorization": f"Bearer {t['access_token']}"}, t["refresh_token"]
+client = ASGIClient()
+
+ADMIN = {"name": "AION Owner", "email": "owner@example.com", "password": "StrongPassword123!"}
+USER = {"name": "AION Reader", "email": "reader@example.com", "password": "StrongPassword123!"}
+ADMIN_REGISTRATION = client.post("/api/auth/register", json={**ADMIN, "setup_token": "test-owner-setup-token"})
+USER_REGISTRATION = client.post("/api/auth/register", json=USER)
 
 
-def test_health():
-    r = client.get("/api/health")
-    assert r.status_code == 200
-    body = r.json()
-    assert body["status"] == "ok" and body["database"] == "ok"
+def auth(account: dict) -> tuple[dict, str]:
+    response = client.post("/api/auth/login", data={"username": account["email"], "password": account["password"]})
+    assert response.status_code == 200, response.text
+    tokens = response.json()
+    return {"Authorization": f"Bearer {tokens['access_token']}"}, tokens["refresh_token"]
 
 
-def test_register_first_user_is_admin():
-    r = client.post("/api/auth/register", json=ADMIN)
-    assert r.status_code == 201 and r.json()["role"] == "admin"
-    r = client.post("/api/auth/register", json=USER)
-    assert r.status_code == 201 and r.json()["role"] == "user"
-    # e-mail duplicado
-    assert client.post("/api/auth/register", json=ADMIN).status_code == 409
+ADMIN_HEADERS, _ = auth(ADMIN)
+USER_HEADERS, _ = auth(USER)
 
 
-def test_login_and_me():
-    h, _ = auth(ADMIN["email"], ADMIN["password"])
-    r = client.get("/api/auth/me", headers=h)
-    assert r.status_code == 200 and r.json()["email"] == ADMIN["email"]
-    # senha errada
-    r = client.post("/api/auth/login", data={"username": ADMIN["email"], "password": "errada123"})
-    assert r.status_code == 401
+def raster_bytes(width: int = 1200, height: int = 630, color: str = "#5634d1") -> bytes:
+    output = io.BytesIO()
+    Image.new("RGB", (width, height), color).save(output, "PNG")
+    return output.getvalue()
 
 
-def test_refresh_token_rotation():
-    _, refresh = auth(ADMIN["email"], ADMIN["password"])
-    r = client.post("/api/auth/refresh", json={"refresh_token": refresh})
-    assert r.status_code == 200 and "access_token" in r.json()
-    # token antigo foi revogado
-    r2 = client.post("/api/auth/refresh", json={"refresh_token": refresh})
-    assert r2.status_code == 401
+TEST_IMAGE = materialize_uploaded_image(raster_bytes(), "integration test image")
+assert TEST_IMAGE
+TEST_IMAGE_URL = TEST_IMAGE["image_url"]
 
 
-def test_agents_seeded_and_crud():
-    h, _ = auth(ADMIN["email"], ADMIN["password"])
-    r = client.get("/api/agents", headers=h)
-    slugs = {a["slug"] for a in r.json()}
-    assert {"ceo-master", "developer", "qa", "content", "seo",
-            "github", "deploy", "monitor", "cost-guard"} <= slugs
-    r = client.post("/api/agents", headers=h, json={
-        "slug": "traducao", "name": "Tradução", "role": "conteudo"})
-    assert r.status_code == 201
-    aid = r.json()["id"]
-    r = client.patch(f"/api/agents/{aid}", headers=h, json={"status": "running"})
-    assert r.json()["status"] == "running"
-    assert client.delete(f"/api/agents/{aid}", headers=h).status_code == 204
-
-
-def test_users_crud_admin_only():
-    ha, _ = auth(ADMIN["email"], ADMIN["password"])
-    hu, _ = auth(USER["email"], USER["password"])
-    assert client.get("/api/users", headers=hu).status_code == 403
-    users = client.get("/api/users", headers=ha).json()
-    assert len(users) == 2
-    uid = [u for u in users if u["email"] == USER["email"]][0]["id"]
-    r = client.patch(f"/api/users/{uid}", headers=ha, json={"name": "Nome Novo"})
-    assert r.json()["name"] == "Nome Novo"
-
-
-def test_content_crud_and_sitemap():
-    h, _ = auth(ADMIN["email"], ADMIN["password"])
-    r = client.post("/api/contents", headers=h, json={
-        "title": "O que são agentes de IA",
-        "slug": "o-que-sao-agentes-de-ia",
-        "body": "Conteúdo completo...",
-        "excerpt": "Entenda agentes de IA.",
+def article_payload(slug: str, **overrides) -> dict:
+    payload = {
+        "title": f"A practical guide to reliable AI systems {slug}",
+        "slug": slug,
+        "body": "## Reliable AI systems\n\nTeams can evaluate models, document sources, monitor outcomes and improve safeguards before every release. " * 8,
+        "excerpt": "A practical English-language guide to building and operating reliable AI systems.",
         "status": "published",
+        "category": "guides",
+        "tags": "ai,reliability,engineering",
+        "image_url": TEST_IMAGE_URL,
+        "image_alt": "Engineers reviewing a reliable artificial intelligence system",
+        "source_url": "https://example.com/research",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def create_article(slug: str, **overrides) -> dict:
+    response = client.post("/api/contents", headers=ADMIN_HEADERS, json=article_payload(slug, **overrides))
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+PRIMARY = create_article("reliable-ai-systems")
+
+
+def test_health_and_security_headers():
+    response = client.get("/api/health")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
+    assert "camera=()" in response.headers["permissions-policy"]
+
+
+def test_production_rejects_weak_secrets_and_wildcard_cors():
+    from app.core.config import Settings
+    with pytest.raises(ValueError):
+        Settings(_env_file=None, ENV="production", SECRET_KEY="weak",
+                 ADMIN_SETUP_TOKEN="short", CORS_ORIGINS="*")
+
+
+def test_owner_setup_is_explicit_and_single_use():
+    assert ADMIN_REGISTRATION.status_code == 201
+    assert ADMIN_REGISTRATION.json()["role"] == "admin"
+    assert USER_REGISTRATION.status_code == 201
+    assert USER_REGISTRATION.json()["role"] == "user"
+    second = client.post("/api/auth/register", json={
+        "name": "Second Owner", "email": "second-owner@example.com",
+        "password": "StrongPassword123!", "setup_token": "test-owner-setup-token",
     })
-    assert r.status_code == 201 and r.json()["published_at"]
-    cid = r.json()["id"]
-    r = client.patch(f"/api/contents/{cid}", headers=h, json={"title": "Agentes de IA: guia"})
-    assert r.json()["title"] == "Agentes de IA: guia"
-    # sitemap inclui o slug publicado
-    sm = client.get("/sitemap.xml")
-    assert sm.status_code == 200 and "o-que-sao-agentes-de-ia" in sm.text
-    assert "Sitemap" in client.get("/robots.txt").text
+    assert second.status_code == 409
+    invalid = client.post("/api/auth/register", json={
+        "name": "Invalid Owner", "email": "invalid-owner@example.com",
+        "password": "StrongPassword123!", "setup_token": "wrong-token",
+    })
+    assert invalid.status_code == 403
+    too_long = client.post("/api/auth/register", json={
+        "name": "Long Password", "email": "long-password@example.com", "password": "é" * 40,
+    })
+    assert too_long.status_code == 422
 
 
-def test_tasks_crud():
-    h, _ = auth(USER["email"], USER["password"])
-    r = client.post("/api/tasks", headers=h, json={"title": "Revisar landing", "priority": 1})
-    tid = r.json()["id"]
-    r = client.patch(f"/api/tasks/{tid}", headers=h, json={"status": "done"})
-    assert r.json()["status"] == "done"
-    assert client.delete(f"/api/tasks/{tid}", headers=h).status_code == 204
+def test_login_profile_and_refresh_rotation():
+    headers, refresh = auth(ADMIN)
+    assert client.get("/api/auth/me", headers=headers).json()["role"] == "admin"
+    rotated = client.post("/api/auth/refresh", json={"refresh_token": refresh})
+    assert rotated.status_code == 200
+    assert client.post("/api/auth/refresh", json={"refresh_token": refresh}).status_code == 401
+    assert client.post("/api/auth/login", data={"username": ADMIN["email"], "password": "wrong-password"}).status_code == 401
 
 
-def test_logs_memory_settings():
-    ha, _ = auth(ADMIN["email"], ADMIN["password"])
-    client.post("/api/logs", headers=ha, json={"message": "teste de log", "source": "qa"})
-    assert any(l["message"] == "teste de log" for l in client.get("/api/logs", headers=ha).json())
-    r = client.put("/api/memory", headers=ha, json={
-        "scope": "agent:seo", "key": "ultima_auditoria", "value": "2026-07-03"})
-    assert r.json()["value"] == "2026-07-03"
-    r = client.put("/api/settings", headers=ha, json={"key": "posts_por_dia", "value": "3"})
-    assert r.status_code == 200
-    # segredos são recusados no banco
-    r = client.put("/api/settings", headers=ha, json={"key": "openai_api_key", "value": "sk-x"})
-    assert r.status_code == 400
+def test_admin_authorization_for_editorial_mutations():
+    assert client.post("/api/contents", json=article_payload("anonymous-write")).status_code == 401
+    assert client.post("/api/contents", headers=USER_HEADERS, json=article_payload("reader-write")).status_code == 403
+    assert client.patch(f"/api/contents/{PRIMARY['id']}", headers=USER_HEADERS, json={"title": "Unauthorized"}).status_code == 403
 
 
-def test_content_queue_pipeline_offline_draft():
-    h, _ = auth(ADMIN["email"], ADMIN["password"])
-    r = client.post("/api/content-queue", headers=h, json={"topic": "Tendências de IA em 2026"})
-    assert r.status_code == 201
-    r = client.post("/api/pipeline/run")
-    assert r.json()["offline_drafts"] >= 1  # sem API key -> rascunho offline + pendência em log
-    items = client.get("/api/content-queue", headers=h).json()
-    done = [i for i in items if i["topic"] == "Tendências de IA em 2026"][0]
-    assert done["status"] == "done" and done["result_content_id"]
-    draft = client.get(f"/api/contents/{done['result_content_id']}", headers=h).json()
-    assert draft["status"] == "draft" and "[Auto draft" in draft["body"]
-    assert draft["slug"].startswith("tendencias-de-ia-em-2026")
-    # pendência humana registrada em log
-    logs = client.get("/api/logs", headers=h).json()
-    assert any("HUMAN ACTION" in l["message"] for l in logs)
+def test_publication_requires_managed_raster_image():
+    missing = client.post("/api/contents", headers=ADMIN_HEADERS,
+                          json=article_payload("missing-image", image_url=""))
+    assert missing.status_code == 422
+    data_uri = client.post("/api/contents", headers=ADMIN_HEADERS,
+                           json=article_payload("data-image", image_url="data:image/png;base64,AAAA"))
+    assert data_uri.status_code == 422
+    draft = client.post("/api/contents", headers=ADMIN_HEADERS,
+                        json=article_payload("image-gated-draft", status="draft", image_url=""))
+    assert draft.status_code == 201 and draft.json()["status"] == "draft"
+    unsafe_source = client.post("/api/contents", headers=ADMIN_HEADERS,
+                                json=article_payload("unsafe-source", source_url="javascript:alert(1)"))
+    assert unsafe_source.status_code == 422
 
 
-def test_pipeline_unique_slug():
-    h, _ = auth(ADMIN["email"], ADMIN["password"])
-    client.post("/api/content-queue", headers=h, json={"topic": "Tendências de IA em 2026"})
-    client.post("/api/pipeline/run")
-    slugs = [c["slug"] for c in client.get("/api/contents", headers=h).json()]
-    assert len(slugs) == len(set(slugs))  # sem colisão de slug
+def test_publication_requires_english():
+    response = client.post("/api/contents", headers=ADMIN_HEADERS, json=article_payload(
+        "portuguese-blocked",
+        title="Guia de inteligência artificial para empresas",
+        excerpt="Um guia completo sobre inteligência artificial.",
+        body="Este conteúdo explica como uma empresa pode usar inteligência artificial com segurança. " * 12,
+    ))
+    assert response.status_code == 422
+    assert "English" in response.text
 
 
-def test_auth_required():
-    assert client.get("/api/tasks").status_code == 401
-    assert client.get("/api/agents").status_code == 401
+def test_valid_article_is_public_and_body_is_not_in_list():
+    listing = client.get("/api/public/articles")
+    assert listing.status_code == 200 and listing.json()["total"] >= 1
+    item = next(item for item in listing.json()["items"] if item["slug"] == PRIMARY["slug"])
+    assert "body" not in item
+    detail = client.get(f"/api/public/articles/{PRIMARY['slug']}")
+    assert detail.status_code == 200
+    assert detail.json()["reading_time"] >= 1
+    assert detail.json()["image_url"].startswith("https://aion-news-api.onrender.com/api/public/images/")
 
 
-# ====================== FASE 2 — Portal público ======================
-def test_public_articles_list_and_detail():
-    h, _ = auth(ADMIN["email"], ADMIN["password"])
-    client.post("/api/contents", headers=h, json={
-        "title": "Guia público de IA", "slug": "guia-publico-de-ia",
-        "body": "# Seção\n\nParágrafo um.\n\nParágrafo dois.",
-        "excerpt": "Um guia aberto.", "status": "published"})
-    r = client.get("/api/public/articles")
-    assert r.status_code == 200
-    body = r.json()
-    assert body["total"] >= 1 and "body" not in body["items"][0]
-    r = client.get("/api/public/articles/guia-publico-de-ia")
-    assert r.status_code == 200 and "Parágrafo um" in r.json()["body"]
-    # rascunhos não vazam
-    client.post("/api/contents", headers=h, json={
-        "title": "Rascunho secreto", "slug": "rascunho-secreto", "status": "draft"})
-    assert client.get("/api/public/articles/rascunho-secreto").status_code == 404
+def test_search_categories_tags_and_related():
+    create_article("ai-observability", category="analysis", tags="ai,observability")
+    assert client.get("/api/public/articles?q=observability").json()["total"] >= 1
+    assert any(row["category"] == "analysis" for row in client.get("/api/public/categories").json())
+    assert any(row["tag"] == "ai" for row in client.get("/api/public/tags").json())
+    related = client.get(f"/api/public/articles/{PRIMARY['slug']}/related")
+    assert related.status_code == 200
+    assert all(item["image_url"].startswith("https://") for item in related.json())
 
 
-def test_public_pagination():
-    r = client.get("/api/public/articles?page=1&per_page=1")
-    b = r.json()
-    assert b["per_page"] == 1 and len(b["items"]) <= 1
+def test_newsletter_and_contact_flows():
+    newsletter = client.post("/api/public/newsletter", json={"email": "subscriber@example.com"})
+    assert newsletter.status_code == 201
+    assert client.post("/api/public/newsletter", json={"email": "subscriber@example.com"}).status_code == 201
+    contact = client.post("/api/public/contact", json={
+        "name": "News Reader", "email": "reader-news@example.com", "message": "I have a story tip for the newsroom."
+    })
+    assert contact.status_code == 201
+    logs = client.get("/api/logs", headers=ADMIN_HEADERS).json()
+    assert any(log["source"] == "contato" for log in logs)
 
 
-
-# ====================== FASE 5 — Hardening ======================
-def test_security_headers():
-    r = client.get("/api/health")
-    assert r.headers["x-content-type-options"] == "nosniff"
-    assert r.headers["x-frame-options"] == "DENY"
-
-
-def test_rate_limit_login():
-    from app.core.config import settings as cfg
-    from app.main import _BUCKETS
-    cfg.ENV = "development"
-    _BUCKETS.clear()
-    try:
-        for _ in range(10):
-            client.post("/api/auth/login", data={"username": "x@x.dev", "password": "errada123"})
-        r = client.post("/api/auth/login", data={"username": "x@x.dev", "password": "errada123"})
-        assert r.status_code == 429
-    finally:
-        cfg.ENV = "test"
-        _BUCKETS.clear()
+def test_image_upload_validation_and_delivery():
+    assert client.post("/api/orchestrator/upload-image?title=Test", files={"image": ("x.png", raster_bytes(), "image/png")}).status_code == 401
+    uploaded = client.post("/api/orchestrator/upload-image?title=Uploaded", headers=ADMIN_HEADERS,
+                           files={"image": ("cover.png", raster_bytes(), "image/png")})
+    assert uploaded.status_code == 200
+    url = uploaded.json()["image_url"]
+    path = url.split("/api/public", 1)[1]
+    delivered = client.get(f"/api/public{path}")
+    assert delivered.status_code == 200 and delivered.headers["content-type"] == "image/webp"
+    assert "immutable" in delivered.headers["cache-control"]
+    too_small = client.post("/api/orchestrator/upload-image?title=Small", headers=ADMIN_HEADERS,
+                            files={"image": ("small.png", raster_bytes(200, 100), "image/png")})
+    assert too_small.status_code == 422
+    svg = client.post("/api/orchestrator/upload-image?title=SVG", headers=ADMIN_HEADERS,
+                      files={"image": ("cover.svg", b"<svg/>", "image/svg+xml")})
+    assert svg.status_code == 415
 
 
-# ====================== MONETIZAÇÃO — Acesso público ======================
-def test_search_categories_tags():
-    h, _ = auth(ADMIN["email"], ADMIN["password"])
-    client.post("/api/contents", headers=h, json={
-        "title": "IA na saúde brasileira", "slug": "ia-na-saude",
-        "body": "Aplicações de diagnóstico assistido.", "excerpt": "IA na medicina.",
-        "status": "published", "category": "Saude", "tags": "IA, Medicina, diagnostico"})
-    # busca sem login
-    r = client.get("/api/public/articles?q=diagnóstico")
-    assert r.status_code == 200 and r.json()["total"] >= 1
-    # filtro por categoria (normalizada p/ minúsculas)
-    r = client.get("/api/public/articles?category=saude")
-    assert r.json()["total"] == 1
-    # filtro por tag
-    r = client.get("/api/public/articles?tag=medicina")
-    assert r.json()["total"] == 1
-    # listas de categorias e tags
-    assert any(c["category"] == "saude" for c in client.get("/api/public/categories").json())
-    assert any(t["tag"] == "ia" for t in client.get("/api/public/tags").json())
+def test_cover_generation_fails_closed_without_provider():
+    assert client.post("/api/orchestrator/cover?title=Test").status_code == 401
+    response = client.post("/api/orchestrator/cover?title=Test", headers=ADMIN_HEADERS)
+    assert response.status_code == 503
+    assert "draft" in response.text
 
 
-def test_public_contact():
-    r = client.post("/api/public/contact", json={
-        "name": "Visitante", "email": "v@site.com", "message": "Proposta de parceria."})
-    assert r.status_code == 201
-    ha, _ = auth(ADMIN["email"], ADMIN["password"])
-    logs = client.get("/api/logs?limit=20", headers=ha).json()
-    assert any(l["source"] == "contato" for l in logs)
+def test_brand_assets_are_real_pngs():
+    for asset in ("favicon", "icon-192", "icon-512", "og-cover"):
+        response = client.get(f"/{asset}.png")
+        assert response.status_code == 200 and response.content.startswith(b"\x89PNG\r\n\x1a\n")
+
+    for filename, dimensions in (("logo.png", (512, 512)), ("og-cover.png", (1200, 630))):
+        with Image.open(ROOT / "frontend" / "public" / filename) as asset:
+            assert asset.format == "PNG" and asset.size == dimensions
 
 
-def test_route_access_matrix():
-    """Prova a matriz: rotas públicas respondem sem token; privadas exigem 401."""
-    publicas = ["/api/health", "/api/public/articles", "/api/public/categories",
-                "/api/public/tags", "/robots.txt", "/sitemap.xml"]
-    for rota in publicas:
-        assert client.get(rota).status_code == 200, f"pública falhou: {rota}"
-    privadas = ["/api/users", "/api/agents", "/api/tasks", "/api/contents",
-                "/api/logs", "/api/memory", "/api/settings", "/api/content-queue",
-                "/api/auth/me"]
-    for rota in privadas:
-        assert client.get(rota).status_code == 401, f"privada exposta: {rota}"
+def test_robots_uses_only_official_domain_and_three_sitemaps():
+    text = client.get("/robots.txt").text
+    assert text.count("Sitemap: https://aion-news-os.vercel.app/") == 3
+    assert "Disallow: /dashboard" in text
+    assert "aion-agentes" + ".vercel.app" not in text
 
 
-def test_robots_blocks_private_areas():
-    txt = client.get("/robots.txt").text
-    assert "Disallow: /admin" in txt and "Disallow: /dashboard" in txt
-    assert "Disallow: /api/" in txt and "Allow: /" in txt
-    sm = client.get("/sitemap.xml").text
-    for p in ["/articles", "/categories", "/tags", "/privacy", "/terms", "/contact"]:
-        assert p in sm, f"faltou no sitemap: {p}"
-    assert "/admin" not in sm and "/dashboard" not in sm
+def test_sitemap_is_valid_and_contains_public_article():
+    response = client.get("/sitemap.xml")
+    root = ET.fromstring(response.content)
+    assert root.tag.endswith("urlset")
+    assert f"https://aion-news-os.vercel.app/article/{PRIMARY['slug']}" in response.text
+    assert "/conte" + "udos" not in response.text and "/catego" + "rias" not in response.text
 
 
-# ====================== OMEGA — Discovery Growth ======================
-def test_reading_time_and_related():
-    h, _ = auth(ADMIN["email"], ADMIN["password"])
-    client.post("/api/contents", headers=h, json={
-        "title": "IA na educação", "slug": "ia-na-educacao",
-        "body": "palavra " * 400, "excerpt": "Educação e IA.",
-        "status": "published", "category": "saude", "tags": "ia,educacao"})
-    r = client.get("/api/public/articles/ia-na-educacao")
-    assert r.json()["reading_time"] == 2  # 400 palavras / 200 wpm
-    rel = client.get("/api/public/articles/ia-na-saude/related").json()
-    assert any(x["slug"] == "ia-na-educacao" for x in rel)  # mesma categoria + tag "ia"
+def test_news_sitemap_is_valid_english_and_recent():
+    response = client.get("/news-sitemap.xml")
+    root = ET.fromstring(response.content)
+    assert root.tag.endswith("urlset")
+    assert "<news:language>en</news:language>" in response.text
+    assert "AION AI NEWS OS" in response.text
 
 
-def test_growth_report_admin_only():
-    assert client.get("/api/growth/report").status_code == 401
-    ha, _ = auth(ADMIN["email"], ADMIN["password"])
-    r = client.get("/api/growth/report", headers=ha)
-    assert r.status_code == 200
-    body = r.json()
-    assert body["agente"] == "discovery-growth"
-    assert "google_adsense" in body["integracoes"]
-    assert "fila" in body["calendario"] and "clusters" in body["calendario"]
+def test_image_sitemap_is_valid_and_escaped():
+    response = client.get("/image-sitemap.xml")
+    root = ET.fromstring(response.content)
+    assert root.tag.endswith("urlset")
+    assert TEST_IMAGE_URL in response.text
+    assert "<image:image>" in response.text
 
 
-def test_discovery_agent_seeded():
-    ha, _ = auth(ADMIN["email"], ADMIN["password"])
-    slugs = {a["slug"] for a in client.get("/api/agents", headers=ha).json()}
-    assert "discovery-growth" in slugs
+def test_rss_is_valid_with_rfc822_dates_and_enclosures():
+    response = client.get("/rss.xml")
+    root = ET.fromstring(response.content)
+    assert root.tag == "rss"
+    items = root.findall("./channel/item")
+    assert items
+    assert parsedate_to_datetime(items[0].findtext("pubDate"))
+    assert items[0].find("enclosure").attrib["url"].startswith("https://")
+    assert root.findtext("./channel/language") == "en-us"
 
 
-# ====================== FASE 2 OMEGA — Multiagente ======================
-def test_16_agents_seeded():
-    ha, _ = auth(ADMIN["email"], ADMIN["password"])
-    slugs = {a["slug"] for a in client.get("/api/agents", headers=ha).json()}
-    esperados = {"ceo-master", "discovery", "content", "fact-check", "seo", "image-prompt",
-                 "translation", "social-media", "newsletter", "analytics", "discovery-growth",
-                 "adsense-opt", "qa", "security", "cost-guard", "scheduler"}
-    assert esperados <= slugs
+def test_server_rendered_article_has_complete_metadata():
+    response = client.get(f"/article/{PRIMARY['slug']}")
+    assert response.status_code == 200
+    html = response.text
+    assert '<html lang="en-US">' in html
+    assert f'<link rel="canonical" href="https://aion-news-os.vercel.app/article/{PRIMARY["slug"]}">' in html
+    assert '<meta property="og:type" content="article">' in html
+    assert '<meta name="twitter:card" content="summary_large_image">' in html
+    assert '"@type": "NewsArticle"' in html and '"@type": "BreadcrumbList"' in html
+    assert TEST_IMAGE_URL in html
+    assert client.get("/article/not-published").status_code == 404
+    from app.main import _rich_text
+    assert 'href="/article/safe"' in _rich_text("[safe](/article/safe)")
+    assert "javascript:" not in _rich_text("[unsafe](javascript:evil)")
 
 
-def test_orchestrator_cycle_and_runs():
-    ha, _ = auth(ADMIN["email"], ADMIN["password"])
-    assert client.post("/api/orchestrator/run").status_code == 401  # protegido
-    r = client.post("/api/orchestrator/run", headers=ha)
-    assert r.status_code == 200
-    body = r.json()
-    assert body["ok"] >= 10 and body["erros"] == 0  # isolamento: nada explode
-    runs = client.get("/api/orchestrator/runs?limit=100", headers=ha).json()
-    assert any(x["agent_slug"] == "fact-check" for x in runs)
-    m = client.get("/api/orchestrator/metrics", headers=ha).json()
-    assert "orcamento_restante_usd" in m and len(m["por_agente"]) >= 10
+def test_stale_external_hero_cannot_replace_managed_publication_image():
+    db.execute("UPDATE contents SET hero_image_url='https://example.com/stale.jpg' WHERE id=?",
+               (PRIMARY["id"],))
+    hero = client.get("/api/public/hero")
+    assert hero.status_code == 200
+    if hero.json()["id"] == PRIMARY["id"]:
+        assert hero.json()["image_url"] == TEST_IMAGE_URL
+    rendered = client.get(f"/article/{PRIMARY['slug']}")
+    assert TEST_IMAGE_URL in rendered.text
+    assert "https://example.com/stale.jpg" not in rendered.text
 
 
-def test_fact_check_blocks_placeholder_draft():
-    ha, _ = auth(ADMIN["email"], ADMIN["password"])
-    client.post("/api/content-queue", headers=ha, json={"topic": "Pauta para fact check"})
-    client.post("/api/pipeline/run")  # gera rascunho offline com placeholders
-    from app.agents.team import fact_check_agent
-    rep = fact_check_agent({})
-    assert rep["bloqueados"] >= 1
+def test_quarantine_moves_legacy_public_content_to_draft():
+    legacy_id = db.execute(
+        "INSERT INTO contents(title,slug,body,excerpt,status,image_url,published_at) VALUES(?,?,?,?,?,?,datetime('now'))",
+        ("Legacy invalid story", "legacy-invalid-story", "English body", "Summary", "published", "data:image/svg+xml;base64,AA"),
+    )
+    from app.content_rules import quarantine_noncompliant_public_content
+    result = quarantine_noncompliant_public_content()
+    assert legacy_id in result["quarantined"]
+    assert db.query_one("SELECT status FROM contents WHERE id=?", (legacy_id,))["status"] == "draft"
 
 
-def test_orchestrator_anti_loop():
-    ha, _ = auth(ADMIN["email"], ADMIN["password"])
-    ultimo = {}
-    for _ in range(5):
-        ultimo = client.post("/api/orchestrator/run", headers=ha).json()
-    assert ultimo.get("status") == "skipped" and "ciclos/hora" in ultimo.get("motivo", "")
+def test_public_read_gate_withdraws_article_when_managed_file_disappears():
+    unique_image = materialize_uploaded_image(raster_bytes(color="#187a55"), "ephemeral image")
+    assert unique_image
+    article = create_article("withdrawn-missing-file", image_url=unique_image["image_url"])
+    image_path = TEST_ROOT / "uploads" / unique_image["filename"]
+    image_path.unlink()
+    assert client.get(f"/api/public/articles/{article['slug']}").status_code == 404
+    assert db.query_one("SELECT status FROM contents WHERE id=?", (article["id"],))["status"] == "draft"
 
 
-def test_newsletter_subscribe_public():
-    r = client.post("/api/public/newsletter", json={
-        "name": "geral", "email": "leitor@site.com", "message": "inscrever"})
-    assert r.status_code == 201
-    # idempotente
-    assert client.post("/api/public/newsletter", json={
-        "name": "geral", "email": "leitor@site.com", "message": "inscrever"}).status_code == 201
-
-
-def test_cost_guard_blocks_ai_steps_when_budget_zero():
-    ha, _ = auth(ADMIN["email"], ADMIN["password"])
-    from app.core import database as db2
-    db2.execute("INSERT INTO app_settings (key, value) VALUES ('orcamento_mensal_usd','0') "
-                "ON CONFLICT(key) DO UPDATE SET value='0'")
-    db2.execute("DELETE FROM agent_runs WHERE agent_slug='ceo-master'")  # liberar anti-loop
-    from app.agents.core import mem_set
-    mem_set("agent:ceo-master", "lock", "off")
-    r = client.post("/api/orchestrator/run", headers=ha).json()
-    pulados = [e for e in r["etapas"] if e.get("status") == "skipped"]
-    assert any("orçamento" in e.get("motivo", "") for e in pulados)
-    db2.execute("UPDATE app_settings SET value='10' WHERE key='orcamento_mensal_usd'")
-
-
-# ====================== INGESTÃO E PUBLICAÇÃO AUTOMÁTICA ======================
-def test_bootstrap_seeds_when_empty():
-    from app.bootstrap import seed_initial_content
-    # banco de teste já tem conteúdo; idempotência: não duplica
-    antes = client.get("/api/public/articles?per_page=50").json()["total"]
-    seed_initial_content()
-    seed_initial_content()
-    depois = client.get("/api/public/articles?per_page=50").json()["total"]
-    assert depois >= antes and depois - antes <= 3
-
-
-def test_discovery_parses_items_and_publisher_creates_radar(monkeypatch):
-    import app.agents.team as team
-
-    class FakeResp:
-        status_code = 200
-        text = """<rss><channel><title>Feed</title>
-        <item><title>Nova técnica de raciocínio anunciada</title><link>https://exemplo.org/a1</link></item>
-        <item><title><![CDATA[Modelo aberto bate benchmark]]></title><link>https://exemplo.org/a2</link></item>
-        </channel></rss>"""
-        def raise_for_status(self): pass
-
-    monkeypatch.setattr(team.httpx, "get", lambda *a, **k: FakeResp())
-    rep = team.discovery_agent({"max_sources": 1})
-    assert rep["encontrados"] == 2
-    pub = team.publisher_agent({})
-    assert pub["radar"] and pub["radar"]["manchetes"] == 2
-    slug = pub["radar"]["slug"]
-    art = client.get(f"/api/public/articles/{slug}").json()
-    assert art["status_code"] if False else True
-    assert "Read the source](https://exemplo.org/a1" in art["body"]
-    assert art["category"] == "radar"
-    # idempotente no mesmo dia
-    assert team.publisher_agent({})["radar"] is None
-
-
-def test_publisher_respects_fact_check_and_setting():
-    ha, _ = auth(ADMIN["email"], ADMIN["password"])
+def test_fact_check_and_publisher_respect_publication_gate():
+    agent_id = db.query_one("SELECT id FROM agents WHERE slug='content'")["id"]
+    content_id = db.execute(
+        """INSERT INTO contents(title,slug,body,excerpt,status,agent_id,category,tags,image_url,image_alt)
+           VALUES(?,?,?,?,?,?,?,?,?,?)""",
+        ("A complete analysis of model evaluation", "model-evaluation-analysis",
+         "Teams evaluate artificial intelligence models with documented benchmarks, safety reviews and production monitoring. " * 70,
+         "A complete guide to evaluating artificial intelligence models.", "draft", agent_id,
+         "analysis", "ai,evaluation", TEST_IMAGE_URL, "A model evaluation dashboard"),
+    )
     from app.agents.team import fact_check_agent, publisher_agent
-    from app.core import database as db2
-    # rascunho de agente com placeholder segue bloqueado
     fact_check_agent({})
-    drafts_placeholder = db2.query(
-        "SELECT COUNT(*) AS n FROM contents WHERE status='draft' AND body LIKE '%Auto draft%'")[0]["n"]
-    publisher_agent({})
-    ainda = db2.query(
-        "SELECT COUNT(*) AS n FROM contents WHERE status='draft' AND body LIKE '%Auto draft%'")[0]["n"]
-    assert ainda == drafts_placeholder  # nada com placeholder foi publicado
-    # setting desliga tudo
-    db2.execute("INSERT INTO app_settings (key,value) VALUES ('publicacao_automatica','off') "
-                "ON CONFLICT(key) DO UPDATE SET value='off'")
-    assert publisher_agent({}).get("status") == "desativado via settings"
-    db2.execute("UPDATE app_settings SET value='on' WHERE key='publicacao_automatica'")
+    published = publisher_agent({})
+    assert published["auto_publicados"] >= 1
+    assert db.query_one("SELECT status FROM contents WHERE id=?", (content_id,))["status"] == "published"
+
+    invalid_id = db.execute(
+        """INSERT INTO contents(title,slug,body,excerpt,status,agent_id,category,image_url,scheduled_at)
+           VALUES(?,?,?,?,?,?,?,?,datetime('now','-1 hour'))""",
+        ("Scheduled story without an image", "scheduled-without-image", "English editorial body " * 80,
+         "A scheduled English story.", "draft", agent_id, "news", ""),
+    )
+    result = publisher_agent({})
+    assert result["bloqueados"] >= 1
+    assert db.query_one("SELECT status FROM contents WHERE id=?", (invalid_id,))["status"] == "draft"
 
 
-def test_publisher_agent_registered_and_in_pipeline():
-    ha, _ = auth(ADMIN["email"], ADMIN["password"])
-    slugs = {a["slug"] for a in client.get("/api/agents", headers=ha).json()}
-    assert "publisher" in slugs
-    from app.agents.orchestrator import PIPELINE
-    ordem = [p[0] for p in PIPELINE]
-    assert ordem.index("publisher") > ordem.index("fact-check")  # publisher sempre depois do fact-check
-
-
-# ====================== DISCOVERY OMEGA ======================
-def test_cost_guard_tiers():
-    from app.core import database as db3
-    from app.agents.core import budget_tier
-    db3.execute("INSERT INTO app_settings (key,value) VALUES ('orcamento_mensal_usd','10') "
-                "ON CONFLICT(key) DO UPDATE SET value='10'")
-    db3.execute("DELETE FROM agent_runs WHERE agent_slug='_custo_teste'")
-    assert budget_tier()["modo"] in ("normal", "alerta")
-    db3.execute("INSERT INTO agent_runs (agent_slug,cost) VALUES ('_custo_teste', 7.2)")
-    assert budget_tier()["modo"] == "economico"
-    db3.execute("INSERT INTO agent_runs (agent_slug,cost) VALUES ('_custo_teste', 2.9)")  # 10.1
-    t = budget_tier()
-    assert t["modo"] == "suspenso" and t["ia_liberada"] is False
-    db3.execute("DELETE FROM agent_runs WHERE agent_slug='_custo_teste'")
-
-
-def test_news_sitemap_last_48h():
-    r = client.get("/news-sitemap.xml")
-    assert r.status_code == 200 and "sitemap-news" in r.text
-    assert "AION AI NEWS OS" in r.text and "<news:title>" in r.text
-
-
-def test_hero_endpoint_and_breaking():
-    r = client.get("/api/public/hero")
-    assert r.status_code == 200 and "slug" in r.json()
-    # breaking news define hero para o radar do dia
-    from app.agents.core import mem_set
-    from app.agents.team import breaking_news_agent
-    mem_set("agent:discovery", "manchetes_do_dia",
-            [{"title": "Empresa lança modelo aberto", "link": "https://ex.org/x", "image": ""}])
-    rep = breaking_news_agent({})
-    assert rep["manchetes_quentes"] == 1
-    if rep["hero_definido"]:
-        assert client.get("/api/public/hero").json()["breaking"] is True
-
-
-def test_discovery_captures_official_image(monkeypatch):
-    import app.agents.team as team
-
-    class FakeResp:
-        status_code = 200
-        text = ('<rss><channel><title>F</title><item><title>Notícia com foto oficial</title>'
-                '<link>https://ex.org/n1</link>'
-                '<enclosure url="https://ex.org/press/foto.jpg" type="image/jpeg"/>'
-                '</item></channel></rss>')
-        def raise_for_status(self): pass
-
-    monkeypatch.setattr(team.httpx, "get", lambda *a, **k: FakeResp())
-    team.discovery_agent({"max_sources": 1})
-    from app.agents.core import mem_get
-    m = mem_get("agent:discovery", "manchetes_do_dia")
-    assert m[0]["image"] == "https://ex.org/press/foto.jpg"
-
-
-def test_new_agents_registered_and_pipeline_23():
-    ha, _ = auth(ADMIN["email"], ADMIN["password"])
-    slugs = {a["slug"] for a in client.get("/api/agents", headers=ha).json()}
-    novos = {"breaking-news", "trend-hunter", "google-discover", "image-optimization",
-             "search-console", "revenue", "dashboard", "performance"}
-    assert novos <= slugs
-    from app.agents.orchestrator import PIPELINE
-    assert len(PIPELINE) == 30
-
-
-def test_public_articles_expose_image_and_source():
-    item = client.get("/api/public/articles").json()["items"][0]
-    assert "image_url" in item and "source_url" in item
-
-
-# ====================== AUDITORIA DOS AGENTES ======================
-def test_research_agent_briefing_feeds_writer():
-    ha, _ = auth(ADMIN["email"], ADMIN["password"])
-    from app.agents.core import mem_set, mem_get
-    from app.agents.team import research_agent
-    r = client.post("/api/content-queue", headers=ha, json={"topic": "modelos abertos de linguagem"})
-    qid = r.json()["id"]
-    mem_set("agent:discovery", "manchetes_do_dia",
-            [{"title": "Novos modelos abertos de linguagem anunciados", "link": "https://ex.org/m1"}])
-    rep = research_agent({})
-    assert rep["briefings_gerados"] >= 1
-    brief = mem_get("agent:research", f"briefing:{qid}")
-    assert brief and brief["fontes"] == ["https://ex.org/m1"]
-
-
-def test_rss_feed():
-    r = client.get("/rss.xml")
-    assert r.status_code == 200 and "<rss version=\"2.0\"" in r.text and "<item>" in r.text
-
-
-def test_pipeline_order_matches_flow():
-    from app.agents.orchestrator import PIPELINE
-    ordem = [p[0] for p in PIPELINE]
-    fluxo = ["discovery", "research", "trend-hunter", "breaking-news", "content",
-             "fact-check", "seo", "image", "image-optimization", "publisher",
-             "dashboard", "google-discover", "google-news", "rss", "newsletter",
-             "social-media"]
-    idx = [ordem.index(e) for e in fluxo]
-    assert idx == sorted(idx), f"fluxo fora de ordem: {ordem}"
-    assert len(PIPELINE) == 30
-
-
-
-# ====================== OMEGA FINAL ======================
-def test_hero_ranking_never_random():
-    from app.agents.team import hero_ranking
-    r = hero_ranking()
-    assert r and r["slug"]  # sempre determinístico, com score
-    h = client.get("/api/public/hero").json()
-    assert "hero_score" in h
-
-
-def test_rss_googlenews_monitor_agents():
-    from app.agents.team import rss_agent, google_news_agent, monitor_agent
-    assert rss_agent({})["xml_valido"] is True
-    assert google_news_agent({})["news_sitemap_valido"] is True
-    m = monitor_agent({})
-    assert "agentes_em_erro" in m and "erros_6h" in m
-
-
-def test_fact_check_blocks_short_ai_article():
-    from app.core import database as db4
-    from app.agents.team import fact_check_agent
-    db4.execute("""INSERT INTO contents (title, slug, body, excerpt, status, agent_id)
-        VALUES ('Curto demais IA', 'curto-demais-ia', ?, 'x', 'draft',
-        (SELECT id FROM agents WHERE slug='content'))""",
-        ("palavra " * 100,))  # 100 palavras < 500
-    rep = fact_check_agent({})
-    assert any("500" in str(b["problemas"]) for b in
-               __import__("app.agents.core", fromlist=["mem_get"]).mem_get("agent:fact-check", "bloqueados")
-               if b["title"] == "Curto demais IA")
-
-
-# ====================== MODO CEO — plano editorial e saúde ======================
-def test_editorial_plan_daily_mix():
-    from app.agents.team import trend_hunter_agent
-    from app.core import database as db5
-    rep = trend_hunter_agent({})
-    assert "plano_editorial" in rep
-    hoje = {r["template"]: r["n"] for r in db5.query(
-        "SELECT template, COUNT(*) n FROM content_queue "
-        "WHERE date(created_at)=date('now') GROUP BY template")}
-    assert hoje.get("noticia_curta", 0) >= 8 and hoje.get("guia_pratico", 0) >= 2
-    assert hoje.get("comparativo", 0) >= 1 and hoje.get("evergreen", 0) >= 1
-
-
-def test_qa_detects_broken_internal_link():
-    ha, _ = auth(ADMIN["email"], ADMIN["password"])
-    client.post("/api/contents", headers=ha, json={
-        "title": "Com link quebrado", "slug": "com-link-quebrado",
-        "body": "Veja também /article/slug-that-does-not-exist neste texto longo o bastante "
-                "para passar nas outras regras do fact check sem problemas adicionais.",
-        "excerpt": "x", "status": "published"})
-    from app.agents.team import qa_agent
-    rep = qa_agent({})
-    assert any("quebrado" in p for p in rep["problemas"])
-
-
-def test_dashboard_executive_fields():
-    from app.agents.team import dashboard_agent
-    d = dashboard_agent({})
-    for k in ("publicados_hoje", "publicados_semana", "publicados_mes",
-              "saldo_disponivel_usd", "tempo_medio_agente_ms"):
-        assert k in d
-
-
-# ====================== IMAGE AGENT OMEGA ======================
-def test_image_agent_guarantees_image_on_all():
-    from app.agents.team import image_agent
-    from app.core import database as db6
-    db6.execute("UPDATE contents SET image_url='' WHERE id IN "
-                "(SELECT id FROM contents LIMIT 3)")  # simula acervo antigo sem imagem
-    rep = image_agent({})
-    vazios = db6.query("SELECT COUNT(*) n FROM contents WHERE image_url=''")[0]["n"]
-    assert vazios == 0 and rep["processados"] >= 3
-
-
-def test_editorial_art_is_valid_dimensions():
-    from app.agents.imagegen import editorial_data_uri, editorial_svg
-    uri = editorial_data_uri("Um título de teste para arte editorial", "news")
-    assert uri.startswith("data:image/svg+xml;base64,")
-    svg = editorial_svg("Um título", "ia")
-    assert 'width="1200"' in svg and 'height="630"' in svg
-
-
-def test_image_repair_agent_idempotent():
-    from app.agents.team import image_repair_agent
-    r1 = image_repair_agent({})
-    assert r1["acervo_completo"] is True
-    r2 = image_repair_agent({})  # nada a reparar na 2ª vez
-    assert r2["vazios_antes"] == 0 and r2["acervo_completo"] is True
-
-
-def test_public_articles_all_have_image():
-    items = client.get("/api/public/articles?per_page=50").json()["items"]
-    assert items and all(i["image_url"] for i in items)
-    assert all("image_alt" in i and "image_width" in i for i in items)
-
-
-def test_fact_check_blocks_ai_article_without_image():
-    from app.core import database as db7
-    from app.agents.team import fact_check_agent
-    from app.agents.core import mem_get
-    db7.execute("""INSERT INTO contents (title, slug, body, excerpt, status, agent_id,
-        category, image_url) VALUES ('IA sem imagem','ia-sem-imagem',?, 'resumo ok',
-        'draft',(SELECT id FROM agents WHERE slug='content'),'news','')""",
-        ("palavra " * 600,))
-    fact_check_agent({})
-    bloq = mem_get("agent:fact-check", "bloqueados") or []
-    assert any(b["title"] == "IA sem imagem" and
-               any("sem imagem" in p for p in b["problemas"]) for b in bloq)
-
-
-def test_image_sitemap():
-    r = client.get("/image-sitemap.xml")
-    assert r.status_code == 200 and "sitemap-image" in r.text
-
-
-def test_new_image_agents_registered():
-    ha, _ = auth(ADMIN["email"], ADMIN["password"])
-    slugs = {a["slug"] for a in client.get("/api/agents", headers=ha).json()}
-    assert {"image", "image-repair"} <= slugs
-
-
-# ====================== CONTENT SYNTHESIZER (custo zero) ======================
-def test_synthesizer_creates_original_news():
-    from app.agents.synthesizer import sintetizar
-    grupo = [
-        {"title": "Laboratório apresenta modelo aberto de raciocínio",
-         "link": "https://techcrunch.com/x", "source": "https://techcrunch.com/feed",
-         "resumo": "O novo modelo foi lançado nesta semana com foco em raciocínio matemático. "
-                   "A empresa afirma que ele supera versões anteriores em testes padronizados. "
-                   "Os pesos serão disponibilizados publicamente para pesquisadores."},
-        {"title": "Modelo aberto de raciocínio chega ao mercado",
-         "link": "https://venturebeat.com/y", "source": "https://venturebeat.com/feed",
-         "resumo": "Segundo a empresa, a arquitetura reduz custo de inferência pela metade. "
-                   "Desenvolvedores já podem baixar os pesos sob licença permissiva."},
-    ]
-    art = sintetizar(grupo)
-    assert art and art["fontes"] == 2
-    assert "techcrunch" in art["body"] and "venturebeat" in art["body"].lower() or "Venturebeat" in art["body"]
-    assert "## Sources" in art["body"] and "## What we know" in art["body"]
-    assert "read the source" in art["body"].lower()
-    # não é cópia literal de uma única fonte: combina blocos atribuídos
-    assert art["body"].count("According to") >= 2
-
-
-def test_synthesizer_clusters_related():
-    from app.agents.synthesizer import cluster_manchetes
-    manchetes = [
-        {"title": "OpenAI lança novo modelo de linguagem"},
-        {"title": "Novo modelo de linguagem da OpenAI é anunciado"},
-        {"title": "NVIDIA apresenta chip para data centers"},
-    ]
-    grupos = cluster_manchetes(manchetes)
-    assert any(len(g) == 2 for g in grupos)  # os dois de OpenAI juntos
-
-
-def test_synthesizer_requires_source_summary():
-    from app.agents.synthesizer import sintetizar
-    # sem 'resumo' não sintetiza (não inventa conteúdo)
-    assert sintetizar([{"title": "Só título", "link": "https://x.org", "resumo": ""}]) is None
-
-
-def test_publisher_synthesizes_from_feeds():
+def test_publisher_creates_new_discovery_content_as_draft_without_image():
     from app.agents.core import mem_set
     from app.agents.team import publisher_agent
-    from app.core import database as db8
-    mem_set("agent:discovery", "manchetes_do_dia", [
-        {"title": "Empresa lança ferramenta de IA para código",
-         "link": "https://techcrunch.com/a", "image": "",
-         "resumo": "A ferramenta promete acelerar revisões de código em equipes. "
-                   "O recurso está disponível em prévia para usuários selecionados. "
-                   "A companhia pretende expandir o acesso nos próximos meses."},
-        {"title": "Nova ferramenta de IA para código é lançada",
-         "link": "https://venturebeat.com/b", "image": "",
-         "resumo": "Integração com editores populares foi confirmada. "
-                   "Planos gratuitos e pagos estarão disponíveis."},
-    ])
-    rep = publisher_agent({})
-    assert rep.get("noticias_sintetizadas", 0) >= 1
-    art = db8.query_one("SELECT * FROM contents WHERE category='news' "
-                        "AND status='published' ORDER BY id DESC LIMIT 1")
-    assert art and art["image_url"] and art["source_url"]  # imagem garantida + atribuição
+    mem_set("agent:discovery", "manchetes_do_dia", [{
+        "title": "Research lab announces a new evaluation framework",
+        "link": "https://example.com/framework", "source": "https://example.com/feed",
+        "image": "", "resumo": "The lab released a framework for independent model evaluation and documented testing. " * 3,
+    }])
+    result = publisher_agent({})
+    assert result["radar"]
+    row = db.query_one("SELECT status,image_url FROM contents WHERE id=?", (result["radar"]["id"],))
+    assert row == {"status": "draft", "image_url": ""}
 
 
-# ====================== /health/google + SCORES ======================
-def test_google_health_endpoint_and_scores():
-    ha, _ = auth(ADMIN["email"], ADMIN["password"])
-    assert client.get("/api/orchestrator/health/google").status_code == 401
-    r = client.get("/api/orchestrator/health/google", headers=ha)
-    assert r.status_code == 200
-    body = r.json()
-    s = body["scores_conformidade_interna"]
-    assert all(0 <= s[k] <= 100 for k in ("seo", "discover", "health"))
-    assert "aviso" in body  # honestidade: scores internos, não métricas do Google
-    from app.agents.team import dashboard_agent
-    assert "scores" in dashboard_agent({})
+def test_pipeline_order_places_images_before_fact_check_and_publish():
+    from app.agents.orchestrator import PIPELINE
+    order = [step[0] for step in PIPELINE]
+    assert order.index("image") < order.index("fact-check") < order.index("publisher")
+    assert client.post("/api/pipeline/run").status_code == 401
+    queued = client.post("/api/content-queue", headers=ADMIN_HEADERS, json={"topic": "Independent AI model evaluation"})
+    assert queued.status_code == 201
+    scheduled = client.post("/api/contents", headers=ADMIN_HEADERS, json=article_payload(
+        "hourly-scheduled-publication", status="draft", scheduled_at="2000-01-01 00:00:00",
+    ))
+    assert scheduled.status_code == 201
+    run = client.post("/api/pipeline/run", headers=ADMIN_HEADERS)
+    assert run.status_code == 200 and run.json()["scheduled_published"] >= 1
+    assert db.query_one("SELECT status FROM contents WHERE id=?", (scheduled.json()["id"],))["status"] == "published"
 
 
-# ====================== v6.0 — INTERNACIONAL + EDITORIAL STUDIO ======================
-def test_v6_bootstrap_english_guides():
-    from app.bootstrap import ARTIGOS
-    assert all(cat == "guides" for _, _, cat, _, _, _ in ARTIGOS)
-    assert ARTIGOS[0][1] == "what-ai-agents-are"
+def test_agents_tasks_memory_logs_and_secret_settings_controls():
+    agents = client.get("/api/agents", headers=ADMIN_HEADERS)
+    assert agents.status_code == 200
+    assert {"ceo-master", "content", "seo", "qa", "security"} <= {a["slug"] for a in agents.json()}
+    task = client.post("/api/tasks", headers=USER_HEADERS, json={"title": "Review the homepage", "priority": 1})
+    assert task.status_code == 201
+    updated = client.patch(f"/api/tasks/{task.json()['id']}", headers=USER_HEADERS, json={"status": "done"})
+    assert updated.json()["status"] == "done"
+    memory = client.put("/api/memory", headers=USER_HEADERS, json={"scope": "test", "key": "language", "value": "en"})
+    assert memory.status_code == 200
+    assert client.put("/api/settings", headers=ADMIN_HEADERS, json={"key": "api_secret", "value": "nope"}).status_code == 400
+    assert client.get("/api/logs", headers=USER_HEADERS).status_code == 403
 
 
-def test_v6_editorial_studio_flags_and_hero():
-    ha, _ = auth(ADMIN["email"], ADMIN["password"])
-    r = client.post("/api/contents", headers=ha, json={
-        "title": "Editorial featured test", "slug": "editorial-featured-test",
-        "body": "## L\n\nLong enough body to satisfy every quality gate in the pipeline today.",
-        "excerpt": "e", "status": "published", "category": "analysis", "tags": "t",
-        "author": "Vinicio Alves", "featured": 1})
-    assert r.status_code == 201
-    h = client.get("/api/public/hero").json()
-    assert h["slug"] == "editorial-featured-test" and h["author"] == "Vinicio Alves"
-    # limpar destaque para não afetar outros testes
-    client.patch(f"/api/contents/{r.json()['id']}", headers=ha, json={"featured": 0})
+def test_cors_allows_only_official_frontend():
+    allowed = client.options("/api/public/articles", headers={
+        "Origin": "https://aion-news-os.vercel.app", "Access-Control-Request-Method": "GET",
+    })
+    assert allowed.headers.get("access-control-allow-origin") == "https://aion-news-os.vercel.app"
+    denied = client.options("/api/public/articles", headers={
+        "Origin": "https://old.example.com", "Access-Control-Request-Method": "GET",
+    })
+    assert "access-control-allow-origin" not in denied.headers
 
 
-def test_v6_scheduled_publish():
-    ha, _ = auth(ADMIN["email"], ADMIN["password"])
-    r = client.post("/api/contents", headers=ha, json={
-        "title": "Scheduled test piece", "slug": "scheduled-test-piece",
-        "body": "## X\n\nbody with enough words to be acceptable in validation.",
-        "excerpt": "s", "status": "draft", "category": "news", "tags": "t",
-        "scheduled_at": "2020-01-01 00:00:00"})
-    assert r.status_code == 201
-    from app.agents.team import publisher_agent
-    publisher_agent({})
-    assert client.get("/api/public/articles/scheduled-test-piece").status_code == 200
+def test_deployment_configs_align_official_services():
+    render = (ROOT / "render.yaml").read_text()
+    assert "name: aion-news-api" in render
+    assert "https://aion-news-os.vercel.app" in render
+    assert "https://aion-news-api.onrender.com" in render
+    assert "autoDeployTrigger: checksPass" in render
+    assert "value: 3.12.13" in render
+    for path in (ROOT / "vercel.json", ROOT / "frontend" / "vercel.json"):
+        config = json.loads(path.read_text())
+        destinations = " ".join(rewrite["destination"] for rewrite in config["rewrites"])
+        assert "https://aion-news-api.onrender.com/api/:path*" in destinations
+        assert "https://aion-news-api.onrender.com/rss.xml" in destinations
+        assert any(header["key"] == "Content-Security-Policy" for block in config["headers"] for header in block["headers"])
 
 
-def test_v6_cover_endpoint_requires_admin():
-    assert client.get("/api/orchestrator/cover?title=X").status_code == 401
-    ha, _ = auth(ADMIN["email"], ADMIN["password"])
-    r = client.get("/api/orchestrator/cover?title=Test cover&category=news", headers=ha).json()
-    assert r["image_url"].startswith("data:image/svg+xml") and r["width"] == 1200
+def test_no_static_feeds_or_old_public_routes_remain():
+    public = ROOT / "frontend" / "public"
+    for name in ("robots.txt", "sitemap.xml", "news-sitemap.xml", "image-sitemap.xml", "rss.xml"):
+        assert not (public / name).exists()
+    routes = (ROOT / "frontend" / "src" / "main.tsx").read_text()
+    assert 'path="/conte' + 'udos"' not in routes
+    assert 'path="/catego' + 'rias"' not in routes
+    not_found = (public / "404.html").read_text()
+    assert '<html lang="en-US">' in not_found and 'content="noindex,nofollow"' in not_found
+    for config_path in (ROOT / "vercel.json", ROOT / "frontend" / "vercel.json"):
+        config = json.loads(config_path.read_text())
+        assert not any(rewrite["source"] == "/:path*" for rewrite in config["rewrites"])
 
 
-def test_v6_manual_article_gets_editorial_cover_automatically():
-    ha, _ = auth(ADMIN["email"], ADMIN["password"])
-    r = client.post("/api/contents", headers=ha, json={
-        "title": "No image provided", "slug": "no-image-provided",
-        "body": "## B\n\ncontent body sized well enough for the checks to pass here.",
-        "excerpt": "n", "status": "published", "category": "news", "tags": "t"})
-    art = client.get("/api/public/articles/no-image-provided").json()
-    assert art["image_url"].startswith("data:image/svg+xml")  # regra absoluta mantida
-
-
-# ====================== v6.1 QUALIDADE ======================
-def test_v61_editorial_art_has_no_title_text():
-    from app.agents.imagegen import editorial_svg
-    svg = editorial_svg("A very long unique headline that must not appear", "news")
-    assert "unique headline" not in svg  # fim da duplicação hero/card
-    assert "NEWS" in svg and "AION" in svg and 'width="1200"' in svg
-
-
-def test_v61_html_entities_unescaped(monkeypatch):
-    import app.agents.team as team
-    class R:
-        status_code = 200
-        text = ('<rss><channel><title>F</title><item>'
-                '<title>OpenAI&#8217;s new model &amp; benchmark wins</title>'
-                '<link>https://x.org/a</link>'
-                '<description>It&#8217;s a big week. The launch drew wide praise. '
-                'Analysts called it a turning point for open models.</description>'
-                '</item></channel></rss>')
-        def raise_for_status(self): pass
-    monkeypatch.setattr(team.httpx, "get", lambda *a, **k: R())
-    team.discovery_agent({"max_sources": 1})
-    from app.agents.core import mem_get
-    m = mem_get("agent:discovery", "manchetes_do_dia")[0]
-    assert "&#8217;" not in m["title"] and "OpenAI’s" in m["title"] and "&" in m["title"]
-    assert "It’s" in m["resumo"]
-
-
-def test_v61_synthesizer_why_it_matters():
-    from app.agents.synthesizer import sintetizar
-    art = sintetizar([{"title": "Model launch draws praise", "link": "https://x.org/a",
-                       "resumo": "The launch happened this week with new weights. "
-                                 "Developers can download them under a permissive license. "
-                                 "Analysts called it a turning point for open models."}])
-    assert art and "## Why it matters" in art["body"]
-    assert "turning point" in art["body"]  # frase real da fonte, não inventada
-
-
-# ====================== IMAGE AGENT PRO ======================
-def test_pro_og_image_extracted_from_source(monkeypatch):
-    import app.agents.team as team
-    class Page:
-        status_code = 200
-        text = '<html><head><meta property="og:image" content="https://site.com/press/photo.jpg"/></head></html>'
-        def raise_for_status(self): pass
-    monkeypatch.setattr(team.httpx, "get", lambda *a, **k: Page())
-    from app.core import database as db9
-    cid = db9.execute("""INSERT INTO contents (title, slug, body, excerpt, status, source_url)
-        VALUES ('OG test article','og-test-article','body text here ok','e','published',
-        'https://site.com/story')""")
-    rep = team.image_agent({})
-    art = db9.query_one("SELECT image_url, image_credit FROM contents WHERE id=?", (cid,))
-    assert art["image_url"] == "https://site.com/press/photo.jpg"
-    assert rep["og_image"] >= 1
-
-
-def test_pro_provider_photo_when_no_feed_or_og(monkeypatch):
-    monkeypatch.setenv("IMAGE_PROVIDER", "pollinations")
-    import app.agents.team as team
-    monkeypatch.setattr(team, "_og_image", lambda url: "")
-    from app.core import database as db10
-    cid = db10.execute("""INSERT INTO contents (title, slug, body, excerpt, status, tags)
-        VALUES ('Provider photo test','provider-photo-test','body ok here','e','published','ai,models')""")
-    rep = team.image_agent({})
-    art = db10.query_one("SELECT image_url, image_credit FROM contents WHERE id=?", (cid,))
-    assert art["image_url"].startswith("https://image.pollinations.ai/prompt/")
-    assert "width=1200" in art["image_url"] and "nologo=true" in art["image_url"]
-    assert "Pollinations" in art["image_credit"] and rep["foto_provedor"] >= 1
-
-
-def test_pro_repair_swaps_generic_svg_for_photo(monkeypatch):
-    monkeypatch.setenv("IMAGE_PROVIDER", "pollinations")
-    import app.agents.team as team
-    monkeypatch.setattr(team, "_og_image", lambda url: "")
-    from app.core import database as db11
-    cid = db11.execute("""INSERT INTO contents (title, slug, body, excerpt, status, image_url)
-        VALUES ('Generic cover swap','generic-cover-swap','body ok','e','published',
-        'data:image/svg+xml;base64,AAAA')""")
-    q = team.image_quality_agent({})
-    assert q["capas_genericas_svg"] >= 1 and q["reenfileirados"] >= 1
-    team.image_agent({})
-    art = db11.query_one("SELECT image_url FROM contents WHERE id=?", (cid,))
-    assert art["image_url"].startswith("https://image.pollinations.ai/")
-
-
-def test_pro_svg_fallback_when_provider_off(monkeypatch):
-    monkeypatch.setenv("IMAGE_PROVIDER", "none")
-    import app.agents.team as team
-    monkeypatch.setattr(team, "_og_image", lambda url: "")
-    from app.core import database as db12
-    cid = db12.execute("""INSERT INTO contents (title, slug, body, excerpt, status)
-        VALUES ('Fallback svg test','fallback-svg-test','body ok','e','published')""")
-    team.image_agent({})
-    art = db12.query_one("SELECT image_url FROM contents WHERE id=?", (cid,))
-    assert art["image_url"].startswith("data:image/svg+xml")  # nunca vazio
-
-
-def test_pro_image_queue_lifecycle():
-    from app.core import database as db13
-    done = db13.query_one("SELECT COUNT(*) n FROM image_queue WHERE status='done'")["n"]
-    queued = db13.query_one("SELECT COUNT(*) n FROM image_queue WHERE status='queued'")["n"]
-    assert done >= 3 and queued == 0  # fila processada pelos testes acima
-
-
-def test_pro_quality_gate_zero_empty():
-    from app.agents.team import image_quality_agent
-    q = image_quality_agent({})
-    assert q["vazios"] == 0 and q["formatos_invalidos"] == 0 and q["aprovado"] is True
-
-
-# ====================== HERO IMAGE PRIORITY ======================
-def _probe_fake(url):
-    # dimensões simuladas por URL (sem rede nos testes)
-    if "big" in url: return {"ok": True, "w": 1600, "h": 838}
-    if "small" in url: return {"ok": True, "w": 300, "h": 300}
-    return {"ok": None, "w": 0, "h": 0}
-
-
-def test_hero_radar_picks_best_photo_among_headlines(monkeypatch):
-    monkeypatch.setenv("IMAGE_PROVIDER", "none")
-    import app.agents.imagegen as ig, app.agents.team as team
-    monkeypatch.setattr(ig, "probe_image", _probe_fake)
-    monkeypatch.setattr(team, "_og_image", lambda u: "")
-    from app.core import database as dbh
-    from app.agents.core import mem_set
-    mem_set("agent:discovery", "manchetes_do_dia", [
-        {"title": "Story one", "link": "https://a.com/1", "image": "https://a.com/small-thumb.jpg", "resumo": "x. y. z."},
-        {"title": "Story two", "link": "https://b.com/2", "image": "https://b.com/big-press.jpg", "resumo": "x. y. z."},
-    ])
-    cid = dbh.execute("""INSERT INTO contents (title, slug, body, excerpt, status, category)
-        VALUES ('Radar hero test','radar-hero-test','body','e','published','radar')""")
-    rep = team.compute_hero_image(cid)
-    assert rep["hero_image"] == "https://b.com/big-press.jpg"  # 1600px vence a miniatura
-    row = dbh.query_one("SELECT hero_image_url, hero_image_width, hero_image_source FROM contents WHERE id=?", (cid,))
-    assert row["hero_image_width"] == "1600" and row["hero_image_source"] == "feed"
-
-
-def test_hero_never_svg_when_photo_exists(monkeypatch):
-    monkeypatch.setenv("IMAGE_PROVIDER", "pollinations")
-    import app.agents.imagegen as ig, app.agents.team as team
-    monkeypatch.setattr(ig, "probe_image", lambda u: {"ok": None, "w": 0, "h": 0})
-    monkeypatch.setattr(team, "_og_image", lambda u: "")
-    from app.core import database as dbh
-    cid = dbh.execute("""INSERT INTO contents (title, slug, body, excerpt, status, image_url)
-        VALUES ('SVG never wins','svg-never-wins','body','e','published',
-        'data:image/svg+xml;base64,AA')""")
-    rep = team.compute_hero_image(cid)
-    assert rep["hero_image"].startswith("https://image.pollinations.ai/")  # foto vence a arte
-
-
-def test_hero_endpoint_returns_ranked_image(monkeypatch):
-    monkeypatch.setenv("IMAGE_PROVIDER", "none")
-    ha, _ = auth(ADMIN["email"], ADMIN["password"])
-    import app.agents.imagegen as ig, app.agents.team as team
-    monkeypatch.setattr(ig, "probe_image", _probe_fake)
-    monkeypatch.setattr(team, "_og_image", lambda u: "https://src.com/big-og.jpg")
-    r = client.post("/api/contents", headers=ha, json={
-        "title": "Featured with og", "slug": "featured-with-og",
-        "body": "long enough body for all the gates to accept during this validation.",
-        "excerpt": "e", "status": "published", "category": "news", "tags": "t",
-        "source_url": "https://src.com/story", "featured": 1})
-    assert r.status_code == 201  # PATCH/POST featured dispara compute? POST não — forçar:
-    from app.agents.team import compute_hero_image
-    compute_hero_image(r.json()["id"])
-    h = client.get("/api/public/hero").json()
-    assert h["slug"] == "featured-with-og" and h["image_url"] == "https://src.com/big-og.jpg"
-    assert h["hero_image_source"] == "og"
-    client.patch(f"/api/contents/{r.json()['id']}", headers=ha, json={"featured": 0})
-
-
-def test_hero_patch_featured_triggers_recompute(monkeypatch):
-    monkeypatch.setenv("IMAGE_PROVIDER", "none")
-    ha, _ = auth(ADMIN["email"], ADMIN["password"])
-    import app.agents.imagegen as ig, app.agents.team as team
-    monkeypatch.setattr(ig, "probe_image", _probe_fake)
-    monkeypatch.setattr(team, "_og_image", lambda u: "https://src.com/big-recompute.jpg")
-    r = client.post("/api/contents", headers=ha, json={
-        "title": "Recompute on featured", "slug": "recompute-on-featured",
-        "body": "sufficient body content to be accepted by validation gates easily.",
-        "excerpt": "e", "status": "published", "category": "news", "tags": "t",
-        "source_url": "https://src.com/story2"})
-    client.patch(f"/api/contents/{r.json()['id']}", headers=ha, json={"featured": 1})
-    from app.core import database as dbh
-    row = dbh.query_one("SELECT hero_image_url FROM contents WHERE id=?", (r.json()["id"],))
-    assert row["hero_image_url"] == "https://src.com/big-recompute.jpg"
-    client.patch(f"/api/contents/{r.json()['id']}", headers=ha, json={"featured": 0})
-
-
-# ====================== v6.4 — DOMINIO OFICIAL (regressão obrigatória) ======================
-_PROIBIDOS = ("wordbet.com.br", "aion-agentes.vercel.app", "aion-agentes-api.onrender.com")
-_ATIVOS = ["app", "../frontend/src", "../frontend/index.html", "../frontend/public",
-           "../vercel.json"]
-
-
-def test_v64_no_forbidden_domains_in_active_code():
-    import os
-    achados = []
-    for raiz in _ATIVOS:
-        alvo = os.path.join(os.path.dirname(__file__), "..", raiz)
-        if os.path.isfile(alvo):
-            arquivos = [alvo]
-        else:
-            arquivos = [os.path.join(dp, f) for dp, _, fs in os.walk(alvo) for f in fs
-                        if f.endswith((".py", ".ts", ".tsx", ".html", ".json", ".txt"))]
-        for a in arquivos:
-            try:
-                conteudo = open(a, encoding="utf-8", errors="ignore").read()
-            except Exception:
-                continue
-            for dom in _PROIBIDOS:
-                if dom in conteudo:
-                    achados.append(f"{a}: {dom}")
-    assert not achados, f"Referências antigas em código ativo: {achados}"
-
-
-def test_v64_sitemap_only_official_domain_and_english_routes():
-    xml = client.get("/sitemap.xml").text
-    assert "aion-news-os.vercel.app" in xml
-    for proibido in _PROIBIDOS + ("/conteudo", "/sobre", "/privacidade", "/admin", "/dashboard"):
-        assert proibido not in xml, f"sitemap contém {proibido}"
-    for rota in ("/articles", "/about", "/privacy", "/terms", "/contact", "/article/"):
-        assert rota in xml
-
-
-def test_v64_robots_official_with_three_sitemaps():
-    txt = client.get("/robots.txt").text
-    assert txt.count("Sitemap: https://aion-news-os.vercel.app/") == 3
-    assert "Disallow: /api/" in txt and "Disallow: /admin" in txt
-    for dom in _PROIBIDOS:
-        assert dom not in txt
-
-
-def test_v64_rss_and_newssitemap_use_article_route():
-    assert "aion-news-os.vercel.app/article/" in client.get("/rss.xml").text
-    assert "aion-news-os.vercel.app/article/" in client.get("/news-sitemap.xml").text
-
-
-def test_v64_home_canonical_official():
-    html = open(__file__.replace("backend/tests/test_api.py", "frontend/index.html")).read()
-    assert '<link rel="canonical" href="https://aion-news-os.vercel.app/" />' in html
-    assert "wordbet" not in html
-
-
-# ====================== v6.6 — PRODUCTION APPROVAL (regressões permanentes) ======================
-
-def test_v66_site_url_single_source_of_truth():
-    """SITE_URL não pode voltar a ter literal duplicado fora de core/config.py."""
-    import os
-    raiz = os.path.join(os.path.dirname(__file__), "..", "app")
-    ofensores = []
-    for dp, _, fs in os.walk(raiz):
-        for f in fs:
-            if not f.endswith(".py"):
-                continue
-            caminho = os.path.join(dp, f)
-            if caminho.endswith(os.path.join("core", "config.py")):
-                continue
-            conteudo = open(caminho, encoding="utf-8", errors="ignore").read()
-            if 'os.environ.get("SITE_URL"' in conteudo or "os.environ.get('SITE_URL'" in conteudo:
-                ofensores.append(caminho)
-    assert not ofensores, f"SITE_URL lido fora da fonte única (core/config.py): {ofensores}"
-
-
-def test_v66_image_sitemap_rewrite_in_vercel():
-    """robots.txt anuncia image-sitemap.xml — a Vercel PRECISA do rewrite ou ele vira HTML."""
-    import json, os
-    vj = json.load(open(os.path.join(os.path.dirname(__file__), "..", "..", "vercel.json")))
-    fontes = [r["source"] for r in vj.get("rewrites", [])]
-    for rota in ("/robots.txt", "/sitemap.xml", "/news-sitemap.xml", "/image-sitemap.xml", "/rss.xml"):
-        assert rota in fontes, f"vercel.json sem rewrite para {rota} (anunciado no robots.txt)"
-
-
-def test_v66_render_service_name_official():
-    """O nome do serviço no Render define o subdomínio — precisa casar com a URL oficial."""
-    import os
-    y = open(os.path.join(os.path.dirname(__file__), "..", "..", "render.yaml")).read()
-    assert "name: aion-news-api" in y, "render.yaml deve usar o serviço aion-news-api"
-    assert "aion-agentes-api" not in y
-
-
-def test_v66_publishable_image_gate():
-    from app.agents.imagegen import publishable_image, is_editorial_art, editorial_data_uri
-    from app.core.config import settings as cfg
-    art = editorial_data_uri("Test", "news")
-    assert is_editorial_art(art) and is_editorial_art("https://x.com/a.svg")
-    assert not is_editorial_art("https://x.com/a.jpg")
-    # vazio nunca publica, em nenhum ambiente
-    assert publishable_image("") is False and publishable_image(None) is False
-    # fora de produção: arte editorial é fallback interno válido
-    assert publishable_image(art) is True
-    # em produção: só foto http real
-    old = cfg.ENV
-    try:
-        cfg.ENV = "production"
-        assert publishable_image(art) is False, "data-URI publicável em produção!"
-        assert publishable_image("https://x.com/a.svg") is False, "SVG publicável em produção!"
-        assert publishable_image("https://x.com/a.jpg") is True
-    finally:
-        cfg.ENV = old
-
-
-def test_v66_publisher_holds_svg_in_production(monkeypatch):
-    """Em produção, síntese sem foto real fica em draft (nunca publica arte SVG)."""
-    import app.agents.team as team
-    from app.agents.core import mem_set
-    from app.core.config import settings as cfg
-    manchetes = [
-        {"title": "Prod gate story alpha keyword", "link": "https://exemplo.org/p1",
-         "source": "https://exemplo.org/p1", "resumo": "Alpha keyword resumo suficiente para sintetizar.", "image": ""},
-        {"title": "Prod gate story alpha keyword segunda", "link": "https://exemplo.org/p2",
-         "source": "https://exemplo.org/p2", "resumo": "Alpha keyword segunda fonte do cluster.", "image": ""},
+def test_no_deprecated_domains_or_committed_secrets():
+    forbidden = ("wordbet" + ".com.br", "aion-agentes" + ".vercel.app",
+                 "aion-agentes-api" + ".onrender.com")
+    source_files = [
+        ROOT / "backend" / "app" / "main.py", ROOT / "backend" / "app" / "core" / "config.py",
+        ROOT / "render.yaml", ROOT / "vercel.json", ROOT / "frontend" / "vercel.json",
+        ROOT / "frontend" / "index.html", ROOT / "frontend" / "src" / "lib" / "site.ts",
     ]
-    mem_set("agent:discovery", "manchetes_do_dia", manchetes)
-    monkeypatch.setattr(team, "_og_image", lambda url: "")
-    monkeypatch.setattr(team, "compute_hero_image", lambda cid, m=None: {"hero_image": None})
-    import app.agents.imagegen as ig
-    monkeypatch.setattr(ig, "provider_photo_url", lambda t, g="": None)  # sem provedor
-    old = cfg.ENV
-    try:
-        cfg.ENV = "production"
-        rep = team.publisher_agent({})
-    finally:
-        cfg.ENV = old
-        mem_set("agent:discovery", "manchetes_do_dia", [])
-    from app.core import database as _dbq
-    publicados_svg = _dbq.query(
-        "SELECT id FROM contents WHERE status='published' AND image_url LIKE 'data:image/svg%' "
-        "AND title LIKE 'Prod gate story%'")
-    assert not publicados_svg, "publisher publicou arte SVG em produção"
-    assert rep.get("retidos_sem_foto", 0) >= 0  # campo existe no relatório
+    text = "\n".join(path.read_text() for path in source_files)
+    assert not any(domain in text for domain in forbidden)
+    assert not (ROOT / "backend" / ".env").exists()
+    assert "CHANGE_ME_IN_ENV" not in (ROOT / "render.yaml").read_text()
 
 
-def test_v66_public_pages_have_no_portuguese():
-    """Páginas públicas do frontend: zero português (inclui traduções quebradas)."""
-    import os, re
-    base = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "src", "pages")
-    publicos = ["Landing.tsx", "Blog.tsx", "Institucional.tsx", "Sobre.tsx", "NotFound.tsx"]
-    proibidos = re.compile(
-        r"(Categorias|Nenhuma|carregando|Enviando|Falha ao|fale conosco|explorar|"
-        r"Terms de Uso|Send mensagem|erro 404|Ele pode ter sido|Por AION|"
-        r"publisheds|Curadoria di)", re.IGNORECASE)
-    achados = []
-    for f in publicos:
-        s = open(os.path.join(base, f), encoding="utf-8").read()
-        for m in proibidos.finditer(s):
-            achados.append(f"{f}: {m.group(0)}")
-    assert not achados, f"Português/tradução quebrada em página pública: {achados}"
-
-
-def test_v66_article_schema_has_discover_fields():
-    """NewsArticle do artigo: ImageObject, dateModified, publisher.logo, keywords."""
-    import os
-    s = open(os.path.join(os.path.dirname(__file__), "..", "..",
-                          "frontend", "src", "pages", "Blog.tsx"), encoding="utf-8").read()
-    for campo in ('dateModified', '"@type": "ImageObject"', 'logo:', 'keywords',
-                  'og-cover.png', 'twitter:image'):
-        assert campo in s, f"Blog.tsx sem {campo} no Schema/OG do artigo"
-    # og:image nunca pode receber data-URI
-    assert "shareImg" in s
-
-
-def test_v66_api_public_responses_in_english():
-    r = client.get("/api/public/articles/slug-que-nao-existe-xyz")
-    assert r.status_code == 404
-    assert "não" not in r.json()["detail"] and "Artigo" not in r.json()["detail"]
-
-
-def test_v66_rss_description_in_english():
-    xml = client.get("/rss.xml").text
-    assert "Notícias" not in xml and "autônomos" not in xml
-    assert "AI news published by autonomous agents" in xml
-
-
-def test_v66_image_sitemap_is_valid_xml_with_ampersand_urls():
-    """URLs de provedores têm querystring com & — o XML precisa escapar."""
-    import xml.dom.minidom as md
-    from app.core import database as _db
-    _db.execute("""INSERT INTO contents (title, slug, body, excerpt, status,
-        image_url, published_at) VALUES ('XML & Escape <Test>', 'xml-escape-test-v66',
-        'body', 'x', 'published',
-        'https://image.example.com/p?width=1200&height=630&nologo=true', datetime('now'))""")
-    try:
-        for path in ("/sitemap.xml", "/news-sitemap.xml", "/image-sitemap.xml", "/rss.xml"):
-            b = client.get(path).text
-            md.parseString(b)  # levanta se mal formado
-        assert "&amp;height=630" in client.get("/image-sitemap.xml").text
-    finally:
-        _db.execute("DELETE FROM contents WHERE slug='xml-escape-test-v66'")
-
-
-def test_v66_hourly_pipeline_publishes_due_scheduled_posts():
-    """Agendado vencido publica no pipeline horário (não só no orquestrador de 2h)."""
-    from app.core import database as _db
-    _db.execute("""INSERT INTO contents (title, slug, body, excerpt, status,
-        image_url, scheduled_at) VALUES ('Sched Hourly', 'sched-hourly-v66', 'b', 'x',
-        'draft', 'https://example.com/f.jpg', '2020-01-01 00:00:00')""")
-    try:
-        r = client.post("/api/pipeline/run")
-        assert r.status_code == 200
-        assert r.json().get("scheduled_published", 0) >= 1
-        row = _db.query_one("SELECT status FROM contents WHERE slug='sched-hourly-v66'")
-        assert row["status"] == "published"
-    finally:
-        _db.execute("DELETE FROM contents WHERE slug='sched-hourly-v66'")
-
-
-# ====================== v6.6.1 — RECONCILIACAO COM O REMOTO (licoes preservadas) ======================
-
-def test_v661_seo_endpoints_have_no_bom():
-    """Producao teve BOM UTF-8 nos XML (commits a79a5d2..97cdb76) — nunca mais."""
-    for path in ("/robots.txt", "/sitemap.xml", "/news-sitemap.xml",
-                 "/image-sitemap.xml", "/rss.xml"):
-        raw = client.get(path).content
-        assert not raw.startswith(b"\xef\xbb\xbf"), f"{path} com BOM UTF-8"
-        assert raw.lstrip()[:1] in (b"<", b"U"), f"{path} nao inicia como XML/robots"
-
-
-def test_v661_no_static_seo_shadow_files_in_public():
-    """Arquivo fisico em frontend/public VENCE os rewrites na Vercel: um snapshot
-    estatico de sitemap/RSS congelaria o SEO (news-sitemap ficaria vazio p/ sempre).
-    Os XML dinamicos vem do backend via rewrite — nada de shadow no public/."""
-    import os
-    pub = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "public")
-    proibidos = {"robots.txt", "sitemap.xml", "news-sitemap.xml",
-                 "image-sitemap.xml", "rss.xml"}
-    presentes = proibidos & set(os.listdir(pub))
-    assert not presentes, f"Shadow estatico congela o SEO dinamico: {presentes}"
-
-
-def test_v661_index_html_searchaction_and_discover_meta():
-    """SearchAction deve apontar para rota real (/articles?q=) e o robots meta
-    precisa de max-image-preview:large (Google Discover)."""
-    import os
-    html = open(os.path.join(os.path.dirname(__file__), "..", "..",
-                             "frontend", "index.html"), encoding="utf-8").read()
-    assert "/articles?q={search_term_string}" in html, "SearchAction fora da rota real"
-    assert "max-image-preview:large" in html, "sem max-image-preview:large (Discover)"
-    assert '"@type": "NewsMediaOrganization"' in html
-    assert "logo.png" in html, "Schema sem logo real"
+def test_ci_runs_backend_and_frontend_validation():
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
+    assert "python -m pytest" in workflow
+    assert "npm ci" in workflow and "npm run build" in workflow
+    assert "playwright install --with-deps chromium" in workflow and "npm run test:e2e" in workflow

@@ -1,2 +1,1 @@
-# AdSense: after approval, add your real line below and redeploy:
-# google.com, pub-XXXXXXXXXXXXXXXX, DIRECT, f08c47fec0942fa0
+# No advertising seller is authorized yet. Add only a verified AdSense record after approval.

@@ -1,45 +1,14 @@
-# PENDÊNCIAS HUMANAS — AION AGENTES
+# Pendências externas e humanas
 
-Tudo abaixo depende exclusivamente de credenciais/autorização sua. O restante do sistema está pronto e operando.
+O código pode preparar a infraestrutura, mas estas ações exigem contas ou decisões do proprietário:
 
-## 1. Publicar no GitHub
-- **Etapa parada:** push do repositório (exige login/token GitHub).
-- **O que fazer:** crie um repositório em github.com/new e execute:
-  ```bash
-  cd aion-agentes
-  git remote add origin https://github.com/SEU_USUARIO/aion-agentes.git
-  git push -u origin main
-  ```
+- Confirmar os deploys automáticos da `main` nos painéis Vercel e Render.
+- Guardar os valores gerados de `SECRET_KEY` e `ADMIN_SETUP_TOKEN` fora do Git.
+- Criar o primeiro administrador usando o token de setup do Render.
+- Adicionar uma chave de provedor de IA se a redação automática completa for desejada.
+- Verificar `https://aion-news-os.vercel.app` no Google Search Console e enviar `sitemap.xml`, `news-sitemap.xml` e `image-sitemap.xml`.
+- Solicitar participação no Google News, quando editorialmente elegível.
+- Acompanhar Core Web Vitals, rastreamento, indexação e Discover após existirem dados reais de campo.
+- Configurar opcionalmente GA4, AdSense, Cloudflare Analytics e Clarity por variáveis protegidas da Vercel.
 
-## 2. Deploy do frontend (Vercel)
-- **Etapa parada:** login OAuth na Vercel.
-- **O que fazer:** vercel.com → Add New → Project → importe o repositório →
-  Root Directory: `frontend` → adicione a variável `VITE_API_URL` com a URL do backend no Render → Deploy.
-- O `vercel.json` já está configurado (build, output e rewrite de SPA).
-
-## 3. Deploy do backend (Render)
-- **Etapa parada:** login/autorização no Render.
-- **O que fazer:** render.com → New → Blueprint → aponte para o repositório.
-  O `render.yaml` cria o serviço, o disco do SQLite e gera o `SECRET_KEY`.
-  Ajuste `CORS_ORIGINS` para o domínio final do frontend.
-
-## 4. Ativar geração de conteúdo por IA
-- **Etapa parada:** falta ao menos uma API key (OpenAI, Anthropic, OpenRouter ou Gemini) — envolve conta e pagamento.
-- **O que fazer:** obtenha a chave no provedor escolhido e adicione ao `.env` do backend
-  (localmente) ou às Environment Variables do Render (produção). Itens da fila marcados
-  como `blocked` voltam a processar no próximo ciclo do scheduler ou via
-  `POST /api/pipeline/run`.
-
-## 5. Domínio próprio (opcional)
-- **O que fazer:** compre/aponte o domínio na Vercel e atualize as URLs canônicas em
-  `frontend/index.html`, `public/robots.txt`, `public/sitemap.xml` e `backend/app/main.py`.
-
-## 6. Integrações do Discovery Growth Agent (opcionais, para monetização)
-- **Etapa parada:** todas exigem contas/credenciais suas.
-- **O que fazer:** criar as contas e definir as variáveis:
-  - Google Analytics 4 → `VITE_GA_MEASUREMENT_ID` (Vercel)
-  - Google AdSense → `VITE_ADSENSE_CLIENT` (Vercel) — sujeito a aprovação do site
-  - Cloudflare Web Analytics → `VITE_CF_ANALYTICS_TOKEN` (Vercel)
-  - Google Search Console e Bing Webmaster → verificar propriedade e enviar o sitemap
-- **O que será liberado:** métricas de tráfego, anúncios e indexação monitorada.
-  Os scripts só são injetados quando a variável existe — sem credencial, nada é carregado.
+Nenhum desses serviços externos deve ter credenciais salvas no repositório.

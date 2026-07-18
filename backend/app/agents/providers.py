@@ -1,4 +1,3 @@
-import os
 """Provedores de IA — chamadas reais via httpx, prontas para ativar com API key.
 
 Sem nenhuma chave configurada, o pipeline usa o modo offline: gera um rascunho
@@ -18,7 +17,7 @@ TIMEOUT = 60.0
 def slugify(text: str) -> str:
     text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
     text = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
-    return text[:200] or "artigo"
+    return text[:200] or "article"
 
 
 LAST_USAGE = {"tokens": 0}
@@ -82,7 +81,7 @@ def generate(provider: str, prompt: str) -> str:
         return _anthropic(prompt)
     if provider == "gemini":
         return _gemini(prompt)
-    raise ValueError(f"Provedor desconhecido: {provider}")
+    raise ValueError(f"Unknown provider: {provider}")
 
 
 def offline_draft(topic: str, template: str) -> dict:
@@ -103,6 +102,6 @@ def offline_draft(topic: str, template: str) -> dict:
         "title": topic.strip().capitalize(),
         "slug": slugify(topic),
         "body": corpo,
-        "excerpt": f"Rascunho editorial sobre {topic} aguardando redação final.",
+        "excerpt": f"Editorial draft about {topic}, awaiting final copy.",
         "template": template,
     }

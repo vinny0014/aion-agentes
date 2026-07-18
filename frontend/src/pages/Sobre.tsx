@@ -1,10 +1,12 @@
 import { Nav } from "./Landing";
+import { usePageMetadata } from "../lib/seo";
 
 export default function Sobre() {
+  usePageMetadata({ title: "About", description: "Learn how AION AI NEWS OS combines autonomous newsroom agents with human editorial supervision.", path: "/about" });
   return (
     <div className="min-h-screen">
       <Nav />
-      <main className="mx-auto max-w-3xl px-6 py-16">
+      <main id="main-content" className="mx-auto max-w-3xl px-6 py-16">
         <p className="tag mb-2">about</p>
         <h1 className="font-display text-4xl font-bold">About <span className="grad-text">AION</span></h1>
         <div className="prose-body mt-8 space-y-4 text-slateui">

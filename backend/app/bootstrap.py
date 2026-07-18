@@ -1,7 +1,9 @@
-"""Initial editorial content — published automatically on the first boot with an
-empty database, so the portal never launches blank."""
+"""Initial English editorial drafts for a fresh installation.
+
+They intentionally remain drafts until a real HTTP image passes the publication
+gate. Production must never launch placeholder or data-URI news images.
+"""
 from .core import database as db
-from .agents.imagegen import editorial_data_uri
 
 ARTIGOS = [
     ("What AI agents are and why they matter", "what-ai-agents-are",
@@ -26,15 +28,10 @@ def seed_initial_content() -> int:
             db.execute(
                 """INSERT INTO contents (title, slug, body, excerpt, status,
                    seo_title, seo_description, category, tags, image_url,
-                   image_alt, image_credit, image_width, image_height, author,
-                   published_at)
-                   VALUES (?,?,?,?,'published',?,?,?,?,?,?,?,'1200','630',
-                           'AION Editorial',datetime('now'))""",
-                (title, slug, body, excerpt, title, excerpt[:160], cat, tags,
-                 editorial_data_uri(title, cat),
-                 f"AION editorial artwork: {title[:90]}",
-                 "AION editorial artwork"))
+                   image_alt, image_credit, author, published_at)
+                   VALUES (?,?,?,?,'draft',?,?,?,?,?,'','','AION Editorial',NULL)""",
+                (title, slug, body, excerpt, title, excerpt[:160], cat, tags, ""))
             n += 1
     db.execute("INSERT INTO logs (level, source, message) VALUES "
-               "('info','bootstrap',?)", (f"Bootstrap published {n} initial article(s)",))
+               "('info','bootstrap',?)", (f"Bootstrap created {n} image-gated draft(s)",))
     return n
