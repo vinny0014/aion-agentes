@@ -65,22 +65,27 @@ export function Nav() {
   );
 }
 
-function Ticker({ artigos }: { artigos: Art[] }) {
-  if (artigos.length === 0) return null;
+async function readJson<T>(path: string, signal: AbortSignal): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, { signal });
+  if (!response.ok) throw new Error(`Request failed (${response.status})`);
+  return response.json();
+}
+
+function Ticker({ artigos, loading }: { artigos: Art[]; loading: boolean }) {
   const itens = [...artigos, ...artigos]; // loop contínuo
   return (
-    <div className="overflow-hidden border-b border-line bg-surface/60">
+    <div className="min-h-[45px] overflow-hidden border-b border-line bg-surface/60">
       <div className="mx-auto flex max-w-6xl items-center gap-4 px-6 py-2.5">
         <span className="shrink-0 font-mono text-[11px] font-medium uppercase tracking-widest text-signal">⚡ Trending</span>
         <div className="relative flex-1 overflow-hidden">
-          <div className="ticker-track">
+          {loading ? <div className="skeleton h-4 max-w-lg" aria-hidden /> : itens.length > 0 ? <div className="ticker-track">
             {itens.map((a, i) => (
               <Link key={i} to={`/article/${a.slug}`}
                 className="shrink-0 text-sm text-slateui transition hover:text-ink">
                 <span className="mr-2 text-signal">•</span>{a.title}
               </Link>
             ))}
-          </div>
+          </div> : <p className="text-sm text-slateui">Fresh newsroom updates are being prepared.</p>}
         </div>
       </div>
     </div>
@@ -95,15 +100,26 @@ export default function Landing() {
   });
   const [artigos, setArtigos] = useState<Art[]>([]);
   const [tags, setTags] = useState<{ tag: string; total: number }[]>([]);
+  const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
   const [newsMsg, setNewsMsg] = useState("");
 
   const [hero, setHero] = useState<Art | null>(null);
   useEffect(() => {
-    fetch(`${API_BASE}/api/public/hero`).then(r => r.ok ? r.json() : null).then(setHero).catch(() => {});
-    fetch(`${API_BASE}/api/public/articles?per_page=9`).then(r => r.json())
-      .then(d => setArtigos(d.items)).catch(() => {});
-    fetch(`${API_BASE}/api/public/tags`).then(r => r.json()).then(setTags).catch(() => {});
+    const controller = new AbortController();
+    Promise.allSettled([
+      readJson<Art | null>("/api/public/hero", controller.signal),
+      readJson<{ items: Art[] }>("/api/public/articles?per_page=9", controller.signal),
+      readJson<{ tag: string; total: number }[]>("/api/public/tags", controller.signal),
+    ]).then(([heroResult, articlesResult, tagsResult]) => {
+      if (controller.signal.aborted) return;
+      if (heroResult.status === "fulfilled") setHero(heroResult.value);
+      if (articlesResult.status === "fulfilled") setArtigos(articlesResult.value.items);
+      if (tagsResult.status === "fulfilled") setTags(tagsResult.value);
+    }).finally(() => {
+      if (!controller.signal.aborted) setLoading(false);
+    });
+    return () => controller.abort();
   }, []);
 
   async function assinar(e: React.FormEvent) {
@@ -133,13 +149,22 @@ export default function Landing() {
   return (
     <div className="min-h-screen pb-16 sm:pb-0">
       <Nav />
-      <Ticker artigos={artigos.slice(0, 5)} />
+      <Ticker artigos={artigos.slice(0, 5)} loading={loading} />
 
-      <main id="main-content" className="mx-auto max-w-6xl px-6 py-8">
+      <main id="main-content" className="mx-auto max-w-6xl px-6 py-8" aria-busy={loading}>
         <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
           {/* HERO — matéria em destaque (real) */}
           <section aria-label="Featured">
-            {destaque ? (
+            {loading ? (
+              <div className="thumb thumb-hero min-h-[380px] rounded-xl border border-line p-8" aria-label="Loading featured story">
+                <div className="relative z-10 w-full max-w-xl space-y-4 self-end">
+                  <div className="skeleton h-5 w-28" />
+                  <div className="skeleton h-10 w-full" />
+                  <div className="skeleton h-5 w-4/5" />
+                  <div className="skeleton h-9 w-36" />
+                </div>
+              </div>
+            ) : destaque ? (
               <article className="thumb thumb-hero relative flex h-auto min-h-[380px] flex-col justify-end overflow-hidden rounded-xl border border-line p-8">
                 {destaque.image_url && (
                   <>
@@ -187,13 +212,20 @@ export default function Landing() {
             <AdSlot slot="aion-home-top" className="mt-6" />
 
             {/* LATEST NEWS */}
-            <section className="mt-10" aria-label="Latest news">
+            <section className="mt-10 min-h-[1080px] sm:min-h-[540px] lg:min-h-[270px]" aria-label="Latest news">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="font-display text-lg font-bold uppercase tracking-wide">Latest news</h2>
                 <Link to="/articles" className="text-sm text-signal hover:underline">View all →</Link>
               </div>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {ultimas.map((a) => (
+                {loading ? [0, 1, 2, 3].map((i) => (
+                  <div key={i} className="card !p-3" aria-hidden>
+                    <div className="skeleton mb-3 h-36" />
+                    <div className="skeleton h-3 w-20" />
+                    <div className="skeleton mt-3 h-5 w-full" />
+                    <div className="skeleton mt-3 h-3 w-28" />
+                  </div>
+                )) : ultimas.map((a) => (
                   <Link key={a.id} to={`/article/${a.slug}`} className="card card-hover !p-3">
                     <div className="thumb mb-3">
                       <span className="grad-text relative z-0 font-display text-3xl font-bold">
@@ -235,13 +267,18 @@ export default function Landing() {
 
           {/* SIDEBAR */}
           <aside className="space-y-6">
-            <section className="card" aria-label="Today in AI">
+            <section className="card min-h-[360px]" aria-label="Today in AI">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="font-display font-bold uppercase tracking-wide">Today in AI</h2>
                 <span className="badge-live"><span className="status-dot h-1.5 w-1.5 rounded-full bg-emerald-400" />live</span>
               </div>
               <ul className="space-y-4">
-                {hoje.map((a) => (
+                {loading ? [0, 1, 2, 3].map((i) => (
+                  <li key={i} className="flex gap-3" aria-hidden>
+                    <div className="skeleton h-12 w-12 shrink-0" />
+                    <div className="flex-1 space-y-2"><div className="skeleton h-3 w-16" /><div className="skeleton h-4 w-full" /></div>
+                  </li>
+                )) : hoje.map((a) => (
                   <li key={a.id} className="flex gap-3">
                     <div className="thumb !h-12 !w-12 shrink-0 !rounded-md">
                       {a.image_url
@@ -255,7 +292,7 @@ export default function Landing() {
                     </div>
                   </li>
                 ))}
-                {hoje.length === 0 && <li className="text-sm text-slateui">Today's first stories are on their way.</li>}
+                {!loading && hoje.length === 0 && <li className="text-sm text-slateui">Today's first stories are on their way.</li>}
               </ul>
               <Link to="/articles" className="btn-ghost mt-5 w-full !py-2 text-sm">View all updates →</Link>
             </section>
@@ -273,15 +310,15 @@ export default function Landing() {
             </section>
 
             <AdSlot slot="aion-sidebar" />
-            <section className="card" aria-label="Trending topics">
+            <section className="card min-h-[180px]" aria-label="Trending topics">
               <h2 className="font-display font-bold uppercase tracking-wide">Trending topics</h2>
               <div className="mt-4 flex flex-wrap gap-2">
-                {tags.slice(0, 9).map((t) => (
+                {loading ? [0, 1, 2, 3, 4].map((i) => <span key={i} className="skeleton h-7 w-20 rounded-full" aria-hidden />) : tags.slice(0, 9).map((t) => (
                   <Link key={t.tag} to={`/articles?tag=${encodeURIComponent(t.tag)}`} className="chip !py-1 text-xs">
                     #{t.tag}
                   </Link>
                 ))}
-                {tags.length === 0 && <p className="text-sm text-slateui">Tags appear as articles get published.</p>}
+                {!loading && tags.length === 0 && <p className="text-sm text-slateui">Tags appear as articles get published.</p>}
               </div>
               <Link to="/tags" className="btn-ghost mt-5 w-full !py-2 text-sm">View all topics →</Link>
             </section>

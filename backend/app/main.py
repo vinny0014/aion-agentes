@@ -65,6 +65,9 @@ app = FastAPI(
     description="API for the AION AI NEWS OS autonomous newsroom.",
     version="1.0.0",
     lifespan=lifespan,
+    docs_url=None if settings.ENV.lower() == "production" else "/docs",
+    redoc_url=None if settings.ENV.lower() == "production" else "/redoc",
+    openapi_url=None if settings.ENV.lower() == "production" else "/openapi.json",
 )
 
 app.add_middleware(
@@ -104,12 +107,25 @@ async def security_middleware(request: Request, call_next):
     response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; "
-        "form-action 'self'; img-src 'self' https:; font-src 'self' https://fonts.gstatic.com; "
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "form-action 'self'; img-src 'self' https:; font-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
         "script-src 'self'; connect-src 'self' https://aion-news-api.onrender.com"
     )
     if settings.ENV == "production":
         response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+    path = request.url.path
+    if path == "/api/health" or (
+        path.startswith("/api/")
+        and (not path.startswith("/api/public/") or request.method != "GET")
+    ):
+        response.headers["Cache-Control"] = "no-store"
+    elif request.method == "GET" and "cache-control" not in response.headers:
+        if path.startswith("/api/public/"):
+            response.headers["Cache-Control"] = "public, max-age=0, must-revalidate, s-maxage=60, stale-while-revalidate=600"
+        elif path in {"/robots.txt", "/sitemap.xml", "/news-sitemap.xml", "/image-sitemap.xml", "/rss.xml"}:
+            response.headers["Cache-Control"] = "public, max-age=300, s-maxage=600, stale-while-revalidate=86400"
+        elif path.startswith("/article/"):
+            response.headers["Cache-Control"] = "public, max-age=0, must-revalidate, s-maxage=60, stale-while-revalidate=600"
     return response
 
 

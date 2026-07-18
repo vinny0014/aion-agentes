@@ -17,6 +17,14 @@ test("reader and editor production journeys", async ({ page, request }) => {
   const browserErrors: string[] = [];
   page.on("console", (message) => { if (message.type() === "error") browserErrors.push(message.text()); });
   page.on("pageerror", (error) => browserErrors.push(error.message));
+  await page.addInitScript(() => {
+    (window as any).__aionCLS = 0;
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries() as any) {
+        if (!entry.hadRecentInput) (window as any).__aionCLS += entry.value;
+      }
+    }).observe({ type: "layout-shift", buffered: true });
+  });
   await page.goto("/signup");
   await page.getByLabel("Name").fill("AION Owner");
   await page.getByLabel("Email").fill("owner-e2e@example.com");
@@ -59,8 +67,18 @@ test("reader and editor production journeys", async ({ page, request }) => {
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", /\/article\/how-independent-teams/);
   await expect(page.locator("article img").first()).toHaveAttribute("src", /^http:\/\/127\.0\.0\.1:8000\/api\/public\/images\//);
 
+  await page.route("**/api/public/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (["/api/public/hero", "/api/public/articles", "/api/public/tags"].includes(path)) {
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    }
+    await route.continue();
+  });
   await page.goto("/");
   await expect(page.getByRole("heading", { name: title })).toBeVisible();
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => (window as any).__aionCLS)).toBeLessThan(0.1);
+  await page.unroute("**/api/public/**");
   await page.getByLabel("Newsletter email").fill("reader-e2e@example.com");
   await page.getByRole("button", { name: "Subscribe" }).last().click();
   await expect(page.getByText("Subscribed!")).toBeVisible();

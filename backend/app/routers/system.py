@@ -224,6 +224,10 @@ def health(request: Request):
     scheduler = getattr(request.app.state, "scheduler", None)
     scheduler_running = bool(scheduler and scheduler.running)
     scheduler_jobs = [job.id for job in scheduler.get_jobs()] if scheduler else []
+    try:
+        has_admin = bool(db.query_one("SELECT id FROM users WHERE role='admin' LIMIT 1"))
+    except Exception:
+        has_admin = False
     return {
         "status": "ok" if db_ok else "degraded",
         "app": settings.APP_NAME,
@@ -234,6 +238,7 @@ def health(request: Request):
             "status": "running" if scheduler_running else "not_started",
             "jobs": scheduler_jobs,
         },
+        "owner_setup": "ready" if has_admin or settings.ADMIN_SETUP_TOKEN else "configuration_required",
         "uptime_seconds": round(time.time() - START_TIME, 1),
         "ai_providers_configured": providers,
     }

@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test";
 
-const runId = `${process.pid}`;
+const runId = `${process.pid}-${Date.now()}`;
 const python = process.env.PLAYWRIGHT_PYTHON || "python";
 
 export default defineConfig({

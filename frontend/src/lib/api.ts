@@ -1,5 +1,9 @@
 /** Cliente da API AION com renovação automática de token. */
-export const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+const configuredApi = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+// Production always uses the official Vercel origin and its audited rewrites.
+// This prevents a stale dashboard variable from bypassing the single-domain
+// policy, Vercel edge caching and same-origin browser protections.
+export const API_BASE = import.meta.env.PROD ? "" : configuredApi;
 
 export function getTokens() {
   return {

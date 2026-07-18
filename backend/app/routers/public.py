@@ -87,7 +87,10 @@ def get_hero():
         f"SELECT {_FIELDS} FROM contents WHERE status='published' "
         "ORDER BY published_at DESC LIMIT 1")
     if not row:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "No published content")
+        # An empty newsroom is a valid bootstrap state, not a broken resource.
+        # Returning JSON null avoids a noisy browser 404 while the publication
+        # gate and scheduler prepare the first eligible story.
+        return None
     row["breaking"] = False
     return row
 

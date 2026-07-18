@@ -13,9 +13,9 @@ export default {
         slateui: "#9CA0B4",
       },
       fontFamily: {
-        display: ["Space Grotesk", "system-ui", "sans-serif"],
-        body: ["Inter", "system-ui", "sans-serif"],
-        mono: ["IBM Plex Mono", "ui-monospace", "monospace"],
+        display: ["ui-sans-serif", "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
+        body: ["ui-sans-serif", "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
+        mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "Liberation Mono", "monospace"],
       },
     },
   },

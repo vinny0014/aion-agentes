@@ -133,10 +133,12 @@ def test_health_and_security_headers():
     assert payload["release"] == "local"
     assert payload["scheduler"]["status"] in {"running", "not_started"}
     assert isinstance(payload["scheduler"]["jobs"], list)
+    assert payload["owner_setup"] == "ready"
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["x-frame-options"] == "DENY"
     assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
     assert "camera=()" in response.headers["permissions-policy"]
+    assert response.headers["cache-control"] == "no-store"
 
 
 def test_production_rejects_weak_secrets_and_wildcard_cors():
@@ -144,6 +146,26 @@ def test_production_rejects_weak_secrets_and_wildcard_cors():
     with pytest.raises(ValueError):
         Settings(_env_file=None, ENV="production", SECRET_KEY="weak",
                  ADMIN_SETUP_TOKEN="short", CORS_ORIGINS="*")
+
+
+def test_production_boots_without_synthesizing_an_unknown_setup_token():
+    from app.core.config import Settings
+    production = Settings(
+        _env_file=None,
+        ENV="production",
+        SECRET_KEY="a-production-secret-key-that-is-long-enough",
+        ADMIN_SETUP_TOKEN="",
+        CORS_ORIGINS="https://aion-news-os.vercel.app",
+    )
+    assert production.ADMIN_SETUP_TOKEN == ""
+    with pytest.raises(ValueError):
+        Settings(
+            _env_file=None,
+            ENV="production",
+            SECRET_KEY="a-production-secret-key-that-is-long-enough",
+            ADMIN_SETUP_TOKEN="short",
+            CORS_ORIGINS="https://aion-news-os.vercel.app",
+        )
 
 
 def test_owner_setup_is_explicit_and_single_use():
@@ -277,10 +299,22 @@ def test_brand_assets_are_real_pngs():
 
 
 def test_robots_uses_only_official_domain_and_three_sitemaps():
-    text = client.get("/robots.txt").text
+    response = client.get("/robots.txt")
+    text = response.text
     assert text.count("Sitemap: https://aion-news-os.vercel.app/") == 3
     assert "Disallow: /dashboard" in text
     assert "aion-agentes" + ".vercel.app" not in text
+    assert "stale-while-revalidate=86400" in response.headers["cache-control"]
+
+
+def test_public_reader_api_is_edge_cacheable_but_auth_is_not():
+    public = client.get("/api/public/articles")
+    assert public.status_code == 200
+    assert "max-age=0" in public.headers["cache-control"]
+    assert "s-maxage=60" in public.headers["cache-control"]
+    private = client.get("/api/auth/me")
+    assert private.status_code == 401
+    assert private.headers["cache-control"] == "no-store"
 
 
 def test_sitemap_is_valid_and_contains_public_article():
@@ -344,6 +378,18 @@ def test_stale_external_hero_cannot_replace_managed_publication_image():
     rendered = client.get(f"/article/{PRIMARY['slug']}")
     assert TEST_IMAGE_URL in rendered.text
     assert "https://example.com/stale.jpg" not in rendered.text
+
+
+def test_empty_newsroom_returns_a_quiet_optional_hero():
+    states = db.query("SELECT id, status FROM contents")
+    db.execute("UPDATE contents SET status='draft'")
+    try:
+        response = client.get("/api/public/hero")
+        assert response.status_code == 200
+        assert response.json() is None
+    finally:
+        for row in states:
+            db.execute("UPDATE contents SET status=? WHERE id=?", (row["status"], row["id"]))
 
 
 def test_quarantine_moves_legacy_public_content_to_draft():
@@ -463,6 +509,11 @@ def test_deployment_configs_align_official_services():
         assert "https://aion-news-api.onrender.com/rss.xml" in destinations
         assert config["headers"][0]["source"] == "/(.*)"
         assert any(header["key"] == "Content-Security-Policy" for block in config["headers"] for header in block["headers"])
+        csp = next(header["value"] for block in config["headers"] for header in block["headers"]
+                   if header["key"] == "Content-Security-Policy")
+        assert "fonts.googleapis.com" not in csp and "fonts.gstatic.com" not in csp
+    api_client = (ROOT / "frontend" / "src" / "lib" / "api.ts").read_text()
+    assert 'import.meta.env.PROD ? "" : configuredApi' in api_client
 
 
 def test_no_static_feeds_or_old_public_routes_remain():
@@ -477,6 +528,7 @@ def test_no_static_feeds_or_old_public_routes_remain():
     index = (ROOT / "frontend" / "index.html").read_text()
     manifest = json.loads((public / "manifest.json").read_text())
     assert 'href="/logo.png"' in index and "/favicon.png" not in index
+    assert "fonts.googleapis.com" not in index and "fonts.gstatic.com" not in index
     assert manifest["icons"] == [{"src": "/logo.png", "sizes": "512x512",
                                   "type": "image/png", "purpose": "any maskable"}]
     for config_path in (ROOT / "vercel.json", ROOT / "frontend" / "vercel.json"):

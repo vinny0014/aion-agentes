@@ -1,6 +1,4 @@
 """AION AI NEWS OS — central settings loaded from environment variables."""
-import os
-import secrets
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -37,10 +35,11 @@ class Settings(BaseSettings):
             return self
         if self.SECRET_KEY == "CHANGE_ME_IN_ENV" or len(self.SECRET_KEY) < 32:
             raise ValueError("Production SECRET_KEY must be a generated value of at least 32 characters")
-        if len(self.ADMIN_SETUP_TOKEN) < 16:
-            # Generate a default ADMIN_SETUP_TOKEN if missing in production.
-            # This prevents crash on boot; the token can be overridden via env.
-            object.__setattr__(self, "ADMIN_SETUP_TOKEN", secrets.token_hex(32))
+        # An existing production instance can run without a setup token after
+        # its owner has been created. Never synthesize an undiscoverable token
+        # at process startup; reject only explicitly configured weak values.
+        if self.ADMIN_SETUP_TOKEN and len(self.ADMIN_SETUP_TOKEN) < 16:
+            raise ValueError("Production ADMIN_SETUP_TOKEN must be empty or at least 16 characters")
         if "*" in self.CORS_ORIGINS:
             raise ValueError("Production CORS_ORIGINS cannot contain a wildcard")
         return self
