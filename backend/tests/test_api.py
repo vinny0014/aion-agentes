@@ -470,9 +470,16 @@ def test_no_static_feeds_or_old_public_routes_remain():
     assert 'path="/catego' + 'rias"' not in routes
     not_found = (public / "404.html").read_text()
     assert '<html lang="en-US">' in not_found and 'content="noindex,nofollow"' in not_found
+    index = (ROOT / "frontend" / "index.html").read_text()
+    manifest = json.loads((public / "manifest.json").read_text())
+    assert 'href="/logo.png"' in index and "/favicon.png" not in index
+    assert manifest["icons"] == [{"src": "/logo.png", "sizes": "512x512",
+                                  "type": "image/png", "purpose": "any maskable"}]
     for config_path in (ROOT / "vercel.json", ROOT / "frontend" / "vercel.json"):
         config = json.loads(config_path.read_text())
         assert not any(rewrite["source"] == "/:path*" for rewrite in config["rewrites"])
+        assert not any(rewrite["source"] in {"/favicon.png", "/icon-192.png", "/icon-512.png"}
+                       for rewrite in config["rewrites"])
 
 
 def test_no_deprecated_domains_or_committed_secrets():

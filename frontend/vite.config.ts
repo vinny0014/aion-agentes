@@ -9,9 +9,6 @@ const proxy = {
   "/news-sitemap.xml": backend,
   "/image-sitemap.xml": backend,
   "/rss.xml": backend,
-  "/favicon.png": backend,
-  "/icon-192.png": backend,
-  "/icon-512.png": backend,
 };
 
 export default defineConfig({

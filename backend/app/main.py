@@ -309,7 +309,7 @@ def server_rendered_article(slug: str):
     page = f"""<!doctype html><html lang="en-US"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(title)} — AION</title>
 <meta name="description" content="{html.escape(description, quote=True)}"><meta name="robots" content="index,follow,max-image-preview:large">
-<link rel="canonical" href="{html.escape(canonical, quote=True)}"><link rel="alternate" hreflang="en-US" href="{html.escape(canonical, quote=True)}"><link rel="alternate" hreflang="x-default" href="{html.escape(canonical, quote=True)}"><link rel="icon" type="image/png" href="{SITE_URL}/favicon.png">
+<link rel="canonical" href="{html.escape(canonical, quote=True)}"><link rel="alternate" hreflang="en-US" href="{html.escape(canonical, quote=True)}"><link rel="alternate" hreflang="x-default" href="{html.escape(canonical, quote=True)}"><link rel="icon" type="image/png" href="{SITE_URL}/logo.png">
 <meta property="og:type" content="article"><meta property="og:site_name" content="AION AI NEWS OS">
 <meta property="og:title" content="{html.escape(title, quote=True)}"><meta property="og:description" content="{html.escape(description, quote=True)}">
 <meta property="og:url" content="{html.escape(canonical, quote=True)}"><meta property="og:image" content="{html.escape(image, quote=True)}"><meta property="og:image:alt" content="{html.escape(article['image_alt'] or article['title'], quote=True)}">
