@@ -29,7 +29,7 @@ export function Privacy() {
 
 export function Terms() {
   return (
-    <Pagina tag="legal" titulo="Terms de Uso">
+    <Pagina tag="legal" titulo="Terms of Use">
       <p>By using AION you agree to these terms. The portal provides informational content about artificial intelligence, produced with the support of AI agents under human supervision.</p>
       <p>Content is provided "as is", without warranties of accuracy or fitness for a particular purpose, and does not constitute professional advice.</p>
       <p>Using the platform for illegal purposes, attempting to access restricted areas without authorization, or deliberately overloading the services is prohibited.</p>
@@ -41,12 +41,12 @@ export function Terms() {
 export function Contact() {
   const [v, setV] = useState({ name: "", email: "", message: "" });
   const [ok, setOk] = useState("");
-  const [erro, setErro] = useState("");
-  const [enviando, setEnviando] = useState(false);
+  const [errMsg, setErrMsg] = useState("");
+  const [sending, setSending] = useState(false);
 
-  async function enviar(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setOk(""); setErro(""); setEnviando(true);
+    setOk(""); setErrMsg(""); setSending(true);
     try {
       const r = await fetch(`${BASE}/api/public/contact`, {
         method: "POST",
@@ -54,16 +54,16 @@ export function Contact() {
         body: JSON.stringify(v),
       });
       const b = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(b.detail || "Falha ao enviar");
+      if (!r.ok) throw new Error(b.detail || "Could not send your message.");
       setOk(b.detail); setV({ name: "", email: "", message: "" });
-    } catch (err: any) { setErro(err.message); }
-    finally { setEnviando(false); }
+    } catch (err: any) { setErrMsg(err.message); }
+    finally { setSending(false); }
   }
 
   return (
-    <Pagina tag="fale conosco" titulo="Contact">
+    <Pagina tag="contact" titulo="Contact">
       <p>Questions, story tips or partnerships? Send us a message.</p>
-      <form onSubmit={enviar} className="mt-2 max-w-md space-y-4 text-ink">
+      <form onSubmit={submit} className="mt-2 max-w-md space-y-4 text-ink">
         <label className="block text-sm font-medium">Name
           <input className="field mt-1.5" required minLength={2} value={v.name}
             onChange={(e) => setV({ ...v, name: e.target.value })} />
@@ -77,29 +77,29 @@ export function Contact() {
             onChange={(e) => setV({ ...v, message: e.target.value })} />
         </label>
         {ok && <p className="rounded-md bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">{ok}</p>}
-        {erro && <p className="rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-300">{erro}</p>}
-        <button className="btn-primary" disabled={enviando}>{enviando ? "Enviando…" : "Send mensagem"}</button>
+        {errMsg && <p className="rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-300">{errMsg}</p>}
+        <button className="btn-primary" disabled={sending}>{sending ? "Sending…" : "Send message"}</button>
       </form>
     </Pagina>
   );
 }
 
-export function Taxonomia({ tipo }: { tipo: "categorias" | "tags" }) {
+export function Taxonomia({ tipo }: { tipo: "categories" | "tags" }) {
   const [itens, setItens] = useState<any[] | null>(null);
   useEffect(() => {
-    fetch(`${BASE}/api/public/${tipo === "categorias" ? "categories" : "tags"}`)
+    fetch(`${BASE}/api/public/${tipo === "categories" ? "categories" : "tags"}`)
       .then((r) => r.json()).then(setItens);
   }, [tipo]);
-  const chave = tipo === "categorias" ? "category" : "tag";
+  const chave = tipo === "categories" ? "category" : "tag";
   return (
-    <Pagina tag="explorar" titulo={tipo === "categorias" ? "Categorias" : "Tags"}>
+    <Pagina tag="explore" titulo={tipo === "categories" ? "Categories" : "Tags"}>
       {itens === null ? <p className="font-mono text-sm">loading…</p>
         : itens.length === 0 ? (
-          <p>Nenhuma {tipo === "categorias" ? "categoria" : "tag"} ainda — elas aparecem aqui quando artigos publisheds as utilizam.</p>
+          <p>No {tipo === "categories" ? "categories" : "tags"} yet — they appear here once published articles start using them.</p>
         ) : (
           <div className="flex flex-wrap gap-2">
             {itens.map((i) => (
-              <a key={i[chave]} href={`/articles?${tipo === "categorias" ? "categoria" : "tag"}=${encodeURIComponent(i[chave])}`}
+              <a key={i[chave]} href={`/articles?${tipo === "categories" ? "category" : "tag"}=${encodeURIComponent(i[chave])}`}
                 className="chip">
                 {i[chave]} <span className="font-mono text-xs text-slateui">({i.total})</span>
               </a>

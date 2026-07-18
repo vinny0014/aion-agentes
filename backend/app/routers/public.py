@@ -10,7 +10,20 @@ from ..schemas import ContactIn, EmailIn
 
 router = APIRouter(prefix="/api/public", tags=["public"])
 
-_FIELDS = "id, title, slug, excerpt, seo_title, seo_description, category, tags, image_url, image_alt, image_credit, image_width, image_height, hero_image_url, hero_image_alt, hero_image_credit, hero_image_width, hero_image_height, hero_image_source, source_url, author, featured, pinned, breaking_flag, editors_pick, published_at"
+_FIELDS = "id, title, slug, excerpt, seo_title, seo_description, category, tags, image_url, image_alt, image_credit, image_width, image_height, hero_image_url, hero_image_alt, hero_image_credit, hero_image_width, hero_image_height, hero_image_source, source_url, author, featured, pinned, breaking_flag, editors_pick, published_at, updated_at"
+
+
+def _apply_hero(row: dict) -> dict:
+    """Aplica a imagem vencedora do ranking de qualidade (hero_image_url) sobre
+    image_url. Ponto unico: home, listagem e pagina do artigo usam a MESMA
+    imagem escolhida — a arte SVG nunca vence uma foto real."""
+    if row and row.get("hero_image_url"):
+        row["image_url"] = row["hero_image_url"]
+        row["image_alt"] = row.get("hero_image_alt") or row.get("image_alt")
+        row["image_credit"] = row.get("hero_image_credit") or row.get("image_credit")
+        row["image_width"] = row.get("hero_image_width") or row.get("image_width")
+        row["image_height"] = row.get("hero_image_height") or row.get("image_height")
+    return row
 
 
 @router.get("/articles")
@@ -35,8 +48,8 @@ def list_articles(page: int = 1, per_page: int = 10, category: str = "",
         f"SELECT {_FIELDS} FROM contents WHERE {w} ORDER BY pinned DESC, published_at DESC LIMIT ? OFFSET ?",
         (*params, per_page, (page - 1) * per_page),
     )
-    return {"items": items, "total": total, "page": page, "per_page": per_page,
-            "category": category, "tag": tag, "q": q}
+    return {"items": [_apply_hero(i) for i in items], "total": total, "page": page,
+            "per_page": per_page, "category": category, "tag": tag, "q": q}
 
 
 @router.get("/articles/{slug}")
@@ -46,9 +59,9 @@ def get_article(slug: str):
         (slug,),
     )
     if not row:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Artigo não encontrado")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Article not found")
     row["reading_time"] = reading_time_minutes(row["body"])
-    return row
+    return _apply_hero(row)
 
 
 @router.get("/articles/{slug}/related")
@@ -70,18 +83,14 @@ def get_hero():
         if row:
             row["breaking"] = rank["slug"] == breaking.get("slug")
             row["hero_score"] = rank["score"]
-            if row.get("hero_image_url"):  # imagem escolhida pelo ranking de qualidade
-                row["image_url"] = row["hero_image_url"]
-                row["image_alt"] = row["hero_image_alt"] or row["image_alt"]
-                row["image_credit"] = row["hero_image_credit"] or row["image_credit"]
-            return row
+            return _apply_hero(row)
     row = db.query_one(
         f"SELECT {_FIELDS} FROM contents WHERE status='published' "
         "ORDER BY published_at DESC LIMIT 1")
     if not row:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Sem conteúdo publicado")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No published content")
     row["breaking"] = False
-    return row
+    return _apply_hero(row)
 
 
 @router.get("/categories")

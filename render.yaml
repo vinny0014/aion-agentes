@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: aion-agentes-api
+    name: aion-news-api
     runtime: python
     rootDir: backend
     buildCommand: pip install -r requirements.txt

@@ -132,29 +132,29 @@ def create_content(data: ContentIn, user: dict = Depends(get_current_user)):
          data.featured, data.pinned, data.breaking_flag, data.editors_pick,
          data.scheduled_at, data.source_url),
     )
-    return _get_or_404("contents", cid, "Conteúdo")
+    return _get_or_404("contents", cid, "Article")
 
 
 @content_router.get("/{content_id}")
 def get_content(content_id: int, user: dict = Depends(get_current_user)):
-    return _get_or_404("contents", content_id, "Conteúdo")
+    return _get_or_404("contents", content_id, "Article")
 
 
 @content_router.patch("/{content_id}")
 def update_content(content_id: int, data: ContentUpdate, user: dict = Depends(get_current_user)):
-    row = _get_or_404("contents", content_id, "Conteúdo")
+    row = _get_or_404("contents", content_id, "Article")
     _update("contents", content_id, data.model_dump(), touch=True)
     if data.featured or data.breaking_flag:  # imagem do hero recalculada ao destacar
         from ..agents.team import compute_hero_image
         compute_hero_image(content_id)
     if data.status == "published" and row["status"] != "published":
         db.execute("UPDATE contents SET published_at = datetime('now') WHERE id = ?", (content_id,))
-    return _get_or_404("contents", content_id, "Conteúdo")
+    return _get_or_404("contents", content_id, "Article")
 
 
 @content_router.delete("/{content_id}", status_code=204, dependencies=[Depends(require_admin)])
 def delete_content(content_id: int):
-    _get_or_404("contents", content_id, "Conteúdo")
+    _get_or_404("contents", content_id, "Article")
     db.execute("DELETE FROM contents WHERE id = ?", (content_id,))
 
 

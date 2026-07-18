@@ -9,7 +9,9 @@ const BASE = import.meta.env.VITE_API_URL || "";
 type Artigo = {
   id: number; title: string; slug: string; excerpt: string;
   seo_title: string; seo_description: string; published_at: string; body?: string;
-  reading_time?: number; category?: string; tags?: string; image_url?: string; image_alt?: string; source_url?: string; author?: string;
+  reading_time?: number; category?: string; tags?: string; image_url?: string; image_alt?: string;
+  image_credit?: string; image_width?: string | number; image_height?: string | number;
+  updated_at?: string; source_url?: string; author?: string;
 };
 
 function Rich({ t }: { t: string }) {
@@ -37,14 +39,14 @@ function dataBr(iso: string | null) {
 
 export function Conteudos() {
   const [params, setParams] = useSearchParams();
-  const categoria = params.get("categoria") || "";
+  const categoria = params.get("category") || "";
   const tag = params.get("tag") || "";
   const q = params.get("q") || "";
   const [search, setBusca] = useState(q);
   const [artigos, setArtigos] = useState<Artigo[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [carregando, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const perPage = 10;
 
   useEffect(() => { setPage(1); }, [categoria, tag, q]);
@@ -65,13 +67,13 @@ export function Conteudos() {
   return (
     <div className="min-h-screen">
       <Nav />
-      <main className="mx-auto max-w-3xl px-6 py-14">
+      <main id="main" className="mx-auto max-w-3xl px-6 py-14">
         <p className="tag mb-2">daily publication</p>
         <h1 className="font-display text-4xl font-bold tracking-tight">Articles</h1>
         <form className="mt-6 flex gap-2" onSubmit={(e) => { e.preventDefault();
           const p = new URLSearchParams(params); search ? p.set("q", search) : p.delete("q"); setParams(p); }}>
           <input className="field max-w-sm" placeholder="Search artigos…" value={search}
-            onChange={(e) => setBusca(e.target.value)} aria-label="Search artigos" />
+            onChange={(e) => setBusca(e.target.value)} aria-label="Search articles" />
           <button className="btn-primary !py-2">Search</button>
         </form>
         {(categoria || tag || q) && (
@@ -82,7 +84,7 @@ export function Conteudos() {
             <button className="text-ultra hover:underline" onClick={() => { setBusca(""); setParams({}); }}>limpar</button>
           </p>
         )}
-        {carregando ? (
+        {loading ? (
           <div className="mt-8 space-y-6" aria-label="Loading artigos">
             {[0, 1, 2].map((i) => (
               <div key={i} className="card space-y-3">
@@ -139,15 +141,25 @@ export function Artigo() {
       .then((a: Artigo) => {
         setArtigo(a);
         // SEO dinâmico: title, description, OG e JSON-LD (Schema.org NewsArticle)
-        document.title = `${a.seo_title || a.title} — AION AGENTES`;
+        document.title = `${a.seo_title || a.title} — AION AI NEWS OS`;
         const setMeta = (sel: string, attr: string, val: string) => {
           let el = document.querySelector(sel) as HTMLElement | null;
           if (el) el.setAttribute(attr, val);
         };
-        setMeta('meta[name="description"]', "content", a.seo_description || a.excerpt || "");
+        // Google rejeita data-URI/SVG em og:image e em Schema ImageObject:
+        // qualquer coisa que não seja http(s) cai na capa oficial do portal.
+        const shareImg = (a.image_url && /^https?:\/\//i.test(a.image_url)
+          && !/\.svg($|\?)/i.test(a.image_url)) ? a.image_url : `${SITE}/og-cover.png`;
+        const desc = a.seo_description || a.excerpt || "";
+        setMeta('meta[name="description"]', "content", desc);
+        setMeta('meta[property="og:type"]', "content", "article");
         setMeta('meta[property="og:title"]', "content", a.seo_title || a.title);
-        setMeta('meta[property="og:description"]', "content", a.seo_description || a.excerpt || "");
+        setMeta('meta[property="og:description"]', "content", desc);
         setMeta('meta[property="og:url"]', "content", `${SITE}/article/${a.slug}`);
+        setMeta('meta[property="og:image"]', "content", shareImg);
+        setMeta('meta[name="twitter:title"]', "content", a.seo_title || a.title);
+        setMeta('meta[name="twitter:description"]', "content", desc);
+        setMeta('meta[name="twitter:image"]', "content", shareImg);
         setMeta('link[rel="canonical"]', "href", `${SITE}/article/${a.slug}`);
         const old = document.getElementById("jsonld-artigo");
         if (old) old.remove();
@@ -162,14 +174,28 @@ export function Artigo() {
         const ld = document.createElement("script");
         ld.type = "application/ld+json";
         ld.id = "jsonld-artigo";
+        const iso = (d?: string | null) => (d ? d.replace(" ", "T") + "Z" : undefined);
         ld.textContent = JSON.stringify({
           "@context": "https://schema.org", "@type": "NewsArticle",
-          headline: a.title, description: a.seo_description || a.excerpt,
-          datePublished: a.published_at, inLanguage: "en-US",
-          mainEntityOfPage: `${SITE}/article/${a.slug}`,
-          ...(a.image_url ? { image: [a.image_url] } : {}),
-          publisher: { "@type": "Organization", name: "AION AGENTES" },
-          author: { "@type": "Organization", name: "AION AGENTES" },
+          headline: (a.title || "").slice(0, 110),
+          description: desc, inLanguage: "en-US",
+          mainEntityOfPage: { "@type": "WebPage", "@id": `${SITE}/article/${a.slug}` },
+          url: `${SITE}/article/${a.slug}`,
+          datePublished: iso(a.published_at),
+          dateModified: iso(a.updated_at || a.published_at),
+          ...(a.tags ? { keywords: a.tags.split(",").map((t) => t.trim()).filter(Boolean) } : {}),
+          ...(a.category ? { articleSection: a.category } : {}),
+          image: [{
+            "@type": "ImageObject", url: shareImg,
+            width: Number(a.image_width) || 1200, height: Number(a.image_height) || 630,
+            ...(a.image_alt ? { caption: a.image_alt } : {}),
+            ...(a.image_credit ? { creditText: a.image_credit } : {}),
+          }],
+          publisher: {
+            "@type": "NewsMediaOrganization", name: "AION AI NEWS OS", url: `${SITE}/`,
+            logo: { "@type": "ImageObject", url: `${SITE}/logo.png`, width: 512, height: 512 },
+          },
+          author: { "@type": "Organization", name: a.author || "AION Editorial", url: `${SITE}/about` },
         });
         document.head.appendChild(ld);
         fetch(`${BASE}/api/public/articles/${slug}/related`)
@@ -199,7 +225,7 @@ export function Artigo() {
       <Nav />
       <article className="mx-auto max-w-3xl px-6 py-14">
         <p className="tag mb-2">
-          Por AION Editorial · {dataBr(artigo.published_at)}
+          By {artigo.author || "AION Editorial"} · {dataBr(artigo.published_at)}
           {artigo.reading_time ? <> · {artigo.reading_time} min read</> : null}
           {artigo.category ? <> · {artigo.category}</> : null}
           {artigo.source_url ? <> · <a className="text-signal hover:underline" href={artigo.source_url} target="_blank" rel="noopener nofollow">source</a></> : null}

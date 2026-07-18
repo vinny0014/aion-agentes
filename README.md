@@ -67,7 +67,7 @@ cd backend && python -m pytest tests/ -v
 - **Sistema de Conteúdo** — fila (`content_queue`), scheduler horário, templates e provedores plugáveis (OpenAI, Anthropic, OpenRouter, Gemini). Sem API key configurada, itens ficam `blocked` com pendência registrada em log — o restante do sistema segue operando
 - **SEO** — meta tags, Open Graph, Twitter Cards, Schema.org, canonical, slugs, robots.txt e sitemap.xml dinâmico (inclui conteúdos publicados)
 - **Health Check** — `GET /api/health` (status do banco, uptime, provedores configurados)
-- **Portal público** — `/conteudos` e `/conteudo/:slug` consomem `GET /api/public/articles` (paginada, apenas publicados)
+- **Portal público** — `/articles` e `/article/:slug` consomem `GET /api/public/articles` (paginada, apenas publicados)
 - **Editor** — `/admin/editor/novo` e `/admin/editor/:id` com slug automático, SEO e publicar/despublicar
 - **Pipeline de IA** — com API key gera artigos completos; sem key gera rascunhos offline estruturados (a produção diária nunca para)
 - **Seed** — `python scripts_seed.py` popula artigos de demonstração

@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     CORS_ORIGINS: str = "http://localhost:5173"
+    # Fonte unica de verdade para toda saida dependente de URL
+    # (robots, sitemaps, RSS, canonical, OG, JSON-LD, posts sociais).
+    SITE_URL: str = SITE_URL_DEFAULT
     # Chaves de provedores de IA — deixar vazio até configurar
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
@@ -25,3 +28,9 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+settings.SITE_URL = (settings.SITE_URL or SITE_URL_DEFAULT).rstrip("/")
+
+
+def site_url() -> str:
+    """URL publica oficial do portal — ponto unico de configuracao."""
+    return settings.SITE_URL

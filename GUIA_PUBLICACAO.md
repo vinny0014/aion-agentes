@@ -50,10 +50,10 @@ Se pedir senha: o GitHub não aceita mais senha comum, ele quer um **token**. Cr
 
 **3.3.** Conecte sua conta GitHub se pedir, e selecione o repositório **aion-agentes**.
 
-**3.4.** O Render vai ler o arquivo `render.yaml` e mostrar o serviço **aion-agentes-api**. Clique em **Apply** (ou **Deploy Blueprint**).
+**3.4.** O Render vai ler o arquivo `render.yaml` e mostrar o serviço **aion-news-api**. Clique em **Apply** (ou **Deploy Blueprint**).
 
 **3.5.** Aguarde o deploy terminar (5–10 min). Ao final, copie a URL do serviço — algo como:
-`https://aion-agentes-api.onrender.com`
+`https://aion-news-api.onrender.com`
 **Guarde essa URL, você vai usar no Passo 4 e 5.**
 
 ---
@@ -71,15 +71,15 @@ Se pedir senha: o GitHub não aceita mais senha comum, ele quer um **token**. Cr
 - **Framework Preset:** Vite (detecta sozinho)
 - Abra **Environment Variables** e adicione:
   - Name: `VITE_API_URL`
-  - Value: a URL do Render do Passo 3.5 (ex.: `https://aion-agentes-api.onrender.com`) — **sem barra no final**
+  - Value: a URL do Render do Passo 3.5 (ex.: `https://aion-news-api.onrender.com`) — **sem barra no final**
 
 **4.5.** Clique em **Deploy** e aguarde (~2 min).
 
-**4.6.** Copie a URL final do site — algo como `https://aion-agentes.vercel.app`.
+**4.6.** Copie a URL final do site — algo como `https://aion-news-os.vercel.app`.
 
 **4.7.** ÚLTIMO AJUSTE — avisar o backend qual é o endereço do site (CORS):
-- Volte ao Render → serviço **aion-agentes-api** → aba **Environment**
-- Edite a variável `CORS_ORIGINS` e coloque a URL da Vercel do passo 4.6 (ex.: `https://aion-agentes.vercel.app`)
+- Volte ao Render → serviço **aion-news-api** → aba **Environment**
+- Edite a variável `CORS_ORIGINS` e coloque a URL da Vercel do passo 4.6 (ex.: `https://aion-news-os.vercel.app`)
 - Clique em **Save Changes** (o serviço reinicia sozinho)
 
 ---
@@ -123,7 +123,7 @@ Acesse http://localhost:5173
 **6.1.** Teste o backend (troque pela sua URL do Render):
 
 ```bash
-curl https://aion-agentes-api.onrender.com/api/health
+curl https://aion-news-api.onrender.com/api/health
 ```
 ✅ Deve responder algo com `"status":"ok"` e `"database":"ok"`.
 ⚠️ No plano gratuito do Render, a primeira chamada pode demorar ~50 segundos (o serviço "acorda"). É normal.
@@ -140,8 +140,8 @@ curl https://aion-agentes-api.onrender.com/api/health
 
 **6.4.** Teste o SEO:
 ```bash
-curl https://aion-agentes-api.onrender.com/robots.txt
-curl https://aion-agentes-api.onrender.com/sitemap.xml
+curl https://aion-news-api.onrender.com/robots.txt
+curl https://aion-news-api.onrender.com/sitemap.xml
 ```
 
 **6.5.** (Opcional) Popular com artigos de demonstração: no Render, abra a aba **Shell** do serviço e rode:

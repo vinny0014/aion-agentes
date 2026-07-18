@@ -77,7 +77,7 @@ export default function Dashboard() {
             <p className="mt-1 font-display text-2xl font-bold">{abertas}</p>
           </div>
           <div className="card">
-            <p className="tag">conteúdos publisheds</p>
+            <p className="tag">published articles</p>
             <p className="mt-1 font-display text-2xl font-bold">{publisheds}</p>
           </div>
         </div>
@@ -98,7 +98,7 @@ export default function Dashboard() {
         </section>
 
         <section className="mt-10">
-          <h2 className="font-display text-xl font-bold">Últimos conteúdos</h2>
+          <h2 className="font-display text-xl font-bold">Latest articles</h2>
           {contents.length === 0 ? (
             <p className="mt-3 text-sm text-slateui">
               No content yet. Create the first one in Admin or add a topic to the publishing queue.

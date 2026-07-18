@@ -30,7 +30,7 @@ export function BottomNav() {
   return (
     <nav className="bottom-nav" aria-label="Bottom navigation">
       {item("/", "Home", "⌂", pathname === "/")}
-      {item("/categories", "Categorias", "▤", pathname === "/categories")}
+      {item("/categories", "Categories", "▤", pathname === "/categories")}
       {item("/tags", "Tags", "#", pathname === "/tags")}
       {item("/articles", "Search", "⌕", pathname.startsWith("/article"))}
       {item("/login", "Conta", "◉", pathname === "/login" || pathname === "/dashboard")}
@@ -129,9 +129,9 @@ export default function Landing() {
       <Nav />
       <Ticker artigos={artigos.slice(0, 5)} />
 
-      <main className="mx-auto max-w-6xl px-6 py-8">
+      <main id="main" className="mx-auto max-w-6xl px-6 py-8">
         <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
-          {/* HERO — matéria em destaque (real) */}
+          {/* HERO — featured story (real) */}
           <section aria-label="Featured">
             {destaque ? (
               <article className="thumb thumb-hero relative flex h-auto min-h-[380px] flex-col justify-end overflow-hidden rounded-xl border border-line p-8">

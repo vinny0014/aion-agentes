@@ -14,7 +14,7 @@ from fastapi.responses import PlainTextResponse, Response
 
 from .agents.registry import process_queue_once, seed_agents
 from .core import database as db
-from .core.config import settings
+from .core.config import settings, site_url
 from .routers.auth import router as auth_router
 from .routers.public import router as public_router
 from .routers.crud import agents_router, content_router, tasks_router, users_router
@@ -49,11 +49,11 @@ async def lifespan(app: FastAPI):
     scheduler.shutdown(wait=False)
 
 
-SITE_URL = os.environ.get("SITE_URL", "https://aion-news-os.vercel.app").rstrip("/")
+SITE_URL = site_url()  # fonte unica: core.config
 
 app = FastAPI(
     title=settings.APP_NAME,
-    description="API do portal AION AGENTES — conteúdo diário e agentes inteligentes.",
+    description="AION AI NEWS OS API — daily AI news published by autonomous agents.",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -82,7 +82,7 @@ async def security_middleware(request: Request, call_next):
         now = _time.time()
         _BUCKETS[key] = [t for t in _BUCKETS[key] if now - t < window]
         if len(_BUCKETS[key]) >= max_req:
-            return JSONResponse({"detail": "Muitas tentativas. Aguarde um minuto."}, status_code=429)
+            return JSONResponse({"detail": "Too many attempts. Please wait a minute."}, status_code=429)
         _BUCKETS[key].append(now)
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
@@ -136,10 +136,12 @@ def image_sitemap():
                             ELSE image_url END AS image_url
                        FROM contents WHERE status='published'
                        AND (image_url LIKE 'http%' OR hero_image_url LIKE 'http%')""")
+    def _x(t: str) -> str:
+        return (t or "").replace("&", "&amp;").replace("<", "&lt;")
     urls = "".join(
-        f"<url><loc>{base}/article/{r['slug']}</loc>"
-        f"<image:image><image:loc>{r['image_url']}</image:loc>"
-        f"<image:title>{r['title'][:100].replace('&','&amp;').replace('<','&lt;')}</image:title>"
+        f"<url><loc>{base}/article/{_x(r['slug'])}</loc>"
+        f"<image:image><image:loc>{_x(r['image_url'])}</image:loc>"
+        f"<image:title>{_x(r['title'][:100])}</image:title>"
         f"</image:image></url>" for r in rows)
     xml = ('<?xml version="1.0" encoding="UTF-8"?>'
            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
@@ -164,7 +166,7 @@ def rss_feed():
     xml = ('<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel>'
            '<title>AION AI NEWS OS</title>'
            f'<link>{base}</link>'
-           '<description>Notícias de IA publicadas por agentes autônomos.</description>'
+           '<description>AI news published by autonomous agents.</description>'
            f'{items}</channel></rss>')
     return Response(content=xml, media_type="application/rss+xml")
 
@@ -180,7 +182,7 @@ def news_sitemap():
     urls = "".join(
         f"<url><loc>{base}/article/{r['slug']}</loc>"
         f"<news:news><news:publication><news:name>AION AI NEWS OS</news:name>"
-        f"<news:language>pt</news:language></news:publication>"
+        f"<news:language>en</news:language></news:publication>"
         f"<news:publication_date>{r['published_at'].replace(' ', 'T')}Z</news:publication_date>"
         f"<news:title>{r['title'][:110].replace('&','&amp;').replace('<','&lt;')}</news:title>"
         f"</news:news></url>" for r in rows)

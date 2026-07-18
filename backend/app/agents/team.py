@@ -16,6 +16,7 @@ from .core import budget_remaining, mem_get, mem_set
 from .discovery import extract_keywords, reading_time_minutes
 from .providers import slugify
 from .registry import process_queue_once, resolve_provider, ProviderNotConfigured
+from ..core.config import site_url as _site_url
 
 # Fontes padrão do Discovery (RSS/Atom oficiais) — configuráveis via memória
 DEFAULT_SOURCES = [
@@ -295,9 +296,13 @@ def image_quality_agent(payload: dict) -> dict:
                             (c["id"],)):
             db.execute("INSERT INTO image_queue (content_id) VALUES (?)", (c["id"],))
             reenfileirados += 1
+    # P3: em producao, capa SVG/data-URI publicada e REPROVACAO (nao apenas aviso)
+    from ..core.config import settings as _cfg
+    _svg_no_ar = len(genericos) if _cfg.ENV == "production" else 0
     return {"vazios": len(vazios), "formatos_invalidos": len(invalidos),
             "capas_genericas_svg": len(genericos), "reenfileirados": reenfileirados,
-            "aprovado": not vazios and not invalidos,
+            "svg_publicado_em_producao": _svg_no_ar,
+            "aprovado": not vazios and not invalidos and not _svg_no_ar,
             "limitacao": "Detecção de texto embutido em fotos exigiria OCR; nossas artes "
                          "geradas não contêm título desde a v6.1"}
 
@@ -351,7 +356,7 @@ def social_media_agent(payload: dict) -> dict:
         hashtags = " ".join(f"#{t.strip().replace(' ', '')}"
                             for t in (c["tags"] or "ia").split(",")[:4])
         import os as _os
-        url = f"{_os.environ.get('SITE_URL', 'https://aion-news-os.vercel.app').rstrip('/')}/article/{c['slug']}"
+        url = f"{_site_url()}/article/{c['slug']}"
         posts = {}
         for rede in redes:
             curto = rede in ("x", "bluesky", "mastodon", "threads")
@@ -534,18 +539,26 @@ def publisher_agent(payload: dict) -> dict:
               "the curation and framing are original."
         )
         img_oficial = next((m.get("image") for m in manchetes if m.get("image")), "")
+        # P3: a capa do Radar e garantida pelo image_agent no fim deste mesmo ciclo,
+        # entao o gate aqui vale so para PRODUCAO: sem foto real (http, nao-SVG) o
+        # Radar nasce draft e o auto-publish o promove assim que houver foto.
+        from ..core.config import settings as _cfg
+        _radar_status = ('published'
+                         if (_cfg.ENV != "production" or publishable_image(img_oficial))
+                         else 'draft')
         cid = db.execute(
-            """INSERT INTO contents (title, slug, body, excerpt, status, agent_id,
+            f"""INSERT INTO contents (title, slug, body, excerpt, status, agent_id,
                seo_title, seo_description, category, tags, image_url, published_at)
-               VALUES (?,?,?,?, 'published',
+               VALUES (?,?,?,?, '{_radar_status}',
                        (SELECT id FROM agents WHERE slug='discovery'), ?, ?, 'radar',
-                       'radar,noticias,ia', ?, datetime('now'))""",
+                       'radar,ai,news', ?, datetime('now'))""",
             (f"AI Radar — {data_br}: today's top stories", slug_hoje, corpo,
              f"The {min(len(manchetes),12)} most relevant AI headlines of {data_br}, with sources.",
              f"AI Radar {data_br}",
-             f"Curadoria diária de notícias de IA de {data_br} com links para as fontes.",
+             f"Daily AI news curation for {data_br}, with links to every original source.",
              img_oficial))
-        resultado["radar"] = {"id": cid, "slug": slug_hoje, "manchetes": min(len(manchetes), 12)}
+        resultado["radar"] = {"id": cid, "slug": slug_hoje, "status": _radar_status,
+                              "manchetes": min(len(manchetes), 12)}
         resultado["radar_hero_image"] = compute_hero_image(cid, manchetes)
         # Hero imediato se houver manchete quente (Breaking News rodou antes do Radar existir)
         quentes = [m for m in manchetes if any(t in m["title"].lower() for t in _BREAKING_TERMS)]
@@ -555,8 +568,9 @@ def publisher_agent(payload: dict) -> dict:
 
     # --- Notícias sintetizadas (custo zero, sem IA): 1 artigo por cluster de manchetes ---
     from .synthesizer import cluster_manchetes, sintetizar
-    from .imagegen import editorial_data_uri
+    from .imagegen import editorial_data_uri, publishable_image
     sintetizadas = 0
+    retidos_sem_foto = 0
     grupos = cluster_manchetes([m for m in manchetes if m.get("resumo")])
     for grupo in grupos[:6]:  # até 6 notícias por ciclo
         art = sintetizar(grupo)
@@ -574,11 +588,16 @@ def publisher_agent(payload: dict) -> dict:
         credit = _fonte_amigavel(art["source_url"]) if art["image"] else "AION editorial artwork"
         alt = (f"Image: {art['title'][:80]}" if art["image"]
                else f"AION editorial artwork: {art['title'][:80]}")
+        # P3: em producao a arte editorial (data-URI/SVG) nao vai ao ar — o artigo
+        # fica em draft e o Image Agent busca foto real antes de publicar.
+        _status = 'published' if publishable_image(img) else 'draft'
+        if _status == 'draft':
+            retidos_sem_foto += 1
         db.execute(
-            """INSERT INTO contents (title, slug, body, excerpt, status, agent_id,
+            f"""INSERT INTO contents (title, slug, body, excerpt, status, agent_id,
                seo_title, seo_description, category, tags, image_url, image_alt,
                image_credit, image_width, image_height, source_url, published_at)
-               VALUES (?,?,?,?, 'published',
+               VALUES (?,?,?,?, '{_status}',
                        (SELECT id FROM agents WHERE slug='content'), ?, ?, 'news',
                        ?, ?, ?, ?, '1200', '630', ?, datetime('now'))""",
             (art["title"], art["slug"], art["body"], art["excerpt"],
@@ -586,25 +605,36 @@ def publisher_agent(payload: dict) -> dict:
              credit, art["source_url"]))
         sintetizadas += 1
     resultado["noticias_sintetizadas"] = sintetizadas
+    resultado["retidos_sem_foto"] = retidos_sem_foto
 
     # --- Publicação agendada (Editorial Studio) ---
-    agendados = db.query("SELECT id FROM contents WHERE status='draft' "
+    agendados = db.query("SELECT id, image_url FROM contents WHERE status='draft' "
                          "AND scheduled_at != '' AND scheduled_at <= datetime('now')")
+    _ag_pub = 0
     for c in agendados:
+        if not publishable_image(c["image_url"]):  # P3: agendado sem foto espera o Image Agent
+            continue
         db.execute("UPDATE contents SET status='published', published_at=datetime('now'), "
                    "scheduled_at='' WHERE id=?", (c["id"],))
-    resultado["agendados_publicados"] = len(agendados)
+        _ag_pub += 1
+    resultado["agendados_publicados"] = _ag_pub
+    resultado["agendados_retidos_sem_foto"] = len(agendados) - _ag_pub
 
     # --- Auto-publicação de artigos IA aprovados ---
     bloqueados = {b["id"] for b in (mem_get("agent:fact-check", "bloqueados", []) or [])}
     drafts = db.query(
-        "SELECT id, body FROM contents WHERE status='draft' AND agent_id IS NOT NULL")
+        "SELECT id, body, image_url FROM contents WHERE status='draft' AND agent_id IS NOT NULL")
+    _retidos = 0
     for c in drafts:
         if c["id"] in bloqueados or "[Rascunho automático" in (c["body"] or ""):
+            continue
+        if not publishable_image(c["image_url"]):  # P3: nenhuma noticia publicada sem imagem
+            _retidos += 1
             continue
         db.execute("UPDATE contents SET status='published', published_at=datetime('now') "
                    "WHERE id = ?", (c["id"],))
         resultado["auto_publicados"] += 1
+    resultado["drafts_retidos_sem_foto"] = _retidos
     if not manchetes:
         resultado["limitacao"] = ("Sem manchetes coletadas (fontes inacessíveis ou primeiro boot); "
                                   "Radar será criado no próximo ciclo com rede disponível")

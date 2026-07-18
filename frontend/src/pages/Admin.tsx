@@ -137,7 +137,7 @@ export default function Admin() {
 
         {aba === "Content" && (<>
           <Link to="/admin/editor/new" className="btn-primary mt-6 !py-2 text-sm">New article</Link>
-          {dados.length === 0 ? <p className="mt-4 text-sm text-slateui">Nenhum conteúdo ainda.</p> : (
+          {dados.length === 0 ? <p className="mt-4 text-sm text-slateui">Nothing here yet.</p> : (
             <div className="mt-4 overflow-x-auto rounded-lg border border-line bg-surface">
               <table className="w-full text-left text-sm">
                 <thead><tr className="border-b border-line">

@@ -15,13 +15,13 @@ const NotFound = React.lazy(() => import("./pages/NotFound"));
 const Privacidade = React.lazy(() => import("./pages/Institucional").then(m => ({ default: m.Privacy })));
 const Termos = React.lazy(() => import("./pages/Institucional").then(m => ({ default: m.Terms })));
 const Contato = React.lazy(() => import("./pages/Institucional").then(m => ({ default: m.Contact })));
-const Categorias = React.lazy(() => import("./pages/Institucional").then(m => ({ default: (p: any) => m.Taxonomia({ tipo: "categorias" }) })));
+const Categorias = React.lazy(() => import("./pages/Institucional").then(m => ({ default: (p: any) => m.Taxonomia({ tipo: "categories" }) })));
 const TagsPage = React.lazy(() => import("./pages/Institucional").then(m => ({ default: (p: any) => m.Taxonomia({ tipo: "tags" }) })));
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <BrowserRouter>
-      <React.Suspense fallback={<div className="p-10 font-mono text-sm text-slateui">carregando…</div>}>
+      <React.Suspense fallback={<div className="p-10 font-mono text-sm text-slateui">Loading…</div>}>
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/about" element={<Sobre />} />

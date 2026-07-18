@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 @router.post("/register", response_model=UserOut, status_code=201)
 def register(data: RegisterIn):
     if db.query_one("SELECT id FROM users WHERE email = ?", (data.email,)):
-        raise HTTPException(status.HTTP_409_CONFLICT, "E-mail já cadastrado")
+        raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")
     # Primeiro usuário do sistema vira admin automaticamente
     role = "admin" if not db.query_one("SELECT id FROM users LIMIT 1") else "user"
     uid = db.execute(
@@ -39,7 +39,7 @@ def register(data: RegisterIn):
 def login(form: OAuth2PasswordRequestForm = Depends()):
     user = db.query_one("SELECT * FROM users WHERE email = ?", (form.username,))
     if not user or not verify_password(form.password, user["password_hash"]):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "E-mail ou senha incorretos")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Incorrect email or password")
     if not user["is_active"]:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Conta desativada")
     return TokenOut(

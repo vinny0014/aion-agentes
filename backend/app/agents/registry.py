@@ -254,5 +254,18 @@ def process_queue_once() -> dict:
                  json.dumps({"queue_id": item["id"], "topic": item["topic"], "detalhe": str(exc)})),
             )
             offline += 1
+    # Agendados vencidos (Editorial Studio) publicam também neste ciclo horário —
+    # sem esperar o orquestrador de 2h — respeitando o gate de imagem (P3).
+    from .imagegen import publishable_image
+    agendados = db.query("SELECT id, image_url FROM contents WHERE status='draft' "
+                         "AND scheduled_at != '' AND scheduled_at <= datetime('now')")
+    scheduled_published = 0
+    for c in agendados:
+        if not publishable_image(c["image_url"]):
+            continue
+        db.execute("UPDATE contents SET status='published', published_at=datetime('now'), "
+                   "scheduled_at='' WHERE id=?", (c["id"],))
+        scheduled_published += 1
     return {"processed": processed, "offline_drafts": offline, "failed": failed,
+            "scheduled_published": scheduled_published,
             "scanned": len(items)}

@@ -160,3 +160,26 @@ def score_hero_candidate(c: dict) -> float:
     if c.get("verificado") is False:
         s -= 100  # não carregou (HTTP != 200)
     return s
+
+
+# ═══════════ GATE DE PRODUCAO (P3: nenhuma imagem SVG/data-URI no ar) ═══════════
+def is_editorial_art(url: str) -> bool:
+    """True se a imagem for a arte editorial gerada (data-URI) ou um SVG."""
+    u = (url or "").strip().lower()
+    return u.startswith("data:") or u.split("?")[0].endswith(".svg")
+
+
+def publishable_image(url: str) -> bool:
+    """Regra absoluta de producao: so vai ao ar imagem http(s) real.
+
+    - Sem imagem            -> nunca publica (em qualquer ambiente).
+    - data-URI / SVG        -> permitido apenas fora de producao (fallback interno).
+    - Em producao (ENV)     -> exige http(s) e proibe SVG.
+    """
+    from ..core.config import settings
+    u = (url or "").strip()
+    if not u:
+        return False
+    if settings.ENV != "production":
+        return True  # dev/test/offline: arte editorial segue valida internamente
+    return u.startswith("http") and not is_editorial_art(u)

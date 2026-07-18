@@ -10,7 +10,7 @@ import unicodedata
 
 import httpx
 
-from ..core.config import settings
+from ..core.config import settings, site_url as _site_url
 
 TIMEOUT = 60.0
 
@@ -77,7 +77,7 @@ def generate(provider: str, prompt: str) -> str:
         return _openai_compat(
             "https://openrouter.ai/api/v1/chat/completions",
             settings.OPENROUTER_API_KEY, "anthropic/claude-sonnet-4",
-            prompt, {"HTTP-Referer": os.environ.get("SITE_URL", "https://aion-news-os.vercel.app")})
+            prompt, {"HTTP-Referer": _site_url()})
     if provider == "anthropic":
         return _anthropic(prompt)
     if provider == "gemini":
