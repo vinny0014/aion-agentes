@@ -50,6 +50,7 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(lambda: run_cycle("bootstrap"), "date",
                       run_date=datetime.now() + timedelta(seconds=45), id="first-cycle")
     scheduler.start()
+    app.state.scheduler = scheduler
     db.execute(
         "INSERT INTO logs (level, source, message) VALUES ('info','system','API started')"
     )

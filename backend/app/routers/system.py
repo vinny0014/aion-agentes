@@ -2,7 +2,7 @@
 import os
 import time
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 
 from ..core import database as db
 from ..core.config import settings
@@ -209,7 +209,7 @@ health_router = APIRouter(tags=["health"])
 
 
 @health_router.get("/api/health")
-def health():
+def health(request: Request):
     db_ok = True
     try:
         db.query_one("SELECT 1 AS ok")
@@ -221,12 +221,19 @@ def health():
         "openrouter": bool(settings.OPENROUTER_API_KEY),
         "gemini": bool(settings.GEMINI_API_KEY),
     }
+    scheduler = getattr(request.app.state, "scheduler", None)
+    scheduler_running = bool(scheduler and scheduler.running)
+    scheduler_jobs = [job.id for job in scheduler.get_jobs()] if scheduler else []
     return {
         "status": "ok" if db_ok else "degraded",
         "app": settings.APP_NAME,
         "release": os.getenv("RENDER_GIT_COMMIT", "local")[:12],
         "env": settings.ENV,
         "database": "ok" if db_ok else "error",
+        "scheduler": {
+            "status": "running" if scheduler_running else "not_started",
+            "jobs": scheduler_jobs,
+        },
         "uptime_seconds": round(time.time() - START_TIME, 1),
         "ai_providers_configured": providers,
     }
