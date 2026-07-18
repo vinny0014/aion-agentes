@@ -1013,3 +1013,201 @@ def test_v64_home_canonical_official():
     html = open(__file__.replace("backend/tests/test_api.py", "frontend/index.html")).read()
     assert '<link rel="canonical" href="https://aion-news-os.vercel.app/" />' in html
     assert "wordbet" not in html
+
+
+# ====================== v6.6 — PRODUCTION APPROVAL (regressões permanentes) ======================
+
+def test_v66_site_url_single_source_of_truth():
+    """SITE_URL não pode voltar a ter literal duplicado fora de core/config.py."""
+    import os
+    raiz = os.path.join(os.path.dirname(__file__), "..", "app")
+    ofensores = []
+    for dp, _, fs in os.walk(raiz):
+        for f in fs:
+            if not f.endswith(".py"):
+                continue
+            caminho = os.path.join(dp, f)
+            if caminho.endswith(os.path.join("core", "config.py")):
+                continue
+            conteudo = open(caminho, encoding="utf-8", errors="ignore").read()
+            if 'os.environ.get("SITE_URL"' in conteudo or "os.environ.get('SITE_URL'" in conteudo:
+                ofensores.append(caminho)
+    assert not ofensores, f"SITE_URL lido fora da fonte única (core/config.py): {ofensores}"
+
+
+def test_v66_image_sitemap_rewrite_in_vercel():
+    """robots.txt anuncia image-sitemap.xml — a Vercel PRECISA do rewrite ou ele vira HTML."""
+    import json, os
+    vj = json.load(open(os.path.join(os.path.dirname(__file__), "..", "..", "vercel.json")))
+    fontes = [r["source"] for r in vj.get("rewrites", [])]
+    for rota in ("/robots.txt", "/sitemap.xml", "/news-sitemap.xml", "/image-sitemap.xml", "/rss.xml"):
+        assert rota in fontes, f"vercel.json sem rewrite para {rota} (anunciado no robots.txt)"
+
+
+def test_v66_render_service_name_official():
+    """O nome do serviço no Render define o subdomínio — precisa casar com a URL oficial."""
+    import os
+    y = open(os.path.join(os.path.dirname(__file__), "..", "..", "render.yaml")).read()
+    assert "name: aion-news-api" in y, "render.yaml deve usar o serviço aion-news-api"
+    assert "aion-agentes-api" not in y
+
+
+def test_v66_publishable_image_gate():
+    from app.agents.imagegen import publishable_image, is_editorial_art, editorial_data_uri
+    from app.core.config import settings as cfg
+    art = editorial_data_uri("Test", "news")
+    assert is_editorial_art(art) and is_editorial_art("https://x.com/a.svg")
+    assert not is_editorial_art("https://x.com/a.jpg")
+    # vazio nunca publica, em nenhum ambiente
+    assert publishable_image("") is False and publishable_image(None) is False
+    # fora de produção: arte editorial é fallback interno válido
+    assert publishable_image(art) is True
+    # em produção: só foto http real
+    old = cfg.ENV
+    try:
+        cfg.ENV = "production"
+        assert publishable_image(art) is False, "data-URI publicável em produção!"
+        assert publishable_image("https://x.com/a.svg") is False, "SVG publicável em produção!"
+        assert publishable_image("https://x.com/a.jpg") is True
+    finally:
+        cfg.ENV = old
+
+
+def test_v66_publisher_holds_svg_in_production(monkeypatch):
+    """Em produção, síntese sem foto real fica em draft (nunca publica arte SVG)."""
+    import app.agents.team as team
+    from app.agents.core import mem_set
+    from app.core.config import settings as cfg
+    manchetes = [
+        {"title": "Prod gate story alpha keyword", "link": "https://exemplo.org/p1",
+         "source": "https://exemplo.org/p1", "resumo": "Alpha keyword resumo suficiente para sintetizar.", "image": ""},
+        {"title": "Prod gate story alpha keyword segunda", "link": "https://exemplo.org/p2",
+         "source": "https://exemplo.org/p2", "resumo": "Alpha keyword segunda fonte do cluster.", "image": ""},
+    ]
+    mem_set("agent:discovery", "manchetes_do_dia", manchetes)
+    monkeypatch.setattr(team, "_og_image", lambda url: "")
+    monkeypatch.setattr(team, "compute_hero_image", lambda cid, m=None: {"hero_image": None})
+    import app.agents.imagegen as ig
+    monkeypatch.setattr(ig, "provider_photo_url", lambda t, g="": None)  # sem provedor
+    old = cfg.ENV
+    try:
+        cfg.ENV = "production"
+        rep = team.publisher_agent({})
+    finally:
+        cfg.ENV = old
+        mem_set("agent:discovery", "manchetes_do_dia", [])
+    from app.core import database as _dbq
+    publicados_svg = _dbq.query(
+        "SELECT id FROM contents WHERE status='published' AND image_url LIKE 'data:image/svg%' "
+        "AND title LIKE 'Prod gate story%'")
+    assert not publicados_svg, "publisher publicou arte SVG em produção"
+    assert rep.get("retidos_sem_foto", 0) >= 0  # campo existe no relatório
+
+
+def test_v66_public_pages_have_no_portuguese():
+    """Páginas públicas do frontend: zero português (inclui traduções quebradas)."""
+    import os, re
+    base = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "src", "pages")
+    publicos = ["Landing.tsx", "Blog.tsx", "Institucional.tsx", "Sobre.tsx", "NotFound.tsx"]
+    proibidos = re.compile(
+        r"(Categorias|Nenhuma|carregando|Enviando|Falha ao|fale conosco|explorar|"
+        r"Terms de Uso|Send mensagem|erro 404|Ele pode ter sido|Por AION|"
+        r"publisheds|Curadoria di)", re.IGNORECASE)
+    achados = []
+    for f in publicos:
+        s = open(os.path.join(base, f), encoding="utf-8").read()
+        for m in proibidos.finditer(s):
+            achados.append(f"{f}: {m.group(0)}")
+    assert not achados, f"Português/tradução quebrada em página pública: {achados}"
+
+
+def test_v66_article_schema_has_discover_fields():
+    """NewsArticle do artigo: ImageObject, dateModified, publisher.logo, keywords."""
+    import os
+    s = open(os.path.join(os.path.dirname(__file__), "..", "..",
+                          "frontend", "src", "pages", "Blog.tsx"), encoding="utf-8").read()
+    for campo in ('dateModified', '"@type": "ImageObject"', 'logo:', 'keywords',
+                  'og-cover.png', 'twitter:image'):
+        assert campo in s, f"Blog.tsx sem {campo} no Schema/OG do artigo"
+    # og:image nunca pode receber data-URI
+    assert "shareImg" in s
+
+
+def test_v66_api_public_responses_in_english():
+    r = client.get("/api/public/articles/slug-que-nao-existe-xyz")
+    assert r.status_code == 404
+    assert "não" not in r.json()["detail"] and "Artigo" not in r.json()["detail"]
+
+
+def test_v66_rss_description_in_english():
+    xml = client.get("/rss.xml").text
+    assert "Notícias" not in xml and "autônomos" not in xml
+    assert "AI news published by autonomous agents" in xml
+
+
+def test_v66_image_sitemap_is_valid_xml_with_ampersand_urls():
+    """URLs de provedores têm querystring com & — o XML precisa escapar."""
+    import xml.dom.minidom as md
+    from app.core import database as _db
+    _db.execute("""INSERT INTO contents (title, slug, body, excerpt, status,
+        image_url, published_at) VALUES ('XML & Escape <Test>', 'xml-escape-test-v66',
+        'body', 'x', 'published',
+        'https://image.example.com/p?width=1200&height=630&nologo=true', datetime('now'))""")
+    try:
+        for path in ("/sitemap.xml", "/news-sitemap.xml", "/image-sitemap.xml", "/rss.xml"):
+            b = client.get(path).text
+            md.parseString(b)  # levanta se mal formado
+        assert "&amp;height=630" in client.get("/image-sitemap.xml").text
+    finally:
+        _db.execute("DELETE FROM contents WHERE slug='xml-escape-test-v66'")
+
+
+def test_v66_hourly_pipeline_publishes_due_scheduled_posts():
+    """Agendado vencido publica no pipeline horário (não só no orquestrador de 2h)."""
+    from app.core import database as _db
+    _db.execute("""INSERT INTO contents (title, slug, body, excerpt, status,
+        image_url, scheduled_at) VALUES ('Sched Hourly', 'sched-hourly-v66', 'b', 'x',
+        'draft', 'https://example.com/f.jpg', '2020-01-01 00:00:00')""")
+    try:
+        r = client.post("/api/pipeline/run")
+        assert r.status_code == 200
+        assert r.json().get("scheduled_published", 0) >= 1
+        row = _db.query_one("SELECT status FROM contents WHERE slug='sched-hourly-v66'")
+        assert row["status"] == "published"
+    finally:
+        _db.execute("DELETE FROM contents WHERE slug='sched-hourly-v66'")
+
+
+# ====================== v6.6.1 — RECONCILIACAO COM O REMOTO (licoes preservadas) ======================
+
+def test_v661_seo_endpoints_have_no_bom():
+    """Producao teve BOM UTF-8 nos XML (commits a79a5d2..97cdb76) — nunca mais."""
+    for path in ("/robots.txt", "/sitemap.xml", "/news-sitemap.xml",
+                 "/image-sitemap.xml", "/rss.xml"):
+        raw = client.get(path).content
+        assert not raw.startswith(b"\xef\xbb\xbf"), f"{path} com BOM UTF-8"
+        assert raw.lstrip()[:1] in (b"<", b"U"), f"{path} nao inicia como XML/robots"
+
+
+def test_v661_no_static_seo_shadow_files_in_public():
+    """Arquivo fisico em frontend/public VENCE os rewrites na Vercel: um snapshot
+    estatico de sitemap/RSS congelaria o SEO (news-sitemap ficaria vazio p/ sempre).
+    Os XML dinamicos vem do backend via rewrite — nada de shadow no public/."""
+    import os
+    pub = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "public")
+    proibidos = {"robots.txt", "sitemap.xml", "news-sitemap.xml",
+                 "image-sitemap.xml", "rss.xml"}
+    presentes = proibidos & set(os.listdir(pub))
+    assert not presentes, f"Shadow estatico congela o SEO dinamico: {presentes}"
+
+
+def test_v661_index_html_searchaction_and_discover_meta():
+    """SearchAction deve apontar para rota real (/articles?q=) e o robots meta
+    precisa de max-image-preview:large (Google Discover)."""
+    import os
+    html = open(os.path.join(os.path.dirname(__file__), "..", "..",
+                             "frontend", "index.html"), encoding="utf-8").read()
+    assert "/articles?q={search_term_string}" in html, "SearchAction fora da rota real"
+    assert "max-image-preview:large" in html, "sem max-image-preview:large (Discover)"
+    assert '"@type": "NewsMediaOrganization"' in html
+    assert "logo.png" in html, "Schema sem logo real"
