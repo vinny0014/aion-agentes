@@ -8,6 +8,8 @@ services:
     healthCheckPath: /api/health
     autoDeployTrigger: checksPass
     envVars:
+      - key: APP_NAME
+        value: AION AI NEWS OS
       - key: ENV
         value: production
       - key: PYTHON_VERSION

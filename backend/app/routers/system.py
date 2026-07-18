@@ -1,4 +1,5 @@
 """Routers de sistema — Logs, Memória, Configurações, Fila de Conteúdo, Health."""
+import os
 import time
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
@@ -223,6 +224,7 @@ def health():
     return {
         "status": "ok" if db_ok else "degraded",
         "app": settings.APP_NAME,
+        "release": os.getenv("RENDER_GIT_COMMIT", "local")[:12],
         "env": settings.ENV,
         "database": "ok" if db_ok else "error",
         "uptime_seconds": round(time.time() - START_TIME, 1),
