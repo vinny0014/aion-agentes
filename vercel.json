@@ -12,6 +12,7 @@
     { "source": "/image-sitemap.xml", "destination": "https://aion-news-api.onrender.com/image-sitemap.xml" },
     { "source": "/rss.xml", "destination": "https://aion-news-api.onrender.com/rss.xml" },
     { "source": "/article/:slug", "destination": "https://aion-news-api.onrender.com/article/:slug" },
+    { "source": "/favicon.png", "destination": "/logo.png" },
     { "source": "/", "destination": "/index.html" },
     { "source": "/articles", "destination": "/index.html" },
     { "source": "/categories", "destination": "/index.html" },
@@ -43,7 +44,7 @@
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
     },
     {
-      "source": "/(logo.png|og-cover.png)",
+      "source": "/(logo.png|og-cover.png|favicon.png)",
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400, stale-while-revalidate=604800" }]
     },
     {

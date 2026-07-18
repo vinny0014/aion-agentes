@@ -478,8 +478,9 @@ def test_no_static_feeds_or_old_public_routes_remain():
     for config_path in (ROOT / "vercel.json", ROOT / "frontend" / "vercel.json"):
         config = json.loads(config_path.read_text())
         assert not any(rewrite["source"] == "/:path*" for rewrite in config["rewrites"])
-        assert not any(rewrite["source"] in {"/favicon.png", "/icon-192.png", "/icon-512.png"}
-                       for rewrite in config["rewrites"])
+        rewrites = {rewrite["source"]: rewrite["destination"] for rewrite in config["rewrites"]}
+        assert rewrites["/favicon.png"] == "/logo.png"
+        assert "/icon-192.png" not in rewrites and "/icon-512.png" not in rewrites
 
 
 def test_no_deprecated_domains_or_committed_secrets():
