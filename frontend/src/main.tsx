@@ -16,6 +16,7 @@ const NotFound = React.lazy(() => import("./pages/NotFound"));
 const Privacidade = React.lazy(() => import("./pages/Institucional").then(m => ({ default: m.Privacy })));
 const Termos = React.lazy(() => import("./pages/Institucional").then(m => ({ default: m.Terms })));
 const Contato = React.lazy(() => import("./pages/Institucional").then(m => ({ default: m.Contact })));
+const CookiesPage = React.lazy(() => import("./pages/Institucional").then(m => ({ default: m.CookiesPolicy })));
 const Categorias = React.lazy(() => import("./pages/Institucional").then(m => ({ default: (p: any) => m.Taxonomia({ tipo: "categories" }) })));
 const TagsPage = React.lazy(() => import("./pages/Institucional").then(m => ({ default: (p: any) => m.Taxonomia({ tipo: "tags" }) })));
 
@@ -38,6 +39,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <Route path="/privacy" element={<Privacidade />} />
         <Route path="/terms" element={<Termos />} />
         <Route path="/contact" element={<Contato />} />
+            <Route path="/cookies" element={<CookiesPage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Cadastro />} />
         <Route path="/dashboard" element={<Dashboard />} />
