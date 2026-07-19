@@ -28,6 +28,18 @@ export function Privacy() {
   );
 }
 
+export function CookiesPolicy() {
+    usePageMetadata({ title: "Cookie Policy", description: "How AION AI NEWS OS uses cookies and similar technologies.", path: "/cookies" });
+    return (
+          <Pagina tag="legal" titulo="Cookie Policy">
+                <p>AION uses strictly necessary cookies to keep you signed in and to remember basic preferences. These are required for the site to function and cannot be disabled.</p>
+                <p>We may also use analytics and advertising cookies from trusted third-party providers to understand how the portal is used and, where applicable, to show relevant advertising. These providers may set their own cookies subject to their own privacy policies.</p>
+                <p>Where required by law (for example, for visitors in the EEA, the UK or Switzerland), personalized advertising cookies are only set with your consent, managed through the applicable consent tool shown on the site.</p>
+                <p>You can control or delete cookies at any time through your browser settings. Blocking some cookies may affect how the site works. See our Privacy Policy for more on how we handle personal data.</p>
+          </Pagina>
+        );
+}
+
 export function Terms() {
   usePageMetadata({ title: "Terms of Use", description: "Terms governing use of the AION AI NEWS OS website and editorial content.", path: "/terms" });
   return (
