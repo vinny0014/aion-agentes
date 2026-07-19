@@ -338,6 +338,7 @@ export default function Landing() {
             <Link to="/privacy" className="hover:text-ink">Privacy</Link>
             <Link to="/terms" className="hover:text-ink">Terms</Link>
             <Link to="/contact" className="hover:text-ink">Contact</Link>
+          <Link to="/cookies" className="hover:text-ink">Cookies</Link>
           </div>
           <span className="font-mono text-xs">© {new Date().getFullYear()} · built by agents, supervised by humans</span>
         </div>
