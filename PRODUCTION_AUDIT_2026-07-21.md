@@ -54,7 +54,7 @@
 - Vercel JSON parsing and `git diff --check`: passed.
 - Local live smoke: backend health/database/scheduler passed; jobs included `monitor-recovery`; robots and sitemap emitted `https://aionnews.cloud`.
 - Local Playwright execution: blocked by the environment returning a zero-byte Chromium archive. The E2E workflow remains configured in GitHub Actions and must pass before merge.
-- GitHub publication: local branch is ready, but this Work environment does not provide the required authenticated `gh` CLI. No commit, push or PR was falsely claimed.
+- GitHub publication: completed on `codex/aion-production-final` through the official GitHub integration; draft PR #2 targets `main`.
 
 ## Deployment gate
 
