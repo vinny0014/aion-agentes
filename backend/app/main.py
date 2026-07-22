@@ -42,9 +42,16 @@ async def lifespan(app: FastAPI):
         seed_initial_content()
     quarantine_noncompliant_public_content()
     # Process the editorial queue every hour.
-    scheduler.add_job(process_queue_once, "interval", hours=1, id="content-pipeline")
+    scheduler.add_job(process_queue_once, "interval", hours=1, id="content-pipeline",
+                      max_instances=1, coalesce=True, misfire_grace_time=900)
     from .agents.orchestrator import run_cycle
-    scheduler.add_job(lambda: run_cycle("scheduler"), "interval", hours=2, id="agent-orchestrator")
+    scheduler.add_job(lambda: run_cycle("scheduler"), "interval", hours=2, id="agent-orchestrator",
+                      max_instances=1, coalesce=True, misfire_grace_time=1800)
+    from .agents.core import run_agent
+    from .agents.team import monitor_agent
+    scheduler.add_job(lambda: run_agent("monitor", monitor_agent), "interval", minutes=5,
+                      id="monitor-recovery", max_instances=1, coalesce=True,
+                      misfire_grace_time=300)
     # Run the first orchestrator cycle after startup.
     from datetime import datetime, timedelta
     scheduler.add_job(lambda: run_cycle("bootstrap"), "date",

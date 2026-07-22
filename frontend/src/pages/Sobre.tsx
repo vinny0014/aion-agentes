@@ -17,7 +17,7 @@ export default function Sobre() {
           </p>
           <p>
             The platform runs a daily production pipeline (queue, scheduler and templates)
-            coordinated by an orchestrator of 25+ agents: Discovery, Research, Writer,
+            coordinated by a catalog of 35 agents and internal modules: Discovery, Research, Writer,
             Fact Check, SEO, Image, Publisher, QA, Security, Monitor and Cost Guard, among
             others. Each covers one stage of the operation, from sourcing to shipping.
           </p>

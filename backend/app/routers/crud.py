@@ -1,4 +1,6 @@
 """Routers CRUD — Usuários, Agentes, Conteúdo e Tarefas."""
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..core import database as db
@@ -64,7 +66,15 @@ agents_router = APIRouter(prefix="/api/agents", tags=["agents"])
 
 @agents_router.get("")
 def list_agents(user: dict = Depends(get_current_user)):
-    return db.query("SELECT * FROM agents ORDER BY id")
+    rows = db.query("SELECT * FROM agents ORDER BY id")
+    for row in rows:
+        try:
+            config = json.loads(row.get("config_json") or "{}")
+        except Exception:
+            config = {}
+        row["classification"] = config.get("classification", "INACTIVE")
+        row["runtime"] = config
+    return rows
 
 
 @agents_router.post("", status_code=201, dependencies=[Depends(require_admin)])

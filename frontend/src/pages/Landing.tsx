@@ -4,6 +4,7 @@ import { API_BASE } from "../lib/api";
 import { usePageMetadata } from "../lib/seo";
 
 import AdSlot from "../lib/AdSlot";
+import { trackEvent } from "../lib/telemetry";
 
 type Art = { id: number; title: string; slug: string; excerpt: string;
   category?: string; tags?: string; published_at: string; reading_time?: number;
@@ -18,6 +19,22 @@ function horaBr(iso?: string | null) {
   if (!iso) return "";
   return new Date(iso.replace(" ", "T") + "Z").toLocaleTimeString("en-US",
     { hour: "2-digit", minute: "2-digit" });
+}
+
+function AgentIcon({ kind }: { kind: string }) {
+  const paths: Record<string, React.ReactNode> = {
+    content: <><path d="M5 4h10l4 4v12H5z" /><path d="M15 4v5h5M8 13h8M8 17h6" /></>,
+    seo: <><circle cx="10" cy="10" r="5" /><path d="m14 14 6 6M10 7v6M7 10h6" /></>,
+    growth: <><path d="M4 19V9M10 19V5M16 19v-8M3 19h18" /><path d="m4 8 6-4 6 5 5-4" /></>,
+    quality: <><path d="m12 3 8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z" /><path d="m8 12 2.5 2.5L16 9" /></>,
+    budget: <><circle cx="12" cy="12" r="9" /><path d="M15.5 8.5c-.8-.8-2-1.2-3.5-1.2-2 0-3.5 1-3.5 2.5 0 3.8 7 1.4 7 5 0 1.5-1.5 2.5-3.5 2.5-1.6 0-3-.5-4-1.5M12 5v14" /></>,
+  };
+  return (
+    <svg data-agent-icon={kind} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+      {paths[kind]}
+    </svg>
+  );
 }
 
 export function BottomNav() {
@@ -130,7 +147,10 @@ export default function Landing() {
         body: JSON.stringify({ email }),
       });
       setNewsMsg(r.ok ? "Subscribed! ✓" : "Could not subscribe right now.");
-      if (r.ok) setEmail("");
+      if (r.ok) {
+        trackEvent("newsletter_submit", { placement: "homepage" });
+        setEmail("");
+      }
     } catch { setNewsMsg("Could not subscribe right now."); }
   }
 
@@ -139,11 +159,11 @@ export default function Landing() {
   const ultimas = artigos.slice(1, 5);
 
   const AGENTES = [
-    { n: "Content", d: "Produces the portal's daily content from the queue.", r: "content" },
-    { n: "SEO", d: "Optimizes titles, slugs, schema and sitemaps.", r: "optimization" },
-    { n: "Discovery Growth", d: "Clusters, trends and the editorial calendar.", r: "growth" },
-    { n: "QA", d: "Validates critical flows and blocks regressions.", r: "quality" },
-    { n: "Cost Guard", d: "Keeps AI API spend within budget.", r: "budget" },
+    { n: "Content", d: "Produces the portal's daily content from the queue.", r: "content", icon: "content" },
+    { n: "SEO", d: "Optimizes titles, slugs, schema and sitemaps.", r: "optimization", icon: "seo" },
+    { n: "Discovery Growth", d: "Clusters, trends and the editorial calendar.", r: "growth", icon: "growth" },
+    { n: "QA", d: "Validates critical flows and blocks regressions.", r: "quality", icon: "quality" },
+    { n: "Cost Guard", d: "Keeps AI API spend within budget.", r: "budget", icon: "budget" },
   ];
 
   return (
@@ -212,7 +232,7 @@ export default function Landing() {
             <AdSlot slot="aion-home-top" className="mt-6" />
 
             {/* LATEST NEWS */}
-            <section className="mt-10 min-h-[1080px] sm:min-h-[540px] lg:min-h-[270px]" aria-label="Latest news">
+            <section className="mt-10" aria-label="Latest news">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="font-display text-lg font-bold uppercase tracking-wide">Latest news</h2>
                 <Link to="/articles" className="text-sm text-signal hover:underline">View all →</Link>
@@ -255,7 +275,9 @@ export default function Landing() {
                 {AGENTES.map((ag) => (
                   <div key={ag.n} className="card card-hover !p-4">
                     <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg text-white"
-                         style={{ backgroundImage: "var(--grad)" }} aria-hidden>▲</div>
+                         style={{ backgroundImage: "var(--grad)" }} aria-hidden>
+                      <AgentIcon kind={ag.icon} />
+                    </div>
                     <p className="font-display text-sm font-bold">{ag.n}</p>
                     <p className="mt-1 text-xs leading-snug text-slateui">{ag.d}</p>
                     <p className="tag mt-2 text-signal">{ag.r} →</p>

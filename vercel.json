@@ -4,6 +4,20 @@
   "buildCommand": "cd frontend && npm run build",
   "outputDirectory": "frontend/dist",
   "framework": "vite",
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "www.aionnews.cloud" }],
+      "destination": "https://aionnews.cloud/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "aion-news-os.vercel.app" }],
+      "destination": "https://aionnews.cloud/:path*",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     { "source": "/api/:path*", "destination": "https://aion-news-api.onrender.com/api/:path*" },
     { "source": "/robots.txt", "destination": "https://aion-news-api.onrender.com/robots.txt" },

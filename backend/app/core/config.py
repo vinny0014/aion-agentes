@@ -4,7 +4,7 @@ from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-SITE_URL_DEFAULT = "https://aion-news-os.vercel.app"
+PUBLIC_SITE_URL_DEFAULT = "https://aionnews.cloud"
 
 
 class Settings(BaseSettings):
@@ -24,7 +24,10 @@ class Settings(BaseSettings):
     OPENROUTER_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
     # Single source of truth for robots, sitemaps, RSS, canonical and social URLs.
-    SITE_URL: str = SITE_URL_DEFAULT
+    PUBLIC_SITE_URL: str = PUBLIC_SITE_URL_DEFAULT
+    # Compatibility only for an existing Render environment during the DNS migration.
+    # New environments must configure PUBLIC_SITE_URL.
+    SITE_URL: str = ""
     PUBLIC_API_URL: str = "https://aion-news-api.onrender.com"
     UPLOAD_DIR: str = "./uploads"
     IMAGE_PROVIDER: str = "pollinations"
@@ -42,12 +45,17 @@ class Settings(BaseSettings):
             raise ValueError("Production ADMIN_SETUP_TOKEN must be empty or at least 16 characters")
         if "*" in self.CORS_ORIGINS:
             raise ValueError("Production CORS_ORIGINS cannot contain a wildcard")
+        self.PUBLIC_SITE_URL = (
+            self.PUBLIC_SITE_URL or self.SITE_URL or PUBLIC_SITE_URL_DEFAULT
+        ).rstrip("/")
         return self
 
 settings = Settings()
-settings.SITE_URL = (settings.SITE_URL or SITE_URL_DEFAULT).rstrip("/")
+settings.PUBLIC_SITE_URL = (
+    settings.PUBLIC_SITE_URL or settings.SITE_URL or PUBLIC_SITE_URL_DEFAULT
+).rstrip("/")
 
 
 def site_url() -> str:
     """Return the normalized canonical public URL."""
-    return settings.SITE_URL
+    return settings.PUBLIC_SITE_URL
