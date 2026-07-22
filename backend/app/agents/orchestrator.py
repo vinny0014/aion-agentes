@@ -3,6 +3,8 @@
 Ordem do pipeline, trava de concorrência, guarda anti-loop, reinício de
 agentes com falha e respeito ao orçamento (Cost Guard antes de etapas de IA).
 """
+from datetime import datetime, timezone
+
 from ..core import database as db
 from . import team
 from .core import budget_remaining, mem_get, mem_set, run_agent
@@ -41,6 +43,7 @@ PIPELINE = [
 ]
 
 MAX_CYCLES_PER_HOUR = 4  # guarda anti-loop
+LOCK_TTL_SECONDS = 30 * 60
 
 
 def restart_failed_agents() -> int:
@@ -52,9 +55,16 @@ def restart_failed_agents() -> int:
 
 def run_cycle(trigger: str = "manual") -> dict:
     """Um ciclo completo do pipeline. Nunca roda concorrente; nunca em loop."""
-    # trava de concorrência
-    if mem_get("agent:ceo-master", "lock") == "on":
-        return {"status": "skipped", "motivo": "ciclo já em execução"}
+    now = datetime.now(timezone.utc).timestamp()
+    lock = mem_get("agent:ceo-master", "lock") or {}
+    if isinstance(lock, dict) and lock.get("state") == "on":
+        age = now - float(lock.get("acquired_at") or 0)
+        if 0 <= age < LOCK_TTL_SECONDS:
+            return {"status": "skipped", "motivo": "ciclo já em execução"}
+        db.execute(
+            "INSERT INTO logs (level,source,message) VALUES ('warn','ceo-master',?)",
+            (f"Recovered stale orchestrator lock after {int(max(age, 0))} seconds",),
+        )
     # guarda anti-loop
     recentes = db.query_one(
         "SELECT COUNT(*) AS n FROM agent_runs WHERE agent_slug='ceo-master' "
@@ -62,7 +72,9 @@ def run_cycle(trigger: str = "manual") -> dict:
     if recentes >= MAX_CYCLES_PER_HOUR:
         return {"status": "skipped", "motivo": f"limite de {MAX_CYCLES_PER_HOUR} ciclos/hora"}
 
-    mem_set("agent:ceo-master", "lock", "on")
+    mem_set("agent:ceo-master", "lock", {
+        "state": "on", "acquired_at": now, "trigger": trigger,
+    })
     try:
         reiniciados = restart_failed_agents()
         resultados = []
@@ -86,4 +98,6 @@ def run_cycle(trigger: str = "manual") -> dict:
             (trigger, f"ok={resumo['ok']} erros={resumo['erros']} pulados={resumo['pulados']}"))
         return resumo
     finally:
-        mem_set("agent:ceo-master", "lock", "off")
+        mem_set("agent:ceo-master", "lock", {
+            "state": "off", "released_at": datetime.now(timezone.utc).timestamp(),
+        })

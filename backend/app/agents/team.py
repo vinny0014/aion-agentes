@@ -7,6 +7,10 @@ e devolve o que É possível fazer localmente.
 import html
 import json
 import re
+from datetime import datetime, timezone
+from difflib import SequenceMatcher
+from email.utils import parsedate_to_datetime
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import httpx
 
@@ -20,43 +24,146 @@ from .registry import process_queue_once, resolve_provider, ProviderNotConfigure
 # Fontes padrão do Discovery (RSS/Atom oficiais) — configuráveis via memória
 DEFAULT_SOURCES = [
     # Feeds com resumo (description/summary) redistribuível — base da síntese
+    "https://openai.com/news/rss.xml",
+    "https://www.anthropic.com/rss.xml",
+    "https://blog.google/technology/ai/rss/",
+    "https://blogs.nvidia.com/feed/",
+    "https://huggingface.co/blog/feed.xml",
+    "https://export.arxiv.org/rss/cs.AI",
     "https://techcrunch.com/category/artificial-intelligence/feed/",
     "https://venturebeat.com/category/ai/feed/",
     "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
     "https://www.wired.com/feed/tag/ai/latest/rss",
-    "https://export.arxiv.org/rss/cs.AI",
-    "https://huggingface.co/blog/feed.xml",
-    "https://blogs.nvidia.com/feed/",
-    "https://www.anthropic.com/rss.xml",
-    "https://openai.com/news/rss.xml",
-    "https://blog.google/technology/ai/rss/",
 ]
+
+_AI_SIGNALS = {
+    "ai", "artificial intelligence", "agent", "agents", "anthropic", "chatgpt",
+    "claude", "copilot", "deepmind", "gemini", "gpt", "inference", "llm",
+    "machine learning", "model", "models", "nvidia", "openai", "robotics",
+    "transformer", "neural", "automation",
+}
+_REJECT_TITLE_PATTERNS = (
+    r"\bsponsored\b", r"\bwebinar\b", r"\bbuy now\b", r"\bpromo code\b",
+    r"\bweekly roundup\b", r"\bnewsletter\b", r"^untitled$", r"^test\b",
+)
+
+
+def _normalize_headline(value: str) -> str:
+    value = html.unescape(re.sub(r"<[^>]+>", " ", value or ""))
+    return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
+
+
+def _canonical_story_url(value: str) -> str:
+    try:
+        parsed = urlparse((value or "").strip())
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            return ""
+        query = urlencode([(k, v) for k, v in parse_qsl(parsed.query, keep_blank_values=True)
+                           if not k.lower().startswith("utm_") and k.lower() not in {"ref", "source"}])
+        return urlunparse((parsed.scheme.lower(), parsed.netloc.lower(), parsed.path.rstrip("/") or "/",
+                           "", query, ""))
+    except Exception:
+        return ""
+
+
+def _story_date(item: str) -> str:
+    match = re.search(
+        r"<(?:pubDate|published|updated|dc:date)[^>]*>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</(?:pubDate|published|updated|dc:date)>",
+        item, re.S | re.I,
+    )
+    if not match:
+        return ""
+    raw = re.sub(r"<[^>]+>", "", match.group(1)).strip()
+    try:
+        parsed = parsedate_to_datetime(raw)
+    except Exception:
+        try:
+            parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except Exception:
+            return ""
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc).isoformat()
+
+
+def _headline_rejection(title: str, summary: str, published_at: str = "") -> str | None:
+    normalized = _normalize_headline(title)
+    words = normalized.split()
+    if len(title.strip()) < 20 or not (4 <= len(words) <= 32):
+        return "invalid_title_length"
+    if len(set(words)) < max(3, len(words) // 3):
+        return "repetitive_title"
+    if any(re.search(pattern, normalized) for pattern in _REJECT_TITLE_PATTERNS):
+        return "promotional_or_placeholder"
+    context = f" {normalized} {_normalize_headline(summary)} "
+    if not any(f" {signal} " in context for signal in _AI_SIGNALS):
+        return "low_ai_relevance"
+    if published_at:
+        try:
+            age_days = (datetime.now(timezone.utc) - datetime.fromisoformat(published_at)).total_seconds() / 86400
+            if age_days > 14 or age_days < -1:
+                return "stale_or_future_date"
+        except Exception:
+            return "invalid_date"
+    return None
+
+
+def _is_near_duplicate(title: str, existing: list[str], threshold: float = 0.88) -> bool:
+    normalized = _normalize_headline(title)
+    return any(SequenceMatcher(None, normalized, _normalize_headline(other)).ratio() >= threshold
+               for other in existing if other)
 
 
 # ═══════════ 2. DISCOVERY AGENT ═══════════
 def discovery_agent(payload: dict) -> dict:
     sources = mem_get("agent:discovery", "sources", DEFAULT_SOURCES)
-    found, errors = [], []
-    for url in sources[: payload.get("max_sources", 4)]:
+    found, errors, rejected = [], [], {}
+    known_titles = [row["title"] for row in db.query("SELECT title FROM contents")]
+    known_titles += [row["topic"] for row in db.query(
+        "SELECT topic FROM content_queue WHERE status IN ('queued','processing','done')")]
+    known_urls = {row["source_url"] for row in db.query(
+        "SELECT source_url FROM contents WHERE source_url != ''")}
+    seen_urls: set[str] = set()
+    seen_titles: list[str] = []
+    for url in sources[: payload.get("max_sources", 10)]:
         try:
             r = httpx.get(url, timeout=10, follow_redirects=True,
                           headers={"User-Agent": "AION-Discovery/1.0"})
             r.raise_for_status()
-            for item in re.findall(r"<(?:item|entry)>(.*?)</(?:item|entry)>", r.text, re.S)[:5]:
+            per_source = 0
+            for item in re.findall(r"<(?:item|entry)>(.*?)</(?:item|entry)>", r.text, re.S)[:10]:
                 t = re.search(r"<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</title>", item, re.S)
                 l = re.search(r'<link[^>]*href="([^"]+)"|<link>(.*?)</link>', item, re.S)
                 if not t:
                     continue
                 titulo = html.unescape(re.sub(r"<[^>]+>", "", t.group(1))).strip()
-                link = (l.group(1) or l.group(2) or "").strip() if l else ""
+                link = _canonical_story_url((l.group(1) or l.group(2) or "").strip() if l else "")
                 img = re.search(r'<(?:enclosure|media:content|media:thumbnail)[^>]*url="([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"', item)
                 desc_m = re.search(r"<(?:description|summary)[^>]*>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</(?:description|summary)>", item, re.S)
                 desc = html.unescape(re.sub(r"<[^>]+>", " ", desc_m.group(1))).strip() if desc_m else ""
                 desc = re.sub(r"\s+", " ", desc)[:600]
+                published_at = _story_date(item)
                 from ..content_rules import looks_english
-                if titulo and looks_english(titulo, desc):
-                    found.append({"source": url, "title": titulo, "link": link,
-                                  "image": img.group(1) if img else "", "resumo": desc})
+                reason = _headline_rejection(titulo, desc, published_at)
+                if not link:
+                    reason = "invalid_source"
+                elif not looks_english(titulo, desc):
+                    reason = "non_english"
+                elif link in known_urls or link in seen_urls:
+                    reason = "duplicate_url"
+                elif _is_near_duplicate(titulo, known_titles + seen_titles):
+                    reason = "duplicate_title"
+                if reason:
+                    rejected[reason] = rejected.get(reason, 0) + 1
+                    continue
+                found.append({"source": url, "title": titulo, "link": link,
+                              "image": img.group(1) if img else "", "resumo": desc,
+                              "published_at": published_at})
+                seen_urls.add(link)
+                seen_titles.append(titulo)
+                per_source += 1
+                if per_source >= payload.get("max_items_per_source", 5):
+                    break
         except Exception as exc:
             errors.append({"source": url, "erro": f"{type(exc).__name__}"})
     novos = 0
@@ -64,7 +171,9 @@ def discovery_agent(payload: dict) -> dict:
         topic = item["title"][:280]
         if len(topic) < 12:
             continue
-        if not db.query_one("SELECT id FROM content_queue WHERE topic = ?", (topic,)):
+        topic_slug = slugify(topic)
+        if (not db.query_one("SELECT id FROM content_queue WHERE topic = ?", (topic,))
+                and not db.query_one("SELECT id FROM contents WHERE slug = ?", (topic_slug,))):
             db.execute(
                 "INSERT INTO content_queue (topic, template) VALUES (?, 'noticia_curta')", (topic,))
             novos += 1
@@ -74,8 +183,10 @@ def discovery_agent(payload: dict) -> dict:
                 "em produção (Render) o acesso é liberado.")
     mem_set("agent:discovery", "manchetes_do_dia", found[:20])
     mem_set("agent:discovery", "ultima_execucao",
-            {"encontrados": len(found), "enfileirados": novos, "erros_fonte": errors})
-    return {"encontrados": len(found), "enfileirados": novos, "fontes_com_erro": len(errors)}
+            {"encontrados": len(found), "enfileirados": novos, "erros_fonte": errors,
+             "rejeitados": rejected})
+    return {"encontrados": len(found), "enfileirados": novos,
+            "fontes_com_erro": len(errors), "rejeitados": rejected}
 
 
 # ═══════════ 3. CONTENT WRITER AGENT (usa o pipeline existente) ═══════════
@@ -89,33 +200,47 @@ def fact_check_agent(payload: dict) -> dict:
     drafts = db.query("SELECT * FROM contents WHERE status = 'draft' ORDER BY id DESC LIMIT 20")
     aprovados, bloqueados = [], []
     for c in drafts:
-        problemas = []
+        problemas: list[str] = []
+        detalhes: list[str] = []
+        def reject(code: str, detail: str) -> None:
+            if code not in problemas:
+                problemas.append(code)
+            detalhes.append(detail)
         if any(marker in (c["body"] or "") for marker in
                ("[Rascunho automático", "[Desenvolva", "[Auto draft", "[Develop")):
-            problemas.append("placeholders de rascunho no corpo")
+            reject("weak_content", "draft placeholders remain in the body")
         palavras = len((c["body"] or "").split())
         if len(c["body"] or "") < 200:
-            problemas.append("corpo muito curto (<200 caracteres)")
+            reject("insufficient_length", "body has fewer than 200 characters")
         elif c.get("agent_id") and palavras < (250 if c.get("category") in {"news", "radar"} else 500):
-            problemas.append("AI content is below the minimum editorial word count")
+            reject("insufficient_length", "AI content is below the editorial word count")
         if c.get("agent_id"):
             if not (c.get("category") or "").strip():
-                problemas.append("artigo de IA sem categoria")
+                reject("seo_missing", "AI article has no category")
             if not (c.get("excerpt") or "").strip():
-                problemas.append("artigo de IA sem resumo")
+                reject("weak_content", "AI article has no excerpt")
+            if not (c.get("source_url") or "").startswith(("http://", "https://")):
+                reject("invalid_source", "AI article has no valid source URL")
         from ..content_rules import publication_issues
-        problemas.extend(publication_issues(c))
+        for issue in publication_issues(c):
+            if "image" in issue.lower() or "raster" in issue.lower():
+                reject("image_invalid" if c.get("image_url") else "image_missing", issue)
+            elif "English" in issue or "categories" in issue:
+                reject("weak_content", issue)
+            else:
+                reject("publish_conflict", issue)
         dup = db.query_one(
             "SELECT id FROM contents WHERE title = ? AND id != ? AND status = 'published'",
             (c["title"], c["id"]))
         if dup:
-            problemas.append(f"título duplicado do conteúdo #{dup['id']}")
+            reject("duplicate_content", f"title duplicates published content #{dup['id']}")
         # links internos citados devem existir
         for slug in re.findall(r"/article/([a-z0-9-]+)", c["body"] or ""):
             if not db.query_one("SELECT id FROM contents WHERE slug = ?", (slug,)):
-                problemas.append(f"link interno quebrado: {slug}")
+                reject("seo_missing", f"broken internal link: {slug}")
         if problemas:
-            bloqueados.append({"id": c["id"], "title": c["title"], "problemas": problemas})
+            bloqueados.append({"id": c["id"], "title": c["title"],
+                               "reason_codes": problemas, "details": detalhes})
         else:
             aprovados.append(c["id"])
     mem_set("agent:fact-check", "bloqueados", bloqueados)
@@ -185,12 +310,13 @@ def image_agent(payload: dict) -> dict:
     """Acquire and persist a verified raster image before publication.
 
     Chain: existing URL -> feed image -> source Open Graph -> configured photo
-    provider. If every candidate fails, the article remains a draft.
+    provider -> managed AION template. Only a storage failure leaves it in draft.
     """
-    from .imagegen import materialize_remote_image, provider_photo_url
+    from .imagegen import materialize_remote_image, materialize_template_image, provider_photo_url
     manchetes = mem_get("agent:discovery", "manchetes_do_dia", []) or []
     provider_on = provider_photo_url("probe", "") is not None
-    stats = {"existing": 0, "feed": 0, "og_image": 0, "photo_provider": 0, "blocked": 0}
+    stats = {"existing": 0, "feed": 0, "og_image": 0, "photo_provider": 0,
+             "template": 0, "blocked": 0}
 
     # 1) enfileirar quem precisa
     for c in db.query("SELECT id, image_url FROM contents WHERE status IN ('draft','published')"):
@@ -238,6 +364,12 @@ def image_agent(payload: dict) -> dict:
             if prepared:
                 credit, source = candidate_credit, candidate_source
                 break
+        if not prepared:
+            try:
+                prepared = materialize_template_image(c["title"], c["category"] or "news")
+                credit, source = "AION generated editorial template", "template"
+            except Exception:
+                prepared = None
         if prepared:
             alt = c["image_alt"] or f"Editorial image for {c['title'][:90]}"
             db.execute("""UPDATE contents SET image_url=?, image_alt=?, image_credit=?,
@@ -258,7 +390,7 @@ def image_agent(payload: dict) -> dict:
                               "image_url NOT LIKE 'http%'")["n"]
     return {"processados": len(fila), **stats, "sem_imagem_restantes": restantes,
             "provedor_ativo": provider_on,
-            "publication_gate": "articles without a verified raster image remain drafts"}
+            "publication_gate": "verified external images or managed AION templates only"}
 
 
 def compute_hero_image(content_id: int, manchetes: list | None = None) -> dict:
@@ -750,7 +882,7 @@ def image_optimization_agent(payload: dict) -> dict:
 
 # ═══════════ SEARCH CONSOLE / REVENUE / DASHBOARD / PERFORMANCE ═══════════
 def search_console_agent(payload: dict) -> dict:
-    cfg = mem_get("agent:search-console", "site_url") or settings.SITE_URL
+    cfg = mem_get("agent:search-console", "site_url") or settings.PUBLIC_SITE_URL
     return {"site": cfg, "sitemaps": ["/sitemap.xml", "/news-sitemap.xml", "/image-sitemap.xml"],
             "limitation": "Impressions and clicks require verified Google Search Console access"}
 
@@ -851,16 +983,115 @@ def google_news_agent(payload: dict) -> dict:
 
 
 def monitor_agent(payload: dict) -> dict:
-    """Vigia a saúde: agentes em erro, erros recentes, tamanho do banco."""
+    """No-AI production supervisor with idempotent incidents and safe recovery."""
+    def incident(code: str, title: str, detail: str, agent_slug: str, active: bool,
+                 priority: int = 1) -> int | None:
+        task_title = f"[INCIDENT:{code}] {title}"
+        current = db.query_one(
+            "SELECT id,status FROM tasks WHERE title=? ORDER BY id DESC LIMIT 1", (task_title,))
+        if active:
+            if current and current["status"] != "done":
+                return current["id"]
+            aid = db.query_one("SELECT id FROM agents WHERE slug=?", (agent_slug,))
+            task_id = db.execute(
+                "INSERT INTO tasks(title,description,status,priority,agent_id) VALUES(?,?,'todo',?,?)",
+                (task_title, detail[:1000], priority, aid["id"] if aid else None),
+            )
+            db.execute(
+                "INSERT INTO logs(level,source,message,meta_json) VALUES('error','monitor',?,?)",
+                (title, json.dumps({"incident": code, "task_id": task_id, "detail": detail})[:2000]),
+            )
+            return task_id
+        if current and current["status"] != "done":
+            db.execute("UPDATE tasks SET status='done',updated_at=datetime('now') WHERE id=?",
+                       (current["id"],))
+            db.execute("INSERT INTO logs(level,source,message) VALUES('info','monitor',?)",
+                       (f"Recovered incident {code}: {title}",))
+        return None
+
     em_erro = db.query("SELECT slug FROM agents WHERE status='error'")
     erros = db.query_one("SELECT COUNT(*) n FROM logs WHERE level='error' "
                          "AND created_at > datetime('now','-6 hours')")["n"]
-    if em_erro:
-        db.execute("INSERT INTO logs (level, source, message) VALUES ('warn','monitor',?)",
-                   (f"Agentes em erro (CEO reinicia no próximo ciclo): "
-                    f"{[a['slug'] for a in em_erro]}",))
-    return {"agentes_em_erro": [a["slug"] for a in em_erro], "erros_6h": erros,
-            "saudavel": not em_erro and erros == 0}
+    failed_slugs = [a["slug"] for a in em_erro]
+    incident("agents-error", "Agents are in an error state", ", ".join(failed_slugs),
+             "ceo-master", bool(failed_slugs))
+
+    stuck_content = db.query_one(
+        "SELECT COUNT(*) n FROM content_queue WHERE status='processing' "
+        "AND created_at < datetime('now','-1 hour')")["n"]
+    if stuck_content:
+        db.execute("UPDATE content_queue SET status='queued',error='monitor recovery: stale processing' "
+                   "WHERE status='processing' AND created_at < datetime('now','-1 hour')")
+    incident("queue-stuck", "Content queue recovered stale work",
+             f"Requeued {stuck_content} item(s)", "content", bool(stuck_content))
+
+    failed_images = db.query_one(
+        "SELECT COUNT(*) n FROM image_queue WHERE status='failed' AND attempts < 5")["n"]
+    if failed_images:
+        db.execute("UPDATE image_queue SET status='queued',note='monitor retry' "
+                   "WHERE status='failed' AND attempts < 5")
+    incident("image-retry", "Image queue needed recovery",
+             f"Requeued {failed_images} image(s)", "image", bool(failed_images))
+
+    from ..content_rules import quarantine_noncompliant_public_content
+    quarantine = quarantine_noncompliant_public_content()
+    quarantined = len(quarantine.get("quarantined", []))
+    incident("invalid-publication", "Invalid publications were withdrawn",
+             f"Returned {quarantined} item(s) to draft", "image-quality", bool(quarantined))
+
+    published = db.query_one("SELECT COUNT(*) n FROM contents WHERE status='published'")["n"]
+    recent = db.query_one("SELECT COUNT(*) n FROM contents WHERE status='published' "
+                          "AND published_at > datetime('now','-4 hours')")["n"]
+    stale_publication = published > 0 and recent == 0
+    incident("publication-stale", "No article published in four hours",
+             f"Published total={published}; recent={recent}", "publisher", stale_publication, 2)
+
+    probes: dict[str, dict] = {}
+    if settings.ENV.lower() == "production":
+        targets = {
+            "frontend": site_url() + "/",
+            "backend": settings.PUBLIC_API_URL.rstrip("/") + "/api/health",
+            "rss": site_url() + "/rss.xml",
+            "sitemap": site_url() + "/sitemap.xml",
+            "news_sitemap": site_url() + "/news-sitemap.xml",
+            "image_sitemap": site_url() + "/image-sitemap.xml",
+        }
+        with httpx.Client(timeout=12, follow_redirects=True,
+                          headers={"User-Agent": "AION-Monitor/1.0"}) as client:
+            for name, url in targets.items():
+                try:
+                    response = client.get(url)
+                    body = response.text[:1000]
+                    valid = response.status_code == 200
+                    if name == "frontend":
+                        valid = valid and "AION AI NEWS OS" in body and "Parked Domain" not in body
+                    elif name == "backend":
+                        valid = valid and '"status":"ok"' in body.replace(" ", "")
+                    elif name == "rss":
+                        valid = valid and "<rss" in body
+                    elif "sitemap" in name:
+                        valid = valid and "<urlset" in body
+                    probes[name] = {"ok": valid, "status": response.status_code,
+                                    "url": str(response.url)}
+                except Exception as exc:
+                    probes[name] = {"ok": False, "error": type(exc).__name__, "url": url}
+                incident(f"probe-{name}", f"Production probe failed: {name}",
+                         json.dumps(probes[name]), "monitor", not probes[name]["ok"])
+
+    report = {
+        "agentes_em_erro": failed_slugs,
+        "erros_6h": erros,
+        "content_requeued": stuck_content,
+        "images_requeued": failed_images,
+        "quarantined": quarantined,
+        "published_last_4h": recent,
+        "probes": probes,
+        "saudavel": not failed_slugs and not stuck_content and not failed_images
+                    and not quarantined and not stale_publication
+                    and all(p.get("ok") for p in probes.values()),
+    }
+    mem_set("agent:monitor", "last_report", report)
+    return report
 
 
 # ═══════════ HERO RANKING (breaking + relevância + frescor) ═══════════

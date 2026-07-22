@@ -1,9 +1,9 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import "./index.css";
 import Landing from "./pages/Landing";
-import { initializeTelemetry } from "./lib/telemetry";
+import { initializeTelemetry, trackPageView } from "./lib/telemetry";
 const Sobre = React.lazy(() => import("./pages/Sobre"));
 const Login = React.lazy(() => import("./pages/Login"));
 const Cadastro = React.lazy(() => import("./pages/Cadastro"));
@@ -24,9 +24,18 @@ if ("serviceWorker" in navigator && import.meta.env.PROD) {
   window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => undefined));
 }
 
+function TelemetryRouteObserver() {
+  const location = useLocation();
+  React.useEffect(() => {
+    trackPageView(`${location.pathname}${location.search}`);
+  }, [location.pathname, location.search]);
+  return null;
+}
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <BrowserRouter>
+      <TelemetryRouteObserver />
       <React.Suspense fallback={<div className="p-10 font-mono text-sm text-slateui">Loading…</div>}>
       <Routes>
         <Route path="/" element={<Landing />} />

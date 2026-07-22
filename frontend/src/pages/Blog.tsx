@@ -5,6 +5,7 @@ import { Nav } from "./Landing";
 import AdSlot from "../lib/AdSlot";
 import { API_BASE } from "../lib/api";
 import { usePageMetadata } from "../lib/seo";
+import { trackEvent } from "../lib/telemetry";
 
 type Artigo = {
   id: number; title: string; slug: string; excerpt: string;
@@ -80,7 +81,9 @@ export function Conteudos() {
         <p className="tag mb-2">daily publication</p>
         <h1 className="font-display text-4xl font-bold tracking-tight">Articles</h1>
         <form className="mt-6 flex gap-2" onSubmit={(e) => { e.preventDefault();
-          const p = new URLSearchParams(params); search ? p.set("q", search) : p.delete("q"); setParams(p); }}>
+          const p = new URLSearchParams(params); search ? p.set("q", search) : p.delete("q");
+          if (search.trim()) trackEvent("search", { search_term: search.trim().slice(0, 100) });
+          setParams(p); }}>
           <input className="field max-w-sm" placeholder="Search articles…" value={search}
             onChange={(e) => setBusca(e.target.value)} aria-label="Search articles" />
           <button className="btn-primary !py-2">Search</button>
@@ -157,6 +160,7 @@ export function Artigo() {
       .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
       .then((a: Artigo) => {
         setArtigo(a);
+        trackEvent("article_view", { article_slug: a.slug, article_category: a.category || "news" });
         // SEO dinâmico: title, description, OG e JSON-LD (Schema.org NewsArticle)
         document.title = `${a.seo_title || a.title} — AION AI NEWS OS`;
         const setMeta = (sel: string, attr: string, val: string) => {

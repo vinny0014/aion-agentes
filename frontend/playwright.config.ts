@@ -35,7 +35,7 @@ export default defineConfig({
         DATABASE_URL: `sqlite:////tmp/aion-playwright-${runId}.db`,
         UPLOAD_DIR: `/tmp/aion-playwright-uploads-${runId}`,
         PUBLIC_API_URL: "http://127.0.0.1:8000",
-        SITE_URL: "https://aion-news-os.vercel.app",
+        PUBLIC_SITE_URL: "https://aionnews.cloud",
         IMAGE_PROVIDER: "none",
         SECRET_KEY: "playwright-secret-key-with-at-least-32-characters",
         ADMIN_SETUP_TOKEN: "playwright-owner-setup-token",

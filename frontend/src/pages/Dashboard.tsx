@@ -91,7 +91,7 @@ export default function Dashboard() {
               <div key={a.id} className="card card-hover !p-4">
                 <div className="flex items-center justify-between">
                   <span className="font-medium">{a.name}</span>
-                  <span className="tag">{a.status}</span>
+                  <span className="tag">{a.classification || "inactive"}</span>
                 </div>
                 <p className="mt-1.5 text-xs text-slateui">{a.description}</p>
               </div>
