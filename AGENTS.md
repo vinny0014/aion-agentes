@@ -1,26 +1,45 @@
-# AGENTS.md — Os 35 agentes registrados do AION
+# AION — catálogo operacional dos 35 agentes
 
-Breaking News (hero automático) · Trend Hunter (pautas de tendências) · Google Discover (auditoria de requisitos) · Image Optimization (valida imagens oficiais) · Search Console · Revenue (custo vs receita real) · Dashboard (painel executivo) · Performance. Pipeline operacional: 30 etapas.
+O banco preserva os 35 registros históricos. A classificação abaixo separa os nove agentes principais dos módulos internos e das integrações externas. O campo `status` (`idle`, `running`, `error`) representa somente o estado de execução; não prova capacidade. A prova operacional fica em `config_json`, `agent_runs`, `logs`, `memories` e nos efeitos persistidos.
 
-Todos executam via `run_agent()` (app/agents/core.py): isolamento de falha, retry (2x com backoff), log em `agent_runs` (entrada, saída, erro, retries, duração, tokens, custo), status na tabela `agents` e memória compartilhada (`memories`, escopo `agent:<slug>`).
+| ID lógico | Nome | Classificação | Handler/execução | Limitação real |
+|---|---|---|---|---|
+| ceo-master | Commander / CEO Master | OPERATIONAL | `orchestrator.run_cycle` | Limite de 4 ciclos/h e lock com TTL |
+| discovery | Discovery | OPERATIONAL | `team.discovery_agent` | Depende da disponibilidade dos RSS |
+| content | Content | OPERATIONAL | `team.content_writer_agent` | Redação final requer provedor configurado |
+| fact-check | Verification / Fact Check | OPERATIONAL | `team.fact_check_agent` | Checagem factual profunda pode exigir IA |
+| image | Image | OPERATIONAL | `team.image_agent` | Usa template AION quando fontes externas falham |
+| image-quality | Image Validator | OPERATIONAL | `team.image_quality_agent` | OCR não está incluído |
+| seo | SEO Publisher gate | OPERATIONAL | `team.seo_agent` | Publicação final é executada pelo módulo Publisher |
+| monitor | Monitor Recovery | OPERATIONAL | `team.monitor_agent` a cada 5 min | Integrações externas exigem rede e DNS válidos |
+| cost-guard | Cost Guard | OPERATIONAL | `team.cost_guard_agent` | Custos dependem do uso reportado pelo provedor |
+| developer | Developer | INTERNAL_MODULE | sem handler autônomo | Mudança de código passa por Git/PR |
+| qa | QA | INTERNAL_MODULE | `team.qa_agent` | E2E completo roda no CI com Chromium |
+| github | GitHub | BLOCKED_EXTERNAL | conector externo | Requer GitHub/PR e permissões válidas |
+| deploy | Deploy | BLOCKED_EXTERNAL | Vercel/Render | Requer contas e configuração externa |
+| image-repair | Image Repair | INTERNAL_MODULE | `team.image_repair_agent` | — |
+| image-prompt | Image Prompt | INTERNAL_MODULE | `team.image_prompt_agent` | Prompt não é imagem publicada |
+| image-optimization | Image Optimization | INTERNAL_MODULE | `team.image_optimization_agent` | — |
+| translation | Public Language | INTERNAL_MODULE | `team.translation_agent` | O portal público permanece somente em inglês |
+| research | Research | INTERNAL_MODULE | `team.research_agent` | Usa fatos e fontes coletados |
+| breaking-news | Breaking News | INTERNAL_MODULE | `team.breaking_news_agent` | Detecção determinística por sinais |
+| trend-hunter | Trend Hunter | INTERNAL_MODULE | `team.trend_hunter_agent` | Tendências externas dependem do Discovery |
+| publisher | Publisher | INTERNAL_MODULE | `team.publisher_agent` | Nunca contorna os gates de fonte, imagem e idioma |
+| rss | RSS | INTERNAL_MODULE | `team.rss_agent` | — |
+| google-news | Google News | INTERNAL_MODULE | `team.google_news_agent` | Cadastro no Publisher Center é externo |
+| scheduler | Scheduler | INTERNAL_MODULE | APScheduler | Executa dentro do serviço Render |
+| discovery-growth | Discovery Growth | INTERNAL_MODULE | `team.discovery_growth_agent` | Métricas externas não são inventadas |
+| dashboard | Dashboard | INTERNAL_MODULE | `team.dashboard_agent` | Exibe somente dados persistidos |
+| performance | Performance | INTERNAL_MODULE | `team.performance_agent` | CWV real exige medição em produção |
+| security | Security | INTERNAL_MODULE | `team.security_agent` | — |
+| social-media | Social Media | PARTIAL | `team.social_media_agent` | Publicação exige credenciais das redes |
+| newsletter | Newsletter | PARTIAL | `team.newsletter_agent` | Envio exige SMTP/provedor |
+| analytics | Analytics | PARTIAL | `team.analytics_agent` | Tráfego externo exige GA4 conectado |
+| google-discover | Google Discover | PARTIAL | `team.google_discover_agent` | Métricas reais existem no Search Console |
+| search-console | Search Console | PARTIAL | `team.search_console_agent` | Propriedade e acesso são externos |
+| adsense-opt | AdSense Optimization | PARTIAL | `team.adsense_agent` | Aprovação e receita são externas |
+| revenue | Revenue | PARTIAL | `team.revenue_agent` | Receita permanece `null` até integração real |
 
-| # | Agente | O que faz de verdade hoje | Limitação registrada |
-|---|---|---|---|
-| 1 | **CEO Master** | Orquestra o pipeline, trava concorrência, guarda anti-loop (4 ciclos/h), reinicia agentes em erro, respeita orçamento | — |
-| 2 | **Discovery** | Varre RSS de OpenAI, Google, Anthropic, Hugging Face, NVIDIA, arXiv, TechCrunch, VentureBeat, The Verge e Wired, filtrando pautas em inglês e duplicatas | Disponibilidade depende das fontes externas |
-| 3 | **Content Writer** | Pipeline existente: IA (com key) ou rascunho estruturado offline | Artigo completo por IA requer API key |
-| 4 | **Fact Check** | Bloqueia publicação: placeholders, corpo curto, título duplicado, links internos quebrados | Checagem factual profunda requer IA |
-| 5 | **SEO** | Normaliza seo_title≤60/description≤160, gera alt-text por artigo | — |
-| 6 | **Image Prompt** | Prompt original por artigo (sem marcas/pessoas/material protegido) | Geração da imagem requer API externa |
-| 7 | **Language** | Audita as publicações e garante `en-US` como único idioma público | Traduções públicas permanecem desativadas |
-| 8 | **Social Media** | Posts com texto+hashtags+CTA para 7 redes, por artigo | Publicar requer credenciais das redes |
-| 9 | **Newsletter** | Tabela `subscribers`, segmentos, edição composta dos últimos artigos | Envio requer SMTP/provedor; métricas só após envios reais |
-| 10 | **Analytics** | Métricas internas reais (publicados, fila, erros 24h) + recomendações | CTR/sessões/bounce exigem GA4/Cloudflare |
-| 11 | **Discovery Growth** | Clusters, sugestões de categoria, palavras-chave, evergreen, artigos >30d | — |
-| 12 | **AdSense Opt.** | Auditoria de conformidade + posições recomendadas; nunca práticas proibidas | Aprovação/CWV reais só em produção |
-| 13 | **QA** | Valida slugs, SEO obrigatório, duplicidade e gates de produção; suíte de integração no CI | — |
-| 14 | **Security** | Audita rate limit, headers, SQLi (parametrizado), XSS (React escapa), CSRF (n/a Bearer), segredos, senhas | — |
-| 15 | **Cost Guard** | Orçamento diário em settings; gasto somado de `agent_runs`; bloqueia etapas de IA ao esgotar | Custo por token só quando provedor reportar uso real |
-| 16 | **Scheduler** | APScheduler: fila de conteúdo a cada 1h, ciclo completo a cada 2h, sem concorrência | — |
+Pipeline crítico: `Scheduler → Commander → Discovery → Research → Content → SEO → Image → Image Validator → Fact Check → Publisher → RSS/Sitemaps → Monitor Recovery`.
 
-Ordem crítica do pipeline: discovery → research → trend/breaking → content → SEO → image acquisition/repair/quality → fact-check → publisher. As etapas de distribuição, analytics, growth, segurança e monitoramento executam depois da publicação.
+Orçamento: US$13/mês para APIs, além de US$7/mês do Render. O Cost Guard entra em modo econômico em US$10, restringe para conteúdo essencial em US$12 e bloqueia novas chamadas pagas em US$13. RSS, cache, monitoramento e templates continuam funcionando sem IA paga.

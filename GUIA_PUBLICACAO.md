@@ -20,7 +20,7 @@ O projeto existente deve ser publicado sem recriar estrutura ou histórico.
 1. Importe o mesmo repositório, selecionando `frontend` como Root Directory.
 2. Use Vite, `npm run build` e output `dist`.
 3. Mantenha `VITE_API_URL` vazio: `frontend/vercel.json` usa rewrites para o backend oficial e preserva uma única origem pública.
-4. Confirme o domínio `https://aion-news-os.vercel.app` e o deploy automático da `main`.
+4. Confirme o domínio `https://aionnews.cloud` e o deploy automático da `main`.
 
 ## Primeiro acesso editorial
 
@@ -32,13 +32,13 @@ O projeto existente deve ser publicado sem recriar estrutura ou histórico.
 ## Smoke test de produção
 
 ```bash
-curl -I https://aion-news-os.vercel.app/
-curl https://aion-news-os.vercel.app/api/health
-curl https://aion-news-os.vercel.app/robots.txt
-curl https://aion-news-os.vercel.app/sitemap.xml
-curl https://aion-news-os.vercel.app/news-sitemap.xml
-curl https://aion-news-os.vercel.app/image-sitemap.xml
-curl https://aion-news-os.vercel.app/rss.xml
+curl -I https://aionnews.cloud/
+curl https://aionnews.cloud/api/health
+curl https://aionnews.cloud/robots.txt
+curl https://aionnews.cloud/sitemap.xml
+curl https://aionnews.cloud/news-sitemap.xml
+curl https://aionnews.cloud/image-sitemap.xml
+curl https://aionnews.cloud/rss.xml
 ```
 
 Valide também `/articles`, busca, categorias, tags, newsletter, 404, login, dashboard, upload, publicação, edição, destaque, breaking e agendamento.

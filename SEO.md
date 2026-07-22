@@ -1,6 +1,6 @@
 # SEO e indexação
 
-- Domínio canônico único: `https://aion-news-os.vercel.app`.
+- Domínio canônico único: `https://aionnews.cloud`.
 - Rotas públicas em inglês: `/articles`, `/article/:slug`, `/categories`, `/tags`, `/about`, `/privacy`, `/terms` e `/contact`.
 - Artigos diretos são renderizados pelo backend com canonical, hreflang `en-US`, Open Graph, Twitter Card, `NewsArticle`, `BreadcrumbList`, publisher e `ImageObject` próprios.
 - A home declara `WebSite`, `NewsMediaOrganization` e `SearchAction` apontando para `/articles?q=`.
