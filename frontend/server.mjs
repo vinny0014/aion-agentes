@@ -46,7 +46,7 @@ const MIME_TYPES = {
   ".xml": "application/xml; charset=utf-8",
 };
 
-function securityHeaders(response) {
+function securityHeaders(response, backendOrigin) {
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("X-Frame-Options", "DENY");
   response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
@@ -57,10 +57,10 @@ function securityHeaders(response) {
   response.setHeader(
     "Content-Security-Policy",
     "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; " +
-      "form-action 'self'; img-src 'self' https:; font-src 'self'; " +
+    `form-action 'self'; img-src 'self' https: ${backendOrigin}; font-src 'self'; ` +
       "style-src 'self' 'unsafe-inline'; script-src 'self' https://www.googletagmanager.com " +
       "https://pagead2.googlesyndication.com https://static.cloudflareinsights.com https://www.clarity.ms; " +
-      "connect-src 'self' https://aion-news-api.onrender.com https://*.google-analytics.com " +
+      `connect-src 'self' ${backendOrigin} https://*.google-analytics.com ` +
       "https://*.clarity.ms https://cloudflareinsights.com https://pagead2.googlesyndication.com; " +
       "frame-src https://googleads.g.doubleclick.net https://tpc.googlesyndication.com",
   );
@@ -136,10 +136,11 @@ export function createAppServer({
   distDir = process.env.AION_DIST_DIR || DEFAULT_DIST,
 } = {}) {
   const backend = backendUrl.replace(/\/$/, "");
+  const backendOrigin = new URL(backend).origin;
   const root = resolve(distDir);
 
   return createServer(async (request, response) => {
-    securityHeaders(response);
+    securityHeaders(response, backendOrigin);
     const host = (request.headers["x-forwarded-host"] || request.headers.host || "").split(":")[0];
     const protocol = request.headers["x-forwarded-proto"];
     const requestUrl = new URL(request.url || "/", `http://${request.headers.host || "localhost"}`);

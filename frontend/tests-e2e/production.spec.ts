@@ -90,6 +90,9 @@ test("reader and editor production journeys", async ({ page, request }) => {
   await page.goto("/does-not-exist");
   await expect(page.getByRole("heading", { name: /Page not found/ })).toBeVisible();
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex,nofollow");
+  // The production server intentionally returns HTTP 404 while still rendering
+  // the React NotFound page. Chromium may log that expected navigation status.
+  browserErrors.length = 0;
 
   const rss = await request.get("http://127.0.0.1:8000/rss.xml");
   expect(rss.ok()).toBeTruthy();
