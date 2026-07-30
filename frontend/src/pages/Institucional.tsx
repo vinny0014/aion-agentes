@@ -40,6 +40,36 @@ export function Terms() {
   );
 }
 
+export function EditorialPolicy() {
+  usePageMetadata({
+    title: "Editorial Policy",
+    description: "How AION selects, verifies, reviews and publishes artificial intelligence coverage.",
+    path: "/editorial-policy",
+  });
+  return (
+    <Pagina tag="standards" titulo="Editorial Policy">
+      <p>AION covers consequential developments in artificial intelligence with an emphasis on evidence, context and clear attribution.</p>
+      <p>Automated agents may assist research, drafting, image selection and quality checks. Publication gates verify source links, originality, language, metadata and image requirements before an article becomes public.</p>
+      <p>AI assistance never removes editorial accountability. Material claims should be traceable to identified sources, uncertainty must be disclosed, and promotional claims are not presented as independent findings.</p>
+    </Pagina>
+  );
+}
+
+export function CorrectionsPolicy() {
+  usePageMetadata({
+    title: "Corrections Policy",
+    description: "How readers can report errors and how AION corrects published coverage.",
+    path: "/corrections-policy",
+  });
+  return (
+    <Pagina tag="standards" titulo="Corrections Policy">
+      <p>Accuracy concerns can be submitted through the Contact page with the article URL, the disputed passage and supporting evidence.</p>
+      <p>Substantive errors are reviewed promptly. Confirmed errors are corrected in the article, while significant changes are recorded transparently instead of silently changing the meaning of the original coverage.</p>
+      <p>Updates that add new information without correcting an error may be identified as updates. Requests to change accurate reporting are not treated as corrections.</p>
+    </Pagina>
+  );
+}
+
 export function Contact() {
   usePageMetadata({ title: "Contact", description: "Contact the AION AI NEWS OS newsroom with questions, story tips or partnership proposals.", path: "/contact" });
   const [v, setV] = useState({ name: "", email: "", message: "" });

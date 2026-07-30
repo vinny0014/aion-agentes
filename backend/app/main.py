@@ -155,8 +155,9 @@ def robots():
 def sitemap():
     quarantine_noncompliant_public_content()
     base = SITE_URL
-    static = ["", "/articles", "/categories", "/tags",
-              "/about", "/privacy", "/terms", "/contact"]
+    static = ["", "/articles", "/news", "/search", "/categories", "/tags",
+              "/about", "/privacy", "/terms", "/contact",
+              "/editorial-policy", "/corrections-policy"]
     urls = [f"<url><loc>{xml_escape(base + p)}</loc></url>" for p in static]
     for c in db.query("SELECT slug, updated_at FROM contents WHERE status = 'published'"):
         urls.append(

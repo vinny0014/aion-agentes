@@ -16,6 +16,8 @@ const NotFound = React.lazy(() => import("./pages/NotFound"));
 const Privacidade = React.lazy(() => import("./pages/Institucional").then(m => ({ default: m.Privacy })));
 const Termos = React.lazy(() => import("./pages/Institucional").then(m => ({ default: m.Terms })));
 const Contato = React.lazy(() => import("./pages/Institucional").then(m => ({ default: m.Contact })));
+const EditorialPolicy = React.lazy(() => import("./pages/Institucional").then(m => ({ default: m.EditorialPolicy })));
+const CorrectionsPolicy = React.lazy(() => import("./pages/Institucional").then(m => ({ default: m.CorrectionsPolicy })));
 const Categorias = React.lazy(() => import("./pages/Institucional").then(m => ({ default: (p: any) => m.Taxonomia({ tipo: "categories" }) })));
 const TagsPage = React.lazy(() => import("./pages/Institucional").then(m => ({ default: (p: any) => m.Taxonomia({ tipo: "tags" }) })));
 
@@ -41,12 +43,16 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <Route path="/" element={<Landing />} />
         <Route path="/about" element={<Sobre />} />
         <Route path="/articles" element={<Blog />} />
+        <Route path="/news" element={<Blog />} />
+        <Route path="/search" element={<Blog />} />
         <Route path="/article/:slug" element={<ArtigoLazy />} />
         <Route path="/categories" element={<Categorias />} />
         <Route path="/tags" element={<TagsPage />} />
         <Route path="/privacy" element={<Privacidade />} />
         <Route path="/terms" element={<Termos />} />
         <Route path="/contact" element={<Contato />} />
+        <Route path="/editorial-policy" element={<EditorialPolicy />} />
+        <Route path="/corrections-policy" element={<CorrectionsPolicy />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Cadastro />} />
         <Route path="/dashboard" element={<Dashboard />} />

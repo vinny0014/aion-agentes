@@ -43,10 +43,16 @@ export default defineConfig({
       },
     },
     {
-      command: "npm run preview -- --host 127.0.0.1 --port 4173",
+      command: "npm start",
       url: "http://127.0.0.1:4173",
       timeout: 30_000,
       reuseExistingServer: !process.env.CI,
+      env: {
+        ...process.env,
+        HOST: "127.0.0.1",
+        PORT: "4173",
+        AION_BACKEND_URL: "http://127.0.0.1:8000",
+      },
     },
   ],
 });
