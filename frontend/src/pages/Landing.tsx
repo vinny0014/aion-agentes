@@ -354,7 +354,7 @@ export default function Landing() {
           <span className="flex items-center gap-2 font-display font-bold text-ink">
             <span aria-hidden className="grad-text">▲</span>AION AI NEWS OS
           </span>
-          <div className="flex gap-4 text-xs">
+          <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs">
             <Link to="/about" className="hover:text-ink">About</Link>
             <Link to="/categories" className="hover:text-ink">Categories</Link>
             <Link to="/tags" className="hover:text-ink">Tags</Link>
