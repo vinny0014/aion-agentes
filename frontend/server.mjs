@@ -1,4 +1,4 @@
-import { createReadStream } from "node:fs";
+import { createReadStream, readFileSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, join, resolve, sep } from "node:path";
@@ -87,7 +87,7 @@ async function bodyBuffer(request) {
   return Buffer.concat(chunks);
 }
 
-async function proxy(request, response, target) {
+async function proxy(request, response, target, gaMeasurementId = "") {
   try {
     const headers = {};
     for (const [name, value] of Object.entries(request.headers)) {
@@ -109,7 +109,7 @@ async function proxy(request, response, target) {
     const body = Buffer.from(await upstream.arrayBuffer());
     const pathname = new URL(target).pathname;
     const contentType = upstream.headers.get("content-type") || "";
-    const measurementId = process.env.VITE_GA_MEASUREMENT_ID || "";
+    const measurementId = gaMeasurementId;
     if (pathname.startsWith("/article/") && contentType.includes("text/html") && /^G-[A-Z0-9]{6,20}$/.test(measurementId)) {
       const html = body.toString("utf8")
         .replace("</head>", `<meta name="aion-ga-measurement-id" content="${measurementId}">
@@ -151,6 +151,12 @@ export function createAppServer({
   const backend = backendUrl.replace(/\/$/, "");
   const backendOrigin = new URL(backend).origin;
   const root = resolve(distDir);
+  let builtMeasurementId = "";
+  try {
+    builtMeasurementId = readFileSync(join(root, "index.html"), "utf8")
+      .match(/name="aion-ga-build-id" content="(G-[A-Z0-9]{6,20})"/)?.[1] || "";
+  } catch {}
+  const gaMeasurementId = process.env.VITE_GA_MEASUREMENT_ID || builtMeasurementId;
 
   return createServer(async (request, response) => {
     securityHeaders(response, backendOrigin);
@@ -178,7 +184,7 @@ export function createAppServer({
       SEO_PATHS.has(pathname) ||
       pathname.startsWith("/article/")
     ) {
-      return proxy(request, response, `${backend}${requestUrl.pathname}${requestUrl.search}`);
+      return proxy(request, response, `${backend}${requestUrl.pathname}${requestUrl.search}`, gaMeasurementId);
     }
 
     const requested = pathname === "/favicon.png" ? "/logo.png" : pathname;
