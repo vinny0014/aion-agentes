@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  .cookie-consent {
+    @apply fixed inset-0 z-[100] flex items-end bg-black/40 p-4 backdrop-blur-sm sm:items-center sm:justify-center;
+  }
+  .cookie-consent__panel {
+    @apply mx-auto w-full max-w-xl rounded-xl border border-line bg-surface p-5 shadow-2xl;
+  }
+}
+
 :root {
   --ultra: #8b5cf6;
   --signal: #c084fc;

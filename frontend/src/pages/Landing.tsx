@@ -148,7 +148,7 @@ export default function Landing() {
       });
       setNewsMsg(r.ok ? "Subscribed! ✓" : "Could not subscribe right now.");
       if (r.ok) {
-        trackEvent("newsletter_submit", { placement: "homepage" });
+        trackEvent("newsletter_subscribe", { placement: "homepage" });
         setEmail("");
       }
     } catch { setNewsMsg("Could not subscribe right now."); }
@@ -355,8 +355,11 @@ export default function Landing() {
             <span aria-hidden className="grad-text">▲</span>AION AI NEWS OS
           </span>
           <div className="flex gap-4 text-xs">
+            <Link to="/about" className="hover:text-ink">About</Link>
             <Link to="/categories" className="hover:text-ink">Categories</Link>
             <Link to="/tags" className="hover:text-ink">Tags</Link>
+            <Link to="/editorial-policy" className="hover:text-ink">Editorial</Link>
+            <Link to="/corrections-policy" className="hover:text-ink">Corrections</Link>
             <Link to="/privacy" className="hover:text-ink">Privacy</Link>
             <Link to="/terms" className="hover:text-ink">Terms</Link>
             <Link to="/contact" className="hover:text-ink">Contact</Link>

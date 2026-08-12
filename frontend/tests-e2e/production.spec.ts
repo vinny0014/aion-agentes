@@ -15,9 +15,11 @@ Evidence, transparent reporting and continuous monitoring help teams improve art
 
 test("reader and editor production journeys", async ({ page, request }) => {
   const browserErrors: string[] = [];
+  await page.route("https://www.googletagmanager.com/**", (route) => route.fulfill({ status: 200, contentType: "application/javascript", body: "" }));
   page.on("console", (message) => { if (message.type() === "error") browserErrors.push(message.text()); });
   page.on("pageerror", (error) => browserErrors.push(error.message));
   await page.addInitScript(() => {
+    window.localStorage.setItem("aion_cookie_consent_v1", "granted");
     (window as any).__aionCLS = 0;
     new PerformanceObserver((list) => {
       for (const entry of list.getEntries() as any) {
@@ -64,6 +66,9 @@ test("reader and editor production journeys", async ({ page, request }) => {
   await expect(page.getByRole("link", { name: title }).first()).toBeVisible();
   await page.getByRole("link", { name: title }).first().click();
   await expect(page.getByRole("heading", { name: title })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (window.dataLayer || []).some((item: any) => item?.[0] === "event" && item?.[1] === "article_view"))).toBeTruthy();
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await expect.poll(() => page.evaluate(() => (window.dataLayer || []).some((item: any) => item?.[0] === "event" && item?.[1] === "article_scroll_90"))).toBeTruthy();
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", /\/article\/how-independent-teams/);
   await expect(page.locator("article img").first()).toHaveAttribute("src", /^http:\/\/127\.0\.0\.1:8000\/api\/public\/images\//);
 
@@ -113,4 +118,29 @@ test("reader and editor production journeys", async ({ page, request }) => {
   await page.goto("/articles");
   await expect(page.getByRole("link", { name: title })).toHaveCount(0);
   expect(browserErrors).toEqual([]);
+});
+
+test("GA4 stays blocked when rejected and sends one SPA page view after consent", async ({ page }) => {
+  const tagRequests: string[] = [];
+  await page.route("https://www.googletagmanager.com/**", (route) => {
+    tagRequests.push(route.request().url());
+    return route.fulfill({ status: 200, contentType: "application/javascript", body: "" });
+  });
+  await page.goto("/");
+  expect(tagRequests).toHaveLength(0);
+  await page.getByRole("button", { name: "Reject analytics" }).click();
+  await page.waitForTimeout(100);
+  expect(tagRequests).toHaveLength(0);
+  expect(await page.evaluate(() => (window.dataLayer || []).some((item: any) => item?.[0] === "event"))).toBeFalsy();
+
+  await page.evaluate(() => window.dispatchEvent(new Event("aion:open-cookie-preferences")));
+  await page.getByRole("checkbox", { name: /Analytics cookies/ }).check();
+  await page.getByRole("button", { name: "Save preferences" }).click();
+  await expect.poll(() => tagRequests.length).toBe(1);
+  await expect.poll(() => page.evaluate(() => (window.dataLayer || []).filter((item: any) => item?.[0] === "event" && item?.[1] === "page_view").length)).toBe(1);
+
+  await page.getByRole("link", { name: "News" }).click();
+  await expect(page).toHaveURL(/\/articles$/);
+  await expect.poll(() => page.evaluate(() => (window.dataLayer || []).filter((item: any) => item?.[0] === "event" && item?.[1] === "page_view").length)).toBe(2);
+  expect(tagRequests).toHaveLength(1);
 });

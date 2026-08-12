@@ -3,7 +3,8 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import "./index.css";
 import Landing from "./pages/Landing";
-import { initializeTelemetry, trackPageView } from "./lib/telemetry";
+import { CONSENT_EVENT, initializeTelemetry, trackPageView } from "./lib/telemetry";
+import CookieConsent from "./lib/CookieConsent";
 const Sobre = React.lazy(() => import("./pages/Sobre"));
 const Login = React.lazy(() => import("./pages/Login"));
 const Cadastro = React.lazy(() => import("./pages/Cadastro"));
@@ -30,6 +31,9 @@ function TelemetryRouteObserver() {
   const location = useLocation();
   React.useEffect(() => {
     trackPageView(`${location.pathname}${location.search}`);
+    const onConsent = () => trackPageView(`${location.pathname}${location.search}`);
+    window.addEventListener(CONSENT_EVENT, onConsent);
+    return () => window.removeEventListener(CONSENT_EVENT, onConsent);
   }, [location.pathname, location.search]);
   return null;
 }
@@ -60,6 +64,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <Route path="/admin/editor/:id" element={<Editor />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
+      <CookieConsent />
       </React.Suspense>
     </BrowserRouter>
   </React.StrictMode>

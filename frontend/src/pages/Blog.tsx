@@ -1,11 +1,11 @@
 import { SITE } from "../lib/site";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { Nav } from "./Landing";
 import AdSlot from "../lib/AdSlot";
 import { API_BASE } from "../lib/api";
 import { usePageMetadata } from "../lib/seo";
-import { trackEvent } from "../lib/telemetry";
+import { CONSENT_EVENT, trackEvent, trackEventOnce } from "../lib/telemetry";
 
 type Artigo = {
   id: number; title: string; slug: string; excerpt: string;
@@ -60,6 +60,13 @@ export function Conteudos() {
 
   useEffect(() => { setPage(1); }, [categoria, tag, q]);
   useEffect(() => {
+    if (!categoria) return;
+    const send = () => trackEventOnce("category_view", categoria, { category: categoria });
+    send();
+    window.addEventListener(CONSENT_EVENT, send);
+    return () => window.removeEventListener(CONSENT_EVENT, send);
+  }, [categoria]);
+  useEffect(() => {
     setLoading(true); setErro("");
     const u = new URLSearchParams({ page: String(page), per_page: String(perPage) });
     if (categoria) u.set("category", categoria);
@@ -82,7 +89,11 @@ export function Conteudos() {
         <h1 className="font-display text-4xl font-bold tracking-tight">Articles</h1>
         <form className="mt-6 flex gap-2" onSubmit={(e) => { e.preventDefault();
           const p = new URLSearchParams(params); search ? p.set("q", search) : p.delete("q");
-          if (search.trim()) trackEvent("search", { search_term: search.trim().slice(0, 100) });
+          if (search.trim()) trackEvent("search_performed", {
+            search_scope: "articles",
+            has_category_filter: Boolean(categoria),
+            has_tag_filter: Boolean(tag),
+          });
           setParams(p); }}>
           <input className="field max-w-sm" placeholder="Search articles…" value={search}
             onChange={(e) => setBusca(e.target.value)} aria-label="Search articles" />
@@ -153,6 +164,38 @@ export function Artigo() {
   const [artigo, setArtigo] = useState<Artigo | null>(null);
   const [relacionados, setRelacionados] = useState<Artigo[]>([]);
   const [erro, setErro] = useState(false);
+  const articleRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!artigo) return;
+    const parameters = {
+      slug: artigo.slug,
+      category: artigo.category || "news",
+      author: artigo.author || "AION Editorial",
+      published_date: artigo.published_at || "",
+    };
+    const sendArticleView = () => trackEventOnce("article_view", artigo.slug, parameters);
+    const sendScroll = () => {
+      const element = articleRef.current;
+      if (!element) return;
+      const scrollable = Math.max(element.scrollHeight - window.innerHeight, 1);
+      const progress = Math.min(100, Math.max(0, ((window.scrollY - element.offsetTop) / scrollable) * 100));
+      for (const threshold of [25, 50, 90]) {
+        if (progress >= threshold) {
+          trackEventOnce(`article_scroll_${threshold}`, artigo.slug, { ...parameters, percent_scrolled: threshold });
+        }
+      }
+    };
+    sendArticleView();
+    window.addEventListener(CONSENT_EVENT, sendArticleView);
+    window.addEventListener(CONSENT_EVENT, sendScroll);
+    window.addEventListener("scroll", sendScroll, { passive: true });
+    return () => {
+      window.removeEventListener(CONSENT_EVENT, sendArticleView);
+      window.removeEventListener(CONSENT_EVENT, sendScroll);
+      window.removeEventListener("scroll", sendScroll);
+    };
+  }, [artigo]);
 
   useEffect(() => {
     setArtigo(null); setRelacionados([]); setErro(false);
@@ -160,7 +203,6 @@ export function Artigo() {
       .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
       .then((a: Artigo) => {
         setArtigo(a);
-        trackEvent("article_view", { article_slug: a.slug, article_category: a.category || "news" });
         // SEO dinâmico: title, description, OG e JSON-LD (Schema.org NewsArticle)
         document.title = `${a.seo_title || a.title} — AION AI NEWS OS`;
         const setMeta = (sel: string, attr: string, val: string) => {
@@ -206,7 +248,9 @@ export function Artigo() {
             caption: a.image_alt || a.title, creditText: a.image_credit || "AION Editorial" } } : {}),
           publisher: { "@type": "NewsMediaOrganization", name: "AION AI NEWS OS", url: `${SITE}/`,
             logo: { "@type": "ImageObject", url: `${SITE}/logo.png`, width: 512, height: 512 } },
-          author: { "@type": "Organization", name: a.author || "AION Editorial", url: `${SITE}/about` },
+          author: { "@type": (a.author || "") === "Vinicio Alves" ? "Person" : "Organization",
+            name: a.author || "AION Editorial", url: `${SITE}/about` },
+          editor: { "@type": "Person", name: "Vinicio Alves", url: `${SITE}/about` },
         });
         document.head.appendChild(ld);
         fetch(`${API_BASE}/api/public/articles/${slug}/related`)
@@ -234,13 +278,19 @@ export function Artigo() {
   return (
     <div className="min-h-screen">
       <Nav />
-      <article id="main-content" className="mx-auto max-w-3xl px-6 py-14">
+      <article ref={articleRef} id="main-content" className="mx-auto max-w-3xl px-6 py-14">
         <p className="tag mb-2">
           By {artigo.author || "AION Editorial"} · {dataBr(artigo.published_at)}
           {artigo.reading_time ? <> · {artigo.reading_time} min read</> : null}
           {artigo.category ? <> · {artigo.category}</> : null}
-          {artigo.source_url ? <> · <a className="text-signal hover:underline" href={artigo.source_url} target="_blank" rel="noopener nofollow">source</a></> : null}
+          {artigo.source_url ? <> · <a className="text-signal hover:underline" href={artigo.source_url} target="_blank" rel="noopener nofollow"
+            onClick={() => trackEvent("outbound_source_click", {
+              slug: artigo.slug,
+              category: artigo.category || "news",
+              source_host: (() => { try { return new URL(artigo.source_url || "").hostname; } catch { return "unknown"; } })(),
+            })}>source</a></> : null}
         </p>
+        <p className="mb-3 text-xs text-slateui">Responsible editor: Vinicio Alves</p>
         <h1 className="font-display text-4xl font-bold leading-tight tracking-tight">{artigo.title}</h1>
         {artigo.image_url && (
           <img onError={(e) => { e.currentTarget.style.display = "none"; }} src={artigo.image_url} alt={artigo.image_alt || artigo.title}

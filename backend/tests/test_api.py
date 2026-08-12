@@ -572,10 +572,15 @@ def test_ga4_spa_events_and_unique_agent_icons_are_wired_in_code():
     main = (ROOT / "frontend" / "src" / "main.tsx").read_text()
     landing = (ROOT / "frontend" / "src" / "pages" / "Landing.tsx").read_text()
     blog = (ROOT / "frontend" / "src" / "pages" / "Blog.tsx").read_text()
+    consent = (ROOT / "frontend" / "src" / "lib" / "CookieConsent.tsx").read_text()
     assert "send_page_view: false" in telemetry and '"page_view"' in telemetry
+    assert 'getAnalyticsConsent() !== "granted"' in telemetry
+    assert "Accept analytics" in consent and "Reject analytics" in consent and "Save preferences" in consent
     assert "TelemetryRouteObserver" in main
-    for event in ("newsletter_submit", "search", "article_view"):
+    for event in ("newsletter_subscribe", "search_performed", "article_view",
+                  "outbound_source_click", "category_view"):
         assert event in landing + blog
+    assert "[25, 50, 90]" in blog and "`article_scroll_${threshold}`" in blog
     for icon in ('icon: "content"', 'icon: "seo"', 'icon: "growth"',
                  'icon: "quality"', 'icon: "budget"'):
         assert icon in landing
