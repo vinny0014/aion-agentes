@@ -22,9 +22,9 @@ export default function Sobre() {
             others. Each covers one stage of the operation, from sourcing to shipping.
           </p>
           <p>
-            <strong>Editorial team.</strong> Content is published under three bylines:
-            AION Editorial (agent-produced, human-supervised), Vinicio Alves (founder's
-            research and analysis) and Guest Author (invited contributors). Every story
+            <strong>Editorial responsibility.</strong> Vinicio Alves is AION's publisher and responsible editor.
+            Content may be published under Vinicio Alves for his research and analysis or under
+            AION Editorial for work produced through the AION editorial system. Every story
             carries its author, date, category and — whenever it draws on external
             reporting — explicit attribution and links to the original sources.
           </p>

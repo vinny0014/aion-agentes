@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Nav } from "./Landing";
 import { API_BASE } from "../lib/api";
 import { usePageMetadata } from "../lib/seo";
+import { openCookiePreferences } from "../lib/telemetry";
 
 function Pagina({ tag, titulo, children }: { tag: string; titulo: string; children: React.ReactNode }) {
   return (
@@ -20,10 +21,13 @@ export function Privacy() {
   usePageMetadata({ title: "Privacy Policy", description: "How AION AI NEWS OS handles account, contact and analytics data.", path: "/privacy" });
   return (
     <Pagina tag="legal" titulo="Privacy Policy">
-      <p>AION collects only the data needed to operate the platform: your name and email at sign-up, and the messages sent through the contact form.</p>
+      <p><strong>Last updated: August 12, 2026.</strong> AION collects only the data needed to operate the platform: your name and email at sign-up, newsletter subscriptions, and messages sent through the contact form.</p>
       <p>Passwords are stored exclusively as cryptographic hashes (bcrypt) — not even our team can read them. Session tokens expire automatically and can be revoked.</p>
-      <p>We do not sell or share personal data with third parties. Browsing data may be used in aggregated, anonymous form to improve the portal. Third-party services (analytics, advertising) may use cookies as described in their own policies.</p>
-      <p>You can request deletion of your account and data at any time via the Contact page. This policy may be updated; the current version will always live on this page.</p>
+      <p>With your permission, AION uses Google Analytics 4 to understand audience growth, article readership, navigation and traffic sources. GA4 may place analytics cookies and receive technical information such as page URL, device/browser details and approximate location derived from IP. AION does not send newsletter email addresses, contact messages or search text to Analytics.</p>
+      <p>Analytics is blocked until you accept it. Advertising storage and ad personalization remain denied. We do not sell personal data and no AdSense advertising is active at this stage.</p>
+      <p>You can accept, reject or change Analytics permission at any time. Revoking permission prevents future measurement on this browser; it does not retroactively delete aggregated reports already processed by Google.</p>
+      <button type="button" className="btn-ghost !py-2 text-sm" onClick={openCookiePreferences}>Change cookie preferences</button>
+      <p>You can request account or contact-data deletion through the Contact page. This policy may be updated; the current version will always live here.</p>
     </Pagina>
   );
 }
@@ -32,7 +36,7 @@ export function Terms() {
   usePageMetadata({ title: "Terms of Use", description: "Terms governing use of the AION AI NEWS OS website and editorial content.", path: "/terms" });
   return (
     <Pagina tag="legal" titulo="Terms of Use">
-      <p>By using AION you agree to these terms. The portal provides informational content about artificial intelligence, produced with the support of AI agents under human supervision.</p>
+      <p><strong>Last updated: August 12, 2026.</strong> By using AION you agree to these terms. The portal provides informational content about artificial intelligence, produced with the support of AI systems under editorial responsibility.</p>
       <p>Content is provided "as is", without warranties of accuracy or fitness for a particular purpose, and does not constitute professional advice.</p>
       <p>Using the platform for illegal purposes, attempting to access restricted areas without authorization, or deliberately overloading the services is prohibited.</p>
       <p>Published content may be quoted with attribution and a link to the original article. These terms may be revised periodically.</p>
@@ -51,6 +55,8 @@ export function EditorialPolicy() {
       <p>AION covers consequential developments in artificial intelligence with an emphasis on evidence, context and clear attribution.</p>
       <p>Automated agents may assist research, drafting, image selection and quality checks. Publication gates verify source links, originality, language, metadata and image requirements before an article becomes public.</p>
       <p>AI assistance never removes editorial accountability. Material claims should be traceable to identified sources, uncertainty must be disclosed, and promotional claims are not presented as independent findings.</p>
+      <p>Vinicio Alves is the publisher and responsible editor. “AION Editorial” identifies work produced through the AION editorial system under that responsibility; it is not presented as an independent human reporter.</p>
+      <p>Articles must identify their author or editorial byline, publication date, category and source links when external facts are used. Sources are attributed, linked and never copied as substitute article text.</p>
     </Pagina>
   );
 }
