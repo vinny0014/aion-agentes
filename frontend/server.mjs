@@ -106,7 +106,20 @@ async function proxy(request, response, target) {
       }
     }
     response.setHeader("Cache-Control", cacheHeader(new URL(target).pathname));
-    response.end(Buffer.from(await upstream.arrayBuffer()));
+    const body = Buffer.from(await upstream.arrayBuffer());
+    const pathname = new URL(target).pathname;
+    const contentType = upstream.headers.get("content-type") || "";
+    const measurementId = process.env.VITE_GA_MEASUREMENT_ID || "";
+    if (pathname.startsWith("/article/") && contentType.includes("text/html") && /^G-[A-Z0-9]{6,20}$/.test(measurementId)) {
+      const html = body.toString("utf8")
+        .replace("</head>", `<meta name="aion-ga-measurement-id" content="${measurementId}">
+<style>.aion-cookie{position:fixed;inset:0;z-index:100;display:flex;align-items:flex-end;justify-content:center;padding:16px;background:#0008}.aion-cookie[hidden]{display:none}.aion-cookie-panel{max-width:620px;border:1px solid #343044;border-radius:16px;background:#11101a;padding:20px;box-shadow:0 20px 60px #000}.aion-cookie-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}.aion-cookie button{border:1px solid #5b5570;border-radius:8px;background:#221f30;color:#fff;padding:9px 13px;cursor:pointer}.aion-cookie .primary{border-color:#8b5cf6;background:#7c3aed}.aion-cookie-preferences{margin-top:14px;border:1px solid #343044;border-radius:10px;padding:12px}@media(min-width:640px){.aion-cookie{align-items:center}}</style>
+<script src="/article-telemetry.js" defer></script></head>`)
+        .replace("</body>", `<section id="aion-cookie-consent" class="aion-cookie" role="dialog" aria-modal="true" aria-labelledby="aion-cookie-title" hidden><div class="aion-cookie-panel"><small>PRIVACY CONTROLS</small><h2 id="aion-cookie-title">Your privacy choices</h2><p>Essential storage keeps the site working. With your permission, Google Analytics 4 measures readership and site performance. Analytics does not load before you accept.</p><div id="aion-cookie-preferences" class="aion-cookie-preferences" hidden><label><input id="aion-analytics-enabled" type="checkbox"> <strong>Analytics cookies</strong></label><p>Allow anonymized audience, article and navigation measurements.</p></div><div class="aion-cookie-actions"><button id="aion-preferences">Preferences</button><button id="aion-accept" class="primary">Accept analytics</button><button id="aion-reject">Reject analytics</button><a href="/privacy">Privacy policy</a></div></div></section></body>`);
+      response.removeHeader("Content-Length");
+      return response.end(html);
+    }
+    response.end(body);
   } catch (error) {
     response.statusCode = error.message?.includes("20 MB") ? 413 : 502;
     response.setHeader("Content-Type", "application/json; charset=utf-8");

@@ -11,13 +11,16 @@ const listen = (server) => new Promise((resolve) => server.listen(0, "127.0.0.1"
 const close = (server) => new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
 
 test("Hostinger server serves the SPA and proxies API/SEO/article routes", async (t) => {
+  const previousMeasurementId = process.env.VITE_GA_MEASUREMENT_ID;
+  process.env.VITE_GA_MEASUREMENT_ID = "G-DVT2E73K18";
   const distDir = await mkdtemp(join(tmpdir(), "aion-hostinger-"));
   await writeFile(join(distDir, "index.html"), "<!doctype html><h1>AION SPA</h1>");
   await writeFile(join(distDir, "logo.png"), "logo");
 
   const backend = createServer((request, response) => {
-    response.setHeader("Content-Type", request.url.endsWith(".xml") ? "application/xml" : "application/json");
-    response.end(request.url.endsWith(".xml") ? "<urlset />" : JSON.stringify({ path: request.url }));
+    const article = request.url.startsWith("/article/");
+    response.setHeader("Content-Type", request.url.endsWith(".xml") ? "application/xml" : article ? "text/html" : "application/json");
+    response.end(request.url.endsWith(".xml") ? "<urlset />" : article ? "<!doctype html><html><head></head><body><article>AION</article></body></html>" : JSON.stringify({ path: request.url }));
   });
   await listen(backend);
   const backendAddress = backend.address();
@@ -31,6 +34,8 @@ test("Hostinger server serves the SPA and proxies API/SEO/article routes", async
   const base = `http://127.0.0.1:${appAddress.port}`;
 
   t.after(async () => {
+    if (previousMeasurementId === undefined) delete process.env.VITE_GA_MEASUREMENT_ID;
+    else process.env.VITE_GA_MEASUREMENT_ID = previousMeasurementId;
     await close(app);
     await close(backend);
     await rm(distDir, { recursive: true, force: true });
@@ -59,7 +64,10 @@ test("Hostinger server serves the SPA and proxies API/SEO/article routes", async
 
   const article = await fetch(`${base}/article/example`);
   assert.equal(article.status, 200);
-  assert.deepEqual(await article.json(), { path: "/article/example" });
+  const articleHtml = await article.text();
+  assert.match(articleHtml, /aion-ga-measurement-id/);
+  assert.match(articleHtml, /article-telemetry\.js/);
+  assert.match(articleHtml, /Accept analytics/);
 
   const health = await fetch(`${base}/healthz`);
   assert.deepEqual(await health.json(), { status: "ok", service: "aion-news-frontend" });

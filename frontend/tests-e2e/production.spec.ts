@@ -69,6 +69,9 @@ test("reader and editor production journeys", async ({ page, request }) => {
   await expect.poll(() => page.evaluate(() => (window.dataLayer || []).some((item: any) => item?.[0] === "event" && item?.[1] === "article_view"))).toBeTruthy();
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   await expect.poll(() => page.evaluate(() => (window.dataLayer || []).some((item: any) => item?.[0] === "event" && item?.[1] === "article_scroll_90"))).toBeTruthy();
+  await page.reload();
+  await expect(page.locator('meta[name="aion-ga-measurement-id"]')).toHaveAttribute("content", "G-DVT2E73K18");
+  await expect.poll(() => page.evaluate(() => (window.dataLayer || []).some((item: any) => item?.[0] === "event" && item?.[1] === "article_view"))).toBeTruthy();
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", /\/article\/how-independent-teams/);
   await expect(page.locator("article img").first()).toHaveAttribute("src", /^http:\/\/127\.0\.0\.1:8000\/api\/public\/images\//);
 
