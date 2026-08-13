@@ -24,6 +24,7 @@ from .core.security import require_admin
 from .content_rules import quarantine_noncompliant_public_content
 from .routers.auth import router as auth_router
 from .routers.public import router as public_router
+from .routers.manus_bridge import router as manus_bridge_router
 from .routers.crud import agents_router, content_router, tasks_router, users_router
 from .routers.system import (
     growth_router, orchestrator_router, health_router, logs_router, memory_router, queue_router, settings_router,
@@ -88,7 +89,8 @@ app.add_middleware(
 # ---------------- Middlewares de segurança ----------------
 _BUCKETS: dict[str, list[float]] = defaultdict(list)
 _RATE_LIMITS = {"/api/auth/login": (10, 60), "/api/auth/register": (5, 60),
-                "/api/public/contact": (5, 60), "/api/public/newsletter": (5, 60)}  # (req, janela s)
+                "/api/public/contact": (5, 60), "/api/public/newsletter": (5, 60),
+                "/internal/manus/webhook": (120, 60)}  # (req, janela s)
 
 
 @app.middleware("http")
@@ -139,6 +141,8 @@ async def security_middleware(request: Request, call_next):
 for r in (auth_router, users_router, agents_router, content_router, tasks_router,
           logs_router, memory_router, settings_router, queue_router, health_router, public_router, growth_router, orchestrator_router):
     app.include_router(r)
+
+app.include_router(manus_bridge_router)
 
 
 # ---------------- Endpoints públicos de SEO ----------------

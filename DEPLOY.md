@@ -7,5 +7,6 @@
 5. `CORS_ORIGINS`, `SITE_URL` e `PUBLIC_API_URL` já estão fixados nos serviços oficiais pelo Blueprint.
 6. Na Hostinger, cadastre no ambiente de build do frontend `VITE_GA_MEASUREMENT_ID=G-DVT2E73K18`. O ID é exclusivo do AION News; não reutilize nenhuma propriedade do AION Crypto. Após o build, valide o consentimento e o GA4 Realtime conforme `ANALYTICS.md`.
 7. Guarde fora do Git os valores gerados de `SECRET_KEY` e `ADMIN_SETUP_TOKEN`. O token de setup é necessário somente para criar o primeiro administrador.
+8. Para ativar a ponte operacional com o projeto AION NEWS do Manus, siga `docs/MANUS_BRIDGE.md`. Cadastre `MANUS_API_KEY`, `MANUS_WEBHOOK_PUBLIC_KEY`, `MANUS_PROJECT_ID` e `AION_BRIDGE_TOKEN` somente como variáveis secretas no Render. Nunca copie os valores para commits, logs, PRs ou conversas.
 
-Variáveis opcionais: chaves OpenAI/Anthropic/OpenRouter/Gemini no Render; GA4, AdSense, Cloudflare Analytics e Clarity na Vercel.
+Variáveis opcionais: chaves OpenAI/Anthropic/OpenRouter/Gemini no Render; ponte Manus no Render; GA4, AdSense, Cloudflare Analytics e Clarity na Vercel.
