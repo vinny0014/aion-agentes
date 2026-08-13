@@ -6,6 +6,9 @@ import shutil
 import sys
 import asyncio
 import xml.etree.ElementTree as ET
+import base64
+import hashlib
+import time
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 
@@ -31,11 +34,15 @@ os.environ.update({
 import httpx  # noqa: E402
 import pytest  # noqa: E402
 from PIL import Image  # noqa: E402
+from cryptography.hazmat.primitives import hashes, serialization  # noqa: E402
+from cryptography.hazmat.primitives.asymmetric import padding, rsa  # noqa: E402
 
 from app.agents.imagegen import materialize_uploaded_image  # noqa: E402
 from app.agents.registry import seed_agents  # noqa: E402
 from app.core import database as db  # noqa: E402
+from app.core.config import settings  # noqa: E402
 from app.main import app  # noqa: E402
+from app.routers import manus_bridge  # noqa: E402
 
 db.init_db()
 seed_agents()
@@ -502,6 +509,9 @@ def test_deployment_configs_align_official_services():
     assert "https://aion-news-api.onrender.com" in render
     assert "autoDeployTrigger: checksPass" in render
     assert "value: 3.12.13" in render
+    for bridge_key in ("MANUS_API_KEY", "MANUS_WEBHOOK_PUBLIC_KEY",
+                       "MANUS_PROJECT_ID", "AION_BRIDGE_TOKEN"):
+        assert f"key: {bridge_key}" in render
     for path in (ROOT / "vercel.json", ROOT / "frontend" / "vercel.json"):
         config = json.loads(path.read_text())
         destinations = " ".join(rewrite["destination"] for rewrite in config["rewrites"])
@@ -558,3 +568,155 @@ def test_ci_runs_backend_and_frontend_validation():
     assert "python -m pytest" in workflow
     assert "npm ci" in workflow and "npm run build" in workflow
     assert "playwright install --with-deps chromium" in workflow and "npm run test:e2e" in workflow
+
+
+def _signed_manus_headers(private_key, raw_body: bytes, timestamp: int | None = None) -> dict:
+    timestamp = timestamp or int(time.time())
+    body_hash = hashlib.sha256(raw_body).hexdigest()
+    signed = (
+        f"{timestamp}.https://aion-news-api.onrender.com/internal/manus/webhook.{body_hash}"
+    ).encode()
+    signature = private_key.sign(signed, padding.PKCS1v15(), hashes.SHA256())
+    return {
+        "Content-Type": "application/json",
+        "X-Webhook-Timestamp": str(timestamp),
+        "X-Webhook-Signature": base64.b64encode(signature).decode(),
+    }
+
+
+def test_manus_webhook_bootstrap_is_inert_and_bounded(monkeypatch):
+    monkeypatch.setattr(settings, "MANUS_WEBHOOK_PUBLIC_KEY", "")
+    before = db.query_one("SELECT COUNT(*) AS total FROM manus_bridge_events")["total"]
+    response = client.post("/internal/manus/webhook", json={"probe": True})
+    assert response.status_code == 200
+    assert response.json() == {"status": "webhook_registration_pending"}
+    after = db.query_one("SELECT COUNT(*) AS total FROM manus_bridge_events")["total"]
+    assert after == before
+
+    oversized = client.post(
+        "/internal/manus/webhook",
+        content=b"x" * (64 * 1024 + 1),
+        headers={"Content-Type": "application/json"},
+    )
+    assert oversized.status_code == 413
+
+
+def test_manus_webhook_requires_signature_and_is_idempotent(monkeypatch):
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    public_pem = private_key.public_key().public_bytes(
+        serialization.Encoding.PEM,
+        serialization.PublicFormat.SubjectPublicKeyInfo,
+    ).decode()
+    monkeypatch.setattr(settings, "MANUS_WEBHOOK_PUBLIC_KEY", public_pem)
+    payload = {
+        "event_id": "task_stopped_bridge_test_1",
+        "event_type": "task_stopped",
+        "task_detail": {
+            "task_id": "task_bridge_123",
+            "task_title": "Validate AION News production",
+            "task_url": "https://manus.im/app/task_bridge_123",
+            "message": "Production validation completed.",
+            "stop_reason": "finish",
+            "attachments": [{
+                "file_name": "report.txt",
+                "url": "https://signed.example/secret-download-token",
+                "size_bytes": 42,
+            }],
+        },
+    }
+    raw = json.dumps(payload, separators=(",", ":")).encode()
+    headers = _signed_manus_headers(private_key, raw)
+
+    response = client.post("/internal/manus/webhook", content=raw, headers=headers)
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "accepted"
+    duplicate = client.post("/internal/manus/webhook", content=raw, headers=headers)
+    assert duplicate.status_code == 200
+    assert db.query_one(
+        "SELECT COUNT(*) AS total FROM manus_bridge_events WHERE event_id = ?",
+        (payload["event_id"],),
+    )["total"] == 1
+    stored = db.query_one(
+        "SELECT payload_json FROM manus_bridge_events WHERE event_id = ?",
+        (payload["event_id"],),
+    )["payload_json"]
+    assert "secret-download-token" not in stored
+
+    invalid = client.post(
+        "/internal/manus/webhook",
+        content=raw + b" ",
+        headers=headers,
+    )
+    assert invalid.status_code == 401
+    stale_headers = _signed_manus_headers(private_key, raw, int(time.time()) - 301)
+    stale = client.post("/internal/manus/webhook", content=raw, headers=stale_headers)
+    assert stale.status_code == 401
+
+
+def test_manus_bridge_control_endpoints_require_separate_token(monkeypatch):
+    token = "bridge-test-token-with-more-than-32-characters"
+    monkeypatch.setattr(settings, "AION_BRIDGE_TOKEN", token)
+    denied = client.get("/internal/manus/events")
+    assert denied.status_code == 401
+    headers = {"X-Aion-Bridge-Token": token}
+    events = client.get("/internal/manus/events?status=all", headers=headers)
+    assert events.status_code == 200
+    assert any(event["event_id"] == "task_stopped_bridge_test_1" for event in events.json())
+    acknowledged = client.post(
+        "/internal/manus/events/task_stopped_bridge_test_1/ack", headers=headers
+    )
+    assert acknowledged.status_code == 200
+
+    monkeypatch.setattr(settings, "MANUS_API_KEY", "")
+    unavailable = client.post(
+        "/internal/manus/tasks",
+        headers=headers,
+        json={"title": "Test", "prompt": "Do not execute externally."},
+    )
+    assert unavailable.status_code == 503
+
+
+def test_manus_bridge_public_status_never_exposes_credentials(monkeypatch):
+    monkeypatch.setattr(settings, "MANUS_API_KEY", "sensitive-manus-key")
+    monkeypatch.setattr(settings, "MANUS_WEBHOOK_PUBLIC_KEY", "public-key")
+    monkeypatch.setattr(
+        settings, "AION_BRIDGE_TOKEN", "sensitive-control-token-with-32-characters"
+    )
+    response = client.get("/internal/manus/status")
+    assert response.status_code == 200
+    body = response.text
+    assert response.json() == {
+        "webhook_verification": True,
+        "outbound_api": True,
+        "control_auth": True,
+    }
+    assert "sensitive" not in body
+
+
+def test_manus_outbound_tasks_always_include_automation_guardrails(monkeypatch):
+    token = "bridge-test-token-with-more-than-32-characters"
+    monkeypatch.setattr(settings, "AION_BRIDGE_TOKEN", token)
+    captured = {}
+
+    async def fake_post(endpoint, payload):
+        captured["endpoint"] = endpoint
+        captured["payload"] = payload
+        return {
+            "ok": True,
+            "task_id": "task_guardrail_123",
+            "task_title": "Safe task",
+            "task_url": "https://manus.im/app/task_guardrail_123",
+        }
+
+    monkeypatch.setattr(manus_bridge, "_manus_post", fake_post)
+    response = client.post(
+        "/internal/manus/tasks",
+        headers={"X-Aion-Bridge-Token": token},
+        json={"title": "Safe task", "prompt": "Validate the production home page."},
+    )
+    assert response.status_code == 200, response.text
+    sent = captured["payload"]["message"]["content"][0]["text"]
+    assert captured["endpoint"] == "task.create"
+    assert "Do not make payments" in sent
+    assert "AION Crypto" in sent
+    assert sent.endswith("Validate the production home page.")
