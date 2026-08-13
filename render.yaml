@@ -30,6 +30,16 @@ services:
         value: /var/data/uploads
       - key: DATABASE_URL
         value: sqlite:////var/data/aion.db
+      # Manus bridge values are entered only in the Render dashboard. Blueprint
+      # updates must never overwrite or reveal them.
+      - key: MANUS_API_KEY
+        sync: false
+      - key: MANUS_WEBHOOK_PUBLIC_KEY
+        sync: false
+      - key: MANUS_PROJECT_ID
+        sync: false
+      - key: AION_BRIDGE_TOKEN
+        sync: false
     disk:
       name: aion-data
       mountPath: /var/data
