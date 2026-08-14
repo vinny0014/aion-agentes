@@ -224,7 +224,7 @@ export default function Editor() {
                 onChange={(e) => set("scheduled_at", e.target.value ? e.target.value.replace("T", " ") + ":00" : "")} />
             </label>
             <label className="mt-4 block text-sm font-medium">
-              Source URL <span className="font-normal text-slateui">(optional attribution)</span>
+              Source URL <span className="font-normal text-slateui">(required for news and analysis)</span>
               <input className="field mt-1.5 font-mono text-xs" value={v.source_url}
                 onChange={(e) => set("source_url", e.target.value)} />
             </label>

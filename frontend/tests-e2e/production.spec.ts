@@ -43,6 +43,7 @@ test("reader and editor production journeys", async ({ page, request }) => {
   await page.getByLabel("Title", { exact: true }).fill(title);
   await page.getByLabel("Summary").fill("An evidence-based guide to evaluating and operating reliable artificial intelligence systems.");
   await page.getByLabel(/^Body/).fill(body);
+  await page.getByLabel(/Source URL/).fill("https://example.com/reliable-ai-systems");
 
   const cover = await request.get("http://127.0.0.1:8000/og-cover.png");
   expect(cover.ok()).toBeTruthy();
@@ -59,7 +60,7 @@ test("reader and editor production journeys", async ({ page, request }) => {
   await expect(page.getByText("Article published")).toBeVisible();
 
   await page.goto("/articles");
-  await expect(page.getByRole("heading", { name: "Articles" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Latest AI stories" })).toBeVisible();
   await expect(page.getByRole("link", { name: title }).first()).toBeVisible();
   await page.getByLabel("Search articles").fill("independent teams");
   await page.getByRole("button", { name: "Search" }).click();
@@ -88,8 +89,8 @@ test("reader and editor production journeys", async ({ page, request }) => {
   expect(await page.evaluate(() => (window as any).__aionCLS)).toBeLessThan(0.1);
   await page.unroute("**/api/public/**");
   await page.getByLabel("Newsletter email").fill("reader-e2e@example.com");
-  await page.getByRole("button", { name: "Subscribe" }).last().click();
-  await expect(page.getByText("Subscribed!")).toBeVisible();
+  await page.getByRole("button", { name: "Join the briefing" }).click();
+  await expect(page.getByText("You're on the list.")).toBeVisible();
 
   for (const path of ["/categories", "/tags", "/about", "/privacy", "/terms", "/contact"]) {
     await page.goto(path);
