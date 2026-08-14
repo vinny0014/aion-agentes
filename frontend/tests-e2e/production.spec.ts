@@ -143,7 +143,7 @@ test("GA4 stays blocked when rejected and sends one SPA page view after consent"
   await expect.poll(() => tagRequests.length).toBe(1);
   await expect.poll(() => page.evaluate(() => (window.dataLayer || []).filter((item: any) => item?.[0] === "event" && item?.[1] === "page_view").length)).toBe(1);
 
-  await page.getByRole("link", { name: "Latest", exact: true }).click();
+  await page.locator('a[href="/articles"]:visible').first().click();
   await expect(page).toHaveURL(/\/articles$/);
   await expect.poll(() => page.evaluate(() => (window.dataLayer || []).filter((item: any) => item?.[0] === "event" && item?.[1] === "page_view").length)).toBe(2);
   expect(tagRequests).toHaveLength(1);
