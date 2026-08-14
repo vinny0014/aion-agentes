@@ -369,6 +369,9 @@ def test_server_rendered_article_has_complete_metadata():
     assert '<meta name="twitter:card" content="summary_large_image">' in html
     assert '"@type": "NewsArticle"' in html and '"@type": "BreadcrumbList"' in html
     assert TEST_IMAGE_URL in html
+    assert "Independent intelligence for the AI economy" in html
+    assert "Editorial policy" in html and "Corrections" in html
+    assert "<figcaption>" in html and "All stories" in html
     assert client.get("/article/not-published").status_code == 404
     from app.main import _rich_text
     assert 'href="/article/safe"' in _rich_text("[safe](/article/safe)")

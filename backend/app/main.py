@@ -252,7 +252,7 @@ def _rich_text(value: str) -> str:
             external = target.startswith(("https://", "http://"))
             internal = target.startswith("/") and not target.startswith("//")
             if external or internal:
-                rel = ' rel="noopener nofollow"' if external else ""
+                rel = ' rel="noopener noreferrer"' if external else ""
                 rendered.append(
                     f'<a href="{html.escape(target, quote=True)}"{rel}>'
                     f"{html.escape(link.group(1))}</a>"
@@ -327,6 +327,21 @@ def server_rendered_article(slug: str):
             {"@type": "ListItem", "position": 3, "name": article["title"], "item": canonical},
         ],
     }
+    source_html = ""
+    if article["source_url"]:
+        source_html = (
+            f' · <a href="{html.escape(article["source_url"], quote=True)}" '
+            'rel="noopener noreferrer">Primary source ↗</a>'
+        )
+    credit = article["image_credit"] or ""
+    caption = article["image_alt"] or article["title"]
+    caption_html = (
+        f'<figcaption>{html.escape(caption)}'
+        f'{" · " + html.escape(credit) if credit else ""}</figcaption>'
+    )
+    published = html.escape((article["published_at"] or "")[:10])
+    from .agents.discovery import reading_time_minutes
+    reading_time = f' · {reading_time_minutes(article["body"] or "")} min read'
     page = f"""<!doctype html><html lang="en-US"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(title)} — AION</title>
 <meta name="description" content="{html.escape(description, quote=True)}"><meta name="robots" content="index,follow,max-image-preview:large">
@@ -341,11 +356,25 @@ def server_rendered_article(slug: str):
 <meta name="twitter:description" content="{html.escape(description, quote=True)}"><meta name="twitter:image" content="{html.escape(image, quote=True)}"><meta name="twitter:image:alt" content="{html.escape(article['image_alt'] or article['title'], quote=True)}">
 <script type="application/ld+json">{json.dumps(jsonld, ensure_ascii=False).replace('</', '<\\/')}</script>
 <script type="application/ld+json">{json.dumps(breadcrumb, ensure_ascii=False).replace('</', '<\\/')}</script>
-<style>body{{margin:0;background:#08080f;color:#f6f3ff;font:17px/1.7 system-ui,sans-serif}}nav,main{{max-width:860px;margin:auto;padding:22px}}nav{{display:flex;justify-content:space-between}}a{{color:#a78bfa}}h1{{font-size:clamp(2.2rem,6vw,4rem);line-height:1.05}}h2{{margin-top:2rem;line-height:1.2}}img{{width:100%;height:auto;aspect-ratio:1200/630;object-fit:cover;border-radius:16px}}.meta{{color:#a8a4b8;font-size:.85rem}}.lead{{font-size:1.2rem;color:#c8c3d8}}</style></head>
-<body><nav><a href="/">AION AI NEWS OS</a><a href="/articles">All articles</a></nav><main><article>
-<p class="meta">{html.escape(article['category'] or 'news')} · {html.escape(article['author'] or 'AION Editorial')}</p>
-<h1>{html.escape(article['title'])}</h1><img src="{html.escape(image, quote=True)}" alt="{html.escape(article['image_alt'] or article['title'], quote=True)}" width="1200" height="630">
-<p class="lead">{html.escape(article['excerpt'] or '')}</p>{_article_body(article['body'])}</article></main></body></html>"""
+<style>
+:root{{--bg:#08080f;--surface:#11101a;--ink:#f6f3ff;--muted:#aaa5b8;--line:#302d3b;--accent:#c084fc}}
+*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--ink);font:16px/1.7 ui-sans-serif,system-ui,-apple-system,sans-serif}}
+a{{color:inherit;text-decoration:none}}a:hover{{color:var(--accent)}}.site-header{{position:sticky;top:0;z-index:10;border-bottom:1px solid var(--line);background:#08080ff2;backdrop-filter:blur(14px)}}
+.header-inner,.article,.footer-inner{{width:min(100% - 40px,1120px);margin:auto}}.header-top{{display:flex;align-items:center;justify-content:space-between;padding:18px 0;border-bottom:1px solid var(--line)}}
+.brand{{display:flex;align-items:center;gap:12px;font-weight:800;letter-spacing:.12em}}.mark{{display:grid;place-items:center;width:36px;height:36px;border:1px solid #c084fc99;font:700 20px Georgia,serif}}.brand small{{display:block;color:var(--muted);font-size:9px;letter-spacing:.3em}}
+.nav-links{{display:flex;gap:24px;padding:10px 0;font-size:14px;color:var(--muted)}}.nav-links a:first-child{{color:var(--ink);font-weight:700}}.article{{max-width:920px;padding-top:62px;padding-bottom:72px}}
+.eyebrow{{margin:0 0 14px;color:var(--accent);font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase}}h1,h2{{font-family:Georgia,Cambria,'Times New Roman',serif}}h1{{max-width:900px;margin:0;font-size:clamp(2.6rem,7vw,5.1rem);line-height:1.02;letter-spacing:-.035em}}.lead{{max-width:780px;margin:22px 0;color:var(--muted);font-size:1.25rem;line-height:1.6}}
+.byline{{display:flex;flex-wrap:wrap;gap:7px;margin:28px 0;border-block:1px solid var(--line);padding:14px 0;color:var(--muted);font-size:14px}}.byline strong{{color:var(--ink)}}.byline a{{color:var(--accent);font-weight:700}}
+figure{{margin:32px 0 42px}}figure img{{display:block;width:100%;height:auto;aspect-ratio:16/9;object-fit:cover}}figcaption{{margin-top:8px;color:var(--muted);font-size:12px}}.body{{max-width:760px;margin:auto;font-size:1.12rem;line-height:1.9}}.body p{{margin:0 0 26px}}.body h2{{margin:50px 0 18px;border-top:1px solid var(--line);padding-top:28px;font-size:2rem;line-height:1.2}}.body a{{color:var(--accent);text-decoration:underline;text-decoration-color:#c084fc66;text-underline-offset:3px}}.body ul{{padding-left:24px}}
+.story-end{{max-width:760px;margin:48px auto 0;border-top:1px solid var(--line);padding-top:24px}}footer{{border-top:1px solid var(--line);padding:34px 0;color:var(--muted);font-size:13px}}.footer-inner{{display:flex;flex-wrap:wrap;justify-content:space-between;gap:20px}}.footer-links{{display:flex;flex-wrap:wrap;gap:18px}}
+@media(max-width:640px){{.header-inner,.article,.footer-inner{{width:min(100% - 30px,1120px)}}.tagline,.nav-links a:nth-child(n+4){{display:none}}.nav-links{{overflow:auto}}.article{{padding-top:38px}}h1{{font-size:2.7rem}}.lead{{font-size:1.1rem}}}}
+</style></head>
+<body><header class="site-header"><div class="header-inner"><div class="header-top"><a class="brand" href="/"><span class="mark">A</span><span>AION<small>AI NEWS</small></span></a><span class="tagline">Independent intelligence for the AI economy</span></div><nav class="nav-links" aria-label="Primary navigation"><a href="/">Top stories</a><a href="/articles">Latest</a><a href="/articles?category=analysis">Analysis</a><a href="/articles?category=guides">Guides</a><a href="/categories">All topics</a></nav></div></header>
+<main><article class="article"><p class="eyebrow">{html.escape(article['category'] or 'AI intelligence')}</p><h1>{html.escape(article['title'])}</h1>
+<p class="lead">{html.escape(article['excerpt'] or '')}</p><div class="byline"><strong>By {html.escape(article['author'] or 'AION Editorial')}</strong><span>·</span><time>{published}</time><span>{reading_time}</span>{source_html}</div>
+<figure><img src="{html.escape(image, quote=True)}" alt="{html.escape(caption, quote=True)}" width="1200" height="630">{caption_html}</figure>
+<div class="body">{_article_body(article['body'])}</div><div class="story-end"><a href="/articles">← All stories</a></div></article></main>
+<footer><div class="footer-inner"><span>© {datetime.now(timezone.utc).year} AION AI News · Built by agents. Supervised by humans.</span><div class="footer-links"><a href="/about">About</a><a href="/editorial-policy">Editorial policy</a><a href="/corrections-policy">Corrections</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/contact">Contact</a></div></div></footer></body></html>"""
     return HTMLResponse(page)
 
 
