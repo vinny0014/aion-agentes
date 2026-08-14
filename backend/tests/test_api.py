@@ -410,6 +410,20 @@ def test_quarantine_moves_legacy_public_content_to_draft():
     assert db.query_one("SELECT status FROM contents WHERE id=?", (legacy_id,))["status"] == "draft"
 
 
+def test_publication_gate_quarantines_generic_ai_filler():
+    filler_id = db.execute(
+        """INSERT INTO contents(title,slug,body,excerpt,status,category,image_url,published_at)
+           VALUES(?,?,?,?,?,?,?,datetime('now'))""",
+        ("Aion guide: what everyone is and why it is trending", "generic-ai-filler",
+         "A generic English article body with no attributable reporting. " * 20,
+         "Article about everyone generated via openai.", "published", "guides", TEST_IMAGE_URL),
+    )
+    from app.content_rules import quarantine_noncompliant_public_content
+    result = quarantine_noncompliant_public_content()
+    assert filler_id in result["quarantined"]
+    assert db.query_one("SELECT status FROM contents WHERE id=?", (filler_id,))["status"] == "draft"
+
+
 def test_public_read_gate_withdraws_article_when_managed_file_disappears():
     unique_image = materialize_uploaded_image(raster_bytes(color="#187a55"), "ephemeral image")
     assert unique_image
@@ -423,12 +437,13 @@ def test_public_read_gate_withdraws_article_when_managed_file_disappears():
 def test_fact_check_and_publisher_respect_publication_gate():
     agent_id = db.query_one("SELECT id FROM agents WHERE slug='content'")["id"]
     content_id = db.execute(
-        """INSERT INTO contents(title,slug,body,excerpt,status,agent_id,category,tags,image_url,image_alt)
-           VALUES(?,?,?,?,?,?,?,?,?,?)""",
+        """INSERT INTO contents(title,slug,body,excerpt,status,agent_id,category,tags,image_url,image_alt,source_url)
+           VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
         ("A complete analysis of model evaluation", "model-evaluation-analysis",
          "Teams evaluate artificial intelligence models with documented benchmarks, safety reviews and production monitoring. " * 70,
          "A complete guide to evaluating artificial intelligence models.", "draft", agent_id,
-         "analysis", "ai,evaluation", TEST_IMAGE_URL, "A model evaluation dashboard"),
+         "analysis", "ai,evaluation", TEST_IMAGE_URL, "A model evaluation dashboard",
+         "https://example.com/model-evaluation"),
     )
     from app.agents.team import fact_check_agent, publisher_agent
     fact_check_agent({})

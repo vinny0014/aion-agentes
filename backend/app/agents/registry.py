@@ -169,13 +169,19 @@ def _save_draft(item: dict, title: str, slug: str, body: str, excerpt: str,
     brief = _mg("agent:research", f"briefing:{item['id']}") or {}
     tags = ",".join((brief.get("keywords") or ["ai"])[:5])
     categoria = _TEMPLATE_CATEGORIA.get(item.get("template", ""), "news")
+    if "generated via" in (excerpt or "").lower():
+        first_paragraph = next((p.strip() for p in (body or "").split("\n\n")
+                                if p.strip() and not p.strip().startswith("#")), "")
+        excerpt = first_paragraph[:157] + ("…" if len(first_paragraph) > 157 else "")
+    source_url = next((url for url in (brief.get("fontes") or [])
+                       if isinstance(url, str) and url.startswith(("http://", "https://"))), "")
     cid = db.execute(
         """INSERT INTO contents (title, slug, body, excerpt, status, agent_id,
-           seo_title, seo_description, category, tags)
+           seo_title, seo_description, category, tags, source_url)
            VALUES (?,?,?,?,?,
-                   (SELECT id FROM agents WHERE slug = 'content'), ?, ?, ?, ?)""",
+                   (SELECT id FROM agents WHERE slug = 'content'), ?, ?, ?, ?, ?)""",
         (title, _unique_slug(slug), body, excerpt, status, title, excerpt[:160],
-         categoria, tags),
+         categoria, tags, source_url),
     )
     db.execute(
         "UPDATE content_queue SET status = 'done', result_content_id = ? WHERE id = ?",

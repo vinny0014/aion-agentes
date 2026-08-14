@@ -27,6 +27,9 @@ def looks_english(*parts: str) -> bool:
 
 def publication_issues(content: dict) -> list[str]:
     issues: list[str] = []
+    title = (content.get("title") or "").strip()
+    excerpt = (content.get("excerpt") or "").strip()
+    body = (content.get("body") or "").strip()
     image_url = (content.get("image_url") or "").strip()
     if not is_http_image_url(image_url):
         issues.append("A verified HTTP/HTTPS raster image is required")
@@ -37,6 +40,18 @@ def publication_issues(content: dict) -> list[str]:
     if not looks_english(content.get("title", ""), content.get("excerpt", ""),
                          content.get("body", "")):
         issues.append("Public content must be written in English")
+    if "generated via" in excerpt.lower() or excerpt.lower().startswith("article about "):
+        issues.append("Generic machine-generated excerpts cannot be published")
+    generic_title = re.search(
+        r"^(?:daily briefing: (?:some|month|everyone|than)|aion guide: what (?:some|month|everyone|than)\b)",
+        title,
+        flags=re.IGNORECASE,
+    )
+    if generic_title:
+        issues.append("Generic trend-placeholder topics cannot be published")
+    external_links = re.findall(r"https?://[^\s)\]]+", body)
+    if content.get("category") in {"news", "analysis"} and not content.get("source_url") and not external_links:
+        issues.append("News and analysis require an attributable external source")
     taxonomy = set(re.findall(r"[a-z]+", f"{content.get('category', '')} {content.get('tags', '')}".lower()))
     if taxonomy & PORTUGUESE_TAXONOMY:
         issues.append("Public categories and tags must be written in English")

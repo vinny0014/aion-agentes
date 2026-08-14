@@ -22,11 +22,17 @@ def _hash(texto: str) -> int:
 
 
 def photo_prompt(titulo: str, tags: str = "") -> str:
-    """Create an editorial photo prompt without text, logos or watermarks."""
+    """Create a restrained editorial prompt when no source-owned image exists."""
     tema = ", ".join([t.strip() for t in (tags or "").split(",") if t.strip()][:3]) or "artificial intelligence technology"
-    return (f"professional editorial photograph for a news article about {titulo[:90]}, "
-            f"{tema}, photojournalism style, natural lighting, shallow depth of field, "
-            f"realistic, high detail, 4k, no text, no words, no logo, no watermark")
+    return (
+        f"Editorial technology photograph illustrating this exact news subject: {titulo[:120]}. "
+        f"Context: {tema}. Use one believable real-world scene or object directly connected "
+        "to the subject, documentary composition, natural available light, realistic materials, "
+        "subtle color, 35mm newsroom photography, landscape 16:9. Avoid generic robots, glowing "
+        "brains, holographic faces, floating UI, fantasy circuitry, staged stock-photo gestures, "
+        "distorted hands, invented product designs, fake interfaces and recognizable people unless "
+        "the subject explicitly requires a public figure. No text, letters, logos or watermark."
+    )
 
 
 def provider_photo_url(titulo: str, tags: str = "") -> tuple[str, str] | None:
