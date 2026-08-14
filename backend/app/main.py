@@ -340,7 +340,8 @@ def server_rendered_article(slug: str):
         f'{" · " + html.escape(credit) if credit else ""}</figcaption>'
     )
     published = html.escape((article["published_at"] or "")[:10])
-    reading_time = f' · {int(article["reading_time"] or 1)} min read'
+    from .agents.discovery import reading_time_minutes
+    reading_time = f' · {reading_time_minutes(article["body"] or "")} min read'
     page = f"""<!doctype html><html lang="en-US"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(title)} — AION</title>
 <meta name="description" content="{html.escape(description, quote=True)}"><meta name="robots" content="index,follow,max-image-preview:large">
