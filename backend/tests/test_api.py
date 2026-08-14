@@ -574,7 +574,7 @@ def test_orchestrator_recovers_a_stale_persistent_lock(monkeypatch):
     assert mem_get("agent:ceo-master", "lock")["state"] == "off"
 
 
-def test_ga4_spa_events_and_unique_agent_icons_are_wired_in_code():
+def test_ga4_spa_events_and_editorial_home_are_wired_in_code():
     telemetry = (ROOT / "frontend" / "src" / "lib" / "telemetry.ts").read_text()
     main = (ROOT / "frontend" / "src" / "main.tsx").read_text()
     landing = (ROOT / "frontend" / "src" / "pages" / "Landing.tsx").read_text()
@@ -588,9 +588,11 @@ def test_ga4_spa_events_and_unique_agent_icons_are_wired_in_code():
                   "outbound_source_click", "category_view"):
         assert event in landing + blog
     assert "[25, 50, 90]" in blog and "`article_scroll_${threshold}`" in blog
-    for icon in ('icon: "content"', 'icon: "seo"', 'icon: "growth"',
-                 'icon: "quality"', 'icon: "budget"'):
-        assert icon in landing
+    for editorial_marker in ("The intelligence that matters now",
+                             "Independent intelligence for the AI economy",
+                             "Start here"):
+        assert editorial_marker in landing
+    assert "Agent Hub" not in landing
 
 
 def test_cors_allows_only_official_frontend():

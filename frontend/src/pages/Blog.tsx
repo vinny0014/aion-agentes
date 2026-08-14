@@ -24,7 +24,7 @@ function Rich({ t }: { t: string }) {
         const b = p.match(/^\*\*([^*]+)\*\*$/);
         if (b) return <strong key={i}>{b[1]}</strong>;
         const l = p.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-        if (l && /^https?:\/\//i.test(l[2])) return <a key={i} href={l[2]} target="_blank" rel="noopener noreferrer nofollow" className="text-signal underline decoration-signal/40 hover:decoration-signal">{l[1]}</a>;
+        if (l && /^https?:\/\//i.test(l[2])) return <a key={i} href={l[2]} target="_blank" rel="noopener noreferrer" className="text-signal underline decoration-signal/40 hover:decoration-signal">{l[1]}</a>;
         if (l && /^\/(?!\/)/.test(l[2])) return <a key={i} href={l[2]} className="text-signal underline decoration-signal/40 hover:decoration-signal">{l[1]}</a>;
         if (l) return l[1];
         return p;
@@ -84,9 +84,11 @@ export function Conteudos() {
   return (
     <div className="min-h-screen">
       <Nav />
-      <main id="main-content" className="mx-auto max-w-3xl px-6 py-14">
-        <p className="tag mb-2">daily publication</p>
-        <h1 className="font-display text-4xl font-bold tracking-tight">Articles</h1>
+      <main id="main-content" className="mx-auto max-w-5xl px-5 py-12 sm:px-8">
+        <div className="section-heading">
+          <div><p className="eyebrow">AION newsroom</p><h1>Latest AI stories</h1></div>
+          <p className="max-w-md text-sm leading-relaxed text-slateui">Source-led news, analysis and practical guides from across the AI industry.</p>
+        </div>
         <form className="mt-6 flex gap-2" onSubmit={(e) => { e.preventDefault();
           const p = new URLSearchParams(params); search ? p.set("q", search) : p.delete("q");
           if (search.trim()) trackEvent("search_performed", {
@@ -126,20 +128,21 @@ export function Conteudos() {
             <p className="max-w-sm text-sm">Our agent team is preparing the first stories. Check back soon.</p>
           </div>
         ) : (
-          <ul className="mt-8 space-y-6">
+          <ul className="mt-8 divide-y divide-line border-t border-line">
             {artigos.map((a) => (
-              <li key={a.id} className="card card-hover grid gap-4 sm:grid-cols-[180px_1fr]">
-                <Link to={`/article/${a.slug}`} className="block overflow-hidden rounded-lg">
+              <li key={a.id} className="grid gap-5 py-7 sm:grid-cols-[260px_1fr]">
+                <Link to={`/article/${a.slug}`} className="editorial-image block aspect-[16/10] overflow-hidden">
                   <img src={a.image_url} alt={a.image_alt || a.title} width={1200} height={630}
                     loading="lazy" decoding="async" className="aspect-[1200/630] h-full w-full object-cover" />
                 </Link>
-                <div>
-                  <p className="tag">{dataBr(a.published_at)}</p>
+                <div className="self-center">
+                  <p className="eyebrow">{a.category || "News"}</p>
                   <Link to={`/article/${a.slug}`}
-                    className="mt-1 block font-display text-xl font-bold hover:text-ultra">
+                    className="mt-1 block font-display text-2xl font-bold leading-tight hover:text-signal">
                     {a.title}
                   </Link>
-                  {a.excerpt && <p className="mt-2 text-sm text-slateui">{a.excerpt}</p>}
+                  {a.excerpt && <p className="mt-2 text-sm leading-relaxed text-slateui">{a.excerpt}</p>}
+                  <p className="story-meta">{dataBr(a.published_at)}{a.reading_time ? <> <span>·</span> {a.reading_time} min read</> : null}</p>
                 </div>
               </li>
             ))}
@@ -248,9 +251,7 @@ export function Artigo() {
             caption: a.image_alt || a.title, creditText: a.image_credit || "AION Editorial" } } : {}),
           publisher: { "@type": "NewsMediaOrganization", name: "AION AI NEWS OS", url: `${SITE}/`,
             logo: { "@type": "ImageObject", url: `${SITE}/logo.png`, width: 512, height: 512 } },
-          author: { "@type": (a.author || "") === "Vinicio Alves" ? "Person" : "Organization",
-            name: a.author || "AION Editorial", url: `${SITE}/about` },
-          editor: { "@type": "Person", name: "Vinicio Alves", url: `${SITE}/about` },
+          author: { "@type": "Organization", name: a.author || "AION Editorial", url: `${SITE}/about` },
         });
         document.head.appendChild(ld);
         fetch(`${API_BASE}/api/public/articles/${slug}/related`)
@@ -278,34 +279,39 @@ export function Artigo() {
   return (
     <div className="min-h-screen">
       <Nav />
-      <article ref={articleRef} id="main-content" className="mx-auto max-w-3xl px-6 py-14">
-        <p className="tag mb-2">
-          By {artigo.author || "AION Editorial"} · {dataBr(artigo.published_at)}
-          {artigo.reading_time ? <> · {artigo.reading_time} min read</> : null}
-          {artigo.category ? <> · {artigo.category}</> : null}
-          {artigo.source_url ? <> · <a className="text-signal hover:underline" href={artigo.source_url} target="_blank" rel="noopener nofollow"
+      <article ref={articleRef} id="main-content" className="mx-auto max-w-4xl px-5 py-12 sm:px-8 sm:py-16">
+        <p className="eyebrow mb-4">{artigo.category || "AI intelligence"}</p>
+        <h1 className="font-display text-4xl font-bold leading-[1.05] tracking-[-0.025em] sm:text-6xl">{artigo.title}</h1>
+        {artigo.excerpt && <p className="mt-5 max-w-3xl text-xl leading-relaxed text-slateui">{artigo.excerpt}</p>}
+        <div className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-2 border-y border-line py-4 text-sm text-slateui">
+          <span className="font-semibold text-ink">By {artigo.author || "AION Editorial"}</span>
+          <span>·</span><time>{dataBr(artigo.published_at)}</time>
+          {artigo.reading_time ? <><span>·</span><span>{artigo.reading_time} min read</span></> : null}
+          {artigo.source_url ? <><span>·</span><a className="font-semibold text-signal hover:underline" href={artigo.source_url} target="_blank" rel="noopener noreferrer"
             onClick={() => trackEvent("outbound_source_click", {
               slug: artigo.slug,
               category: artigo.category || "news",
               source_host: (() => { try { return new URL(artigo.source_url || "").hostname; } catch { return "unknown"; } })(),
-            })}>source</a></> : null}
-        </p>
-        <p className="mb-3 text-xs text-slateui">Responsible editor: Vinicio Alves</p>
-        <h1 className="font-display text-4xl font-bold leading-tight tracking-tight">{artigo.title}</h1>
-        {artigo.image_url && (
-          <img onError={(e) => { e.currentTarget.style.display = "none"; }} src={artigo.image_url} alt={artigo.image_alt || artigo.title}
-            width={1200} height={630} decoding="async" {...({ fetchpriority: "high" } as any)}
-            className="mt-6 w-full rounded-xl border border-line object-cover" />
-        )}
-        {artigo.excerpt && <p className="mt-4 text-lg text-slateui">{artigo.excerpt}</p>}
-        <div className="mt-8 space-y-4 leading-relaxed text-ink/90">
-          {(artigo.body || "").split(/\n\n+/).filter(Boolean).map((p, i) => {
-            if (p.startsWith("## ")) return <h2 key={i} className="pt-4 font-display text-2xl font-bold">{p.slice(3)}</h2>;
-            if (p.startsWith("# ")) return <h2 key={i} className="pt-4 font-display text-2xl font-bold">{p.slice(2)}</h2>;
-            return <p key={i}><Rich t={p} /></p>;
-          })}
+            })}>Primary source ↗</a></> : null}
         </div>
-        <AdSlot slot="aion-artigo" className="mt-8" />
+        {artigo.image_url && (
+          <figure className="mt-8">
+            <div className="editorial-image aspect-[16/9]">
+              <img onError={(e) => { e.currentTarget.style.display = "none"; }} src={artigo.image_url} alt={artigo.image_alt || artigo.title}
+                width={1200} height={630} decoding="async" {...({ fetchpriority: "high" } as any)} className="h-full w-full object-cover" />
+            </div>
+            {(artigo.image_credit || artigo.image_alt) && <figcaption className="mt-2 text-xs leading-relaxed text-slateui">{artigo.image_alt || artigo.title}{artigo.image_credit ? ` · ${artigo.image_credit}` : ""}</figcaption>}
+          </figure>
+        )}
+        <div className="article-body mt-10">
+          {(artigo.body || "").split(/\n\n+/).filter(Boolean).map((p, i) => <div key={i}>
+            {i === 3 && <AdSlot slot="aion-artigo-inline" className="my-8" />}
+            {p.startsWith("## ") || p.startsWith("# ")
+              ? <h2>{p.replace(/^##? /, "")}</h2>
+              : <p><Rich t={p} /></p>}
+          </div>)}
+        </div>
+        <AdSlot slot="aion-artigo" className="mt-10" />
         {artigo.tags && (
           <div className="mt-8 flex flex-wrap gap-2">
             {artigo.tags.split(",").filter(Boolean).map((t) => (
