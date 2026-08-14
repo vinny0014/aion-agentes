@@ -21,6 +21,8 @@ STOPWORDS = {
     "the", "and", "that", "this", "with", "from", "into", "about", "what", "when",
     "where", "which", "their", "they", "will", "have", "has", "for", "are", "was",
     "were", "your", "you", "how", "why", "its", "can", "could", "would", "should",
+    "some", "than", "everyone", "month", "says", "said", "just", "reportedly", "spotlight",
+    "today", "daily", "briefing", "latest", "news", "aion", "guide", "trending",
 }
 
 INTEGRATIONS = {

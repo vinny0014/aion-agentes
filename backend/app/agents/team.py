@@ -178,7 +178,8 @@ def _og_image(page_url: str) -> str:
 
 def _needs_image(c) -> bool:
     from .imagegen import managed_image_path
-    return managed_image_path(c["image_url"] or "") is None
+    generated = "pollinations" in (c.get("image_credit") or "").lower()
+    return managed_image_path(c["image_url"] or "") is None or (generated and bool(c.get("source_url")))
 
 
 def image_agent(payload: dict) -> dict:
@@ -193,7 +194,7 @@ def image_agent(payload: dict) -> dict:
     stats = {"existing": 0, "feed": 0, "og_image": 0, "photo_provider": 0, "blocked": 0}
 
     # 1) enfileirar quem precisa
-    for c in db.query("SELECT id, image_url FROM contents WHERE status IN ('draft','published')"):
+    for c in db.query("SELECT id, image_url, image_credit, source_url FROM contents WHERE status IN ('draft','published')"):
         if not _needs_image(c):
             continue
         queued = db.query_one(
@@ -219,8 +220,6 @@ def image_agent(payload: dict) -> dict:
         prepared = None
         alt = credit = source = ""
         candidates = []
-        if (c["image_url"] or "").startswith(("http://", "https://")):
-            candidates.append((c["image_url"], c["image_credit"] or "Original source", "existing"))
         oficial = next((m.get("image") for m in manchetes
                         if m.get("image") and m["title"][:20] in (c["title"] or "")), "")
         if oficial:
@@ -229,6 +228,8 @@ def image_agent(payload: dict) -> dict:
             og = _og_image(c["source_url"])
             if og:
                 candidates.append((og, _fonte_amigavel(c["source_url"]), "og_image"))
+        if (c["image_url"] or "").startswith(("http://", "https://")):
+            candidates.append((c["image_url"], c["image_credit"] or "AION Editorial", "existing"))
         if provider_on:
             prov = provider_photo_url(c["title"], c["tags"] or "")
             if prov:
@@ -271,7 +272,8 @@ def compute_hero_image(content_id: int, manchetes: list | None = None) -> dict:
         return {"erro": "conteúdo inexistente"}
     manchetes = manchetes if manchetes is not None else (
         mem_get("agent:discovery", "manchetes_do_dia", []) or [])
-    if managed_image_path(c["image_url"] or ""):
+    generated_primary = "pollinations" in (c.get("image_credit") or "").lower()
+    if managed_image_path(c["image_url"] or "") and not (generated_primary and c.get("source_url")):
         db.execute("""UPDATE contents SET hero_image_url=image_url, hero_image_alt=image_alt,
                       hero_image_credit=image_credit, hero_image_width='1200',
                       hero_image_height='630', hero_image_source='primary' WHERE id=?""",

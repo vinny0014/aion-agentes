@@ -51,13 +51,14 @@ test("reader and editor production journeys", async ({ page, request }) => {
   });
   await expect(page.getByText("Image uploaded, optimized and verified")).toBeVisible();
   await page.getByLabel("Alt text").fill("Editors reviewing an independent artificial intelligence evaluation");
+  await page.getByLabel(/Source URL/).fill("https://example.com/independent-ai-evaluation");
   await page.getByLabel(/Featured/).check();
   await page.getByLabel(/Breaking news/).check();
   await page.getByRole("button", { name: "Publish" }).click();
   await expect(page.getByText("Article published")).toBeVisible();
 
   await page.goto("/articles");
-  await expect(page.getByRole("heading", { name: "Articles" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Latest AI stories" })).toBeVisible();
   await expect(page.getByRole("link", { name: title }).first()).toBeVisible();
   await page.getByLabel("Search articles").fill("independent teams");
   await page.getByRole("button", { name: "Search" }).click();
@@ -80,8 +81,8 @@ test("reader and editor production journeys", async ({ page, request }) => {
   expect(await page.evaluate(() => (window as any).__aionCLS)).toBeLessThan(0.1);
   await page.unroute("**/api/public/**");
   await page.getByLabel("Newsletter email").fill("reader-e2e@example.com");
-  await page.getByRole("button", { name: "Subscribe" }).last().click();
-  await expect(page.getByText("Subscribed!")).toBeVisible();
+  await page.getByRole("button", { name: "Join the briefing" }).click();
+  await expect(page.getByText("You're on the list.")).toBeVisible();
 
   for (const path of ["/categories", "/tags", "/about", "/privacy", "/terms", "/contact"]) {
     await page.goto(path);

@@ -1,68 +1,90 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { API_BASE } from "../lib/api";
 import { usePageMetadata } from "../lib/seo";
-
 import AdSlot from "../lib/AdSlot";
 
-type Art = { id: number; title: string; slug: string; excerpt: string;
-  category?: string; tags?: string; published_at: string; reading_time?: number;
-  image_url?: string; image_alt?: string; image_credit?: string; breaking?: boolean };
+type Art = {
+  id: number; title: string; slug: string; excerpt: string; category?: string;
+  tags?: string; published_at: string; reading_time?: number; image_url?: string;
+  image_alt?: string; image_credit?: string; breaking?: boolean; author?: string;
+};
 
-function dataBr(iso?: string | null) {
+function formatDate(iso?: string | null) {
   if (!iso) return "";
-  return new Date(iso.replace(" ", "T") + "Z").toLocaleDateString("en-US",
-    { day: "2-digit", month: "short", year: "numeric" });
+  return new Date(iso.replace(" ", "T") + "Z").toLocaleDateString("en-US", {
+    day: "numeric", month: "short", year: "numeric",
+  });
 }
-function horaBr(iso?: string | null) {
-  if (!iso) return "";
-  return new Date(iso.replace(" ", "T") + "Z").toLocaleTimeString("en-US",
-    { hour: "2-digit", minute: "2-digit" });
+
+function StoryImage({ story, className = "", eager = false }: { story: Art; className?: string; eager?: boolean }) {
+  return (
+    <div className={`editorial-image ${className}`}>
+      {story.image_url ? (
+        <img src={story.image_url} alt={story.image_alt || story.title} width={1200} height={630}
+          loading={eager ? "eager" : "lazy"} decoding="async"
+          {...(eager ? ({ fetchpriority: "high" } as any) : {})}
+          onError={(event) => { event.currentTarget.style.display = "none"; }}
+          className="h-full w-full object-cover" />
+      ) : <div className="flex h-full items-center justify-center bg-surface text-4xl font-bold text-signal">A</div>}
+    </div>
+  );
+}
+
+function Meta({ story, showAuthor = false }: { story: Art; showAuthor?: boolean }) {
+  return <p className="story-meta">
+    {showAuthor && <>{story.author || "AION Editorial"}<span>·</span></>}
+    {formatDate(story.published_at)}
+    {story.reading_time ? <><span>·</span>{story.reading_time} min read</> : null}
+  </p>;
 }
 
 export function BottomNav() {
   const { pathname } = useLocation();
-  const item = (to: string, rotulo: string, icone: string, ativo: boolean) => (
-    <Link to={to} className={ativo ? "ativo" : ""} aria-current={ativo ? "page" : undefined}>
-      <span aria-hidden className="text-base leading-none">{icone}</span>{rotulo}
+  const item = (to: string, label: string, icon: string, active: boolean) => (
+    <Link to={to} className={active ? "ativo" : ""} aria-current={active ? "page" : undefined}>
+      <span aria-hidden className="text-base leading-none">{icon}</span>{label}
     </Link>
   );
-  return (
-    <nav className="bottom-nav" aria-label="Bottom navigation">
-      {item("/", "Home", "⌂", pathname === "/")}
-      {item("/categories", "Categories", "▤", pathname === "/categories")}
-      {item("/tags", "Tags", "#", pathname === "/tags")}
-      {item("/articles", "Search", "⌕", pathname.startsWith("/article"))}
-      {item("/login", "Account", "◉", pathname === "/login" || pathname === "/dashboard")}
-    </nav>
-  );
+  return <nav className="bottom-nav" aria-label="Bottom navigation">
+    {item("/", "Home", "⌂", pathname === "/")}
+    {item("/articles", "News", "▤", pathname.startsWith("/article"))}
+    {item("/categories", "Topics", "#", pathname === "/categories")}
+    {item("/about", "About", "A", pathname === "/about")}
+    {item("/login", "Account", "◉", pathname === "/login" || pathname === "/dashboard")}
+  </nav>;
 }
 
 export function Nav() {
-  return (
-    <>
-      <a href="#main-content" className="skip-link">Skip to main content</a>
-      <nav className="glass-nav" aria-label="Primary navigation">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <Link to="/" className="flex items-center gap-2 font-display text-xl font-bold tracking-tight">
-            <span aria-hidden className="grad-text text-2xl leading-none">▲</span>
-            <span>AION<span className="block font-mono text-[9px] font-normal uppercase tracking-[0.3em] text-slateui">ai news os</span></span>
+  return <>
+    <a href="#main-content" className="skip-link">Skip to main content</a>
+    <header className="site-header">
+      <div className="mx-auto max-w-7xl px-5 sm:px-8">
+        <div className="flex items-center justify-between border-b border-line py-4">
+          <Link to="/" className="brand-lockup" aria-label="AION AI News home">
+            <span className="brand-mark" aria-hidden>A</span>
+            <span><strong>AION</strong><small>AI NEWS</small></span>
           </Link>
-          <div className="hidden items-center gap-1 text-sm sm:flex">
-            <Link to="/" className="px-3 py-2 text-signal">Home</Link>
-            <Link to="/articles" className="px-3 py-2 text-slateui hover:text-ink">News</Link>
-            <Link to="/categories" className="px-3 py-2 text-slateui hover:text-ink">Categories</Link>
-            <Link to="/tags" className="px-3 py-2 text-slateui hover:text-ink">Tags</Link>
-            <Link to="/about" className="px-3 py-2 text-slateui hover:text-ink">About</Link>
-            <Link to="/login" className="px-3 py-2 text-slateui hover:text-ink">Sign in</Link>
-            <a href="/#newsletter" className="btn-primary !px-4 !py-2 text-sm">Subscribe</a>
+          <p className="hidden text-xs text-slateui lg:block">Independent intelligence for the AI economy</p>
+          <div className="flex items-center gap-3">
+            <Link to="/login" className="hidden text-sm text-slateui hover:text-ink sm:inline">Sign in</Link>
+            <a href="/#newsletter" className="btn-primary !px-4 !py-2 text-sm">Get the briefing</a>
           </div>
-          <a href="/#newsletter" className="btn-primary !px-4 !py-2 text-sm sm:hidden">Subscribe</a>
         </div>
-      </nav>
-      <BottomNav />
-    </>
-  );
+        <nav className="hidden items-center gap-6 overflow-x-auto py-3 text-sm sm:flex" aria-label="Primary navigation">
+          <Link to="/" className="font-semibold text-ink">Top stories</Link>
+          <Link to="/articles" className="text-slateui hover:text-ink">Latest</Link>
+          <Link to="/articles?category=analysis" className="text-slateui hover:text-ink">Analysis</Link>
+          <Link to="/articles?category=guides" className="text-slateui hover:text-ink">Guides</Link>
+          <Link to="/articles?tag=agents" className="text-slateui hover:text-ink">AI agents</Link>
+          <Link to="/articles?tag=openai" className="text-slateui hover:text-ink">OpenAI</Link>
+          <Link to="/categories" className="text-slateui hover:text-ink">All topics</Link>
+          <Link to="/about" className="ml-auto text-slateui hover:text-ink">About AION</Link>
+        </nav>
+      </div>
+    </header>
+    <BottomNav />
+  </>;
 }
 
 async function readJson<T>(path: string, signal: AbortSignal): Promise<T> {
@@ -71,277 +93,175 @@ async function readJson<T>(path: string, signal: AbortSignal): Promise<T> {
   return response.json();
 }
 
-function Ticker({ artigos, loading }: { artigos: Art[]; loading: boolean }) {
-  const itens = [...artigos, ...artigos]; // loop contínuo
-  return (
-    <div className="min-h-[45px] overflow-hidden border-b border-line bg-surface/60">
-      <div className="mx-auto flex max-w-6xl items-center gap-4 px-6 py-2.5">
-        <span className="shrink-0 font-mono text-[11px] font-medium uppercase tracking-widest text-signal">⚡ Trending</span>
-        <div className="relative flex-1 overflow-hidden">
-          {loading ? <div className="skeleton h-4 max-w-lg" aria-hidden /> : itens.length > 0 ? <div className="ticker-track">
-            {itens.map((a, i) => (
-              <Link key={i} to={`/article/${a.slug}`}
-                className="shrink-0 text-sm text-slateui transition hover:text-ink">
-                <span className="mr-2 text-signal">•</span>{a.title}
-              </Link>
-            ))}
-          </div> : <p className="text-sm text-slateui">Fresh newsroom updates are being prepared.</p>}
-        </div>
+function NewsTicker({ stories, loading }: { stories: Art[]; loading: boolean }) {
+  return <div className="border-b border-line bg-surface/50">
+    <div className="mx-auto flex min-h-11 max-w-7xl items-center gap-4 px-5 sm:px-8">
+      <span className="shrink-0 text-[11px] font-bold uppercase tracking-[0.18em] text-signal">News wire</span>
+      <div className="min-w-0 flex-1 overflow-hidden">
+        {loading ? <div className="skeleton h-4 max-w-lg" aria-hidden /> : stories.length ? (
+          <div className="ticker-track">{[...stories, ...stories].map((story, index) => (
+            <Link key={`${story.id}-${index}`} to={`/article/${story.slug}`} className="shrink-0 text-sm text-slateui hover:text-ink">
+              <span className="mr-2 text-signal">●</span>{story.title}
+            </Link>
+          ))}</div>
+        ) : <p className="text-sm text-slateui">The newsroom is preparing the next briefing.</p>}
       </div>
     </div>
-  );
+  </div>;
 }
 
 export default function Landing() {
   usePageMetadata({
-    title: "AI news, guides and analysis",
-    description: "Daily AI news, guides and analysis from an autonomous newsroom.",
+    title: "AI news, analysis and practical intelligence",
+    description: "Independent AI news, source-led analysis and practical guides for people building and using artificial intelligence.",
     path: "/",
   });
-  const [artigos, setArtigos] = useState<Art[]>([]);
+  const [articles, setArticles] = useState<Art[]>([]);
   const [tags, setTags] = useState<{ tag: string; total: number }[]>([]);
+  const [hero, setHero] = useState<Art | null>(null);
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
-  const [newsMsg, setNewsMsg] = useState("");
+  const [newsletterMessage, setNewsletterMessage] = useState("");
 
-  const [hero, setHero] = useState<Art | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     Promise.allSettled([
       readJson<Art | null>("/api/public/hero", controller.signal),
-      readJson<{ items: Art[] }>("/api/public/articles?per_page=9", controller.signal),
+      readJson<{ items: Art[] }>("/api/public/articles?per_page=12", controller.signal),
       readJson<{ tag: string; total: number }[]>("/api/public/tags", controller.signal),
-    ]).then(([heroResult, articlesResult, tagsResult]) => {
+    ]).then(([heroResult, articleResult, tagResult]) => {
       if (controller.signal.aborted) return;
       if (heroResult.status === "fulfilled") setHero(heroResult.value);
-      if (articlesResult.status === "fulfilled") setArtigos(articlesResult.value.items);
-      if (tagsResult.status === "fulfilled") setTags(tagsResult.value);
-    }).finally(() => {
-      if (!controller.signal.aborted) setLoading(false);
-    });
+      if (articleResult.status === "fulfilled") setArticles(articleResult.value.items);
+      if (tagResult.status === "fulfilled") setTags(tagResult.value);
+    }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, []);
 
-  async function assinar(e: React.FormEvent) {
-    e.preventDefault();
+  async function subscribe(event: React.FormEvent) {
+    event.preventDefault();
     try {
-      const r = await fetch(`${API_BASE}/api/public/newsletter`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+      const response = await fetch(`${API_BASE}/api/public/newsletter`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }),
       });
-      setNewsMsg(r.ok ? "Subscribed! ✓" : "Could not subscribe right now.");
-      if (r.ok) setEmail("");
-    } catch { setNewsMsg("Could not subscribe right now."); }
+      setNewsletterMessage(response.ok ? "You're on the list." : "Could not subscribe right now.");
+      if (response.ok) setEmail("");
+    } catch { setNewsletterMessage("Could not subscribe right now."); }
   }
 
-  const destaque = hero || artigos[0];
-  const hoje = artigos.slice(1, 5);
-  const ultimas = artigos.slice(1, 5);
+  const featured = hero || articles[0];
+  const withoutFeatured = useMemo(() => articles.filter((article) => article.id !== featured?.id), [articles, featured]);
+  const leadStories = withoutFeatured.slice(0, 2);
+  const latest = withoutFeatured.slice(2, 8);
 
-  const AGENTES = [
-    { n: "Content", d: "Produces the portal's daily content from the queue.", r: "content" },
-    { n: "SEO", d: "Optimizes titles, slugs, schema and sitemaps.", r: "optimization" },
-    { n: "Discovery Growth", d: "Clusters, trends and the editorial calendar.", r: "growth" },
-    { n: "QA", d: "Validates critical flows and blocks regressions.", r: "quality" },
-    { n: "Cost Guard", d: "Keeps AI API spend within budget.", r: "budget" },
-  ];
+  return <div className="min-h-screen pb-16 sm:pb-0">
+    <Nav />
+    <NewsTicker stories={articles.slice(0, 6)} loading={loading} />
 
-  return (
-    <div className="min-h-screen pb-16 sm:pb-0">
-      <Nav />
-      <Ticker artigos={artigos.slice(0, 5)} loading={loading} />
-
-      <main id="main-content" className="mx-auto max-w-6xl px-6 py-8" aria-busy={loading}>
-        <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
-          {/* HERO — matéria em destaque (real) */}
-          <section aria-label="Featured">
-            {loading ? (
-              <div className="thumb thumb-hero min-h-[380px] rounded-xl border border-line p-8" aria-label="Loading featured story">
-                <div className="relative z-10 w-full max-w-xl space-y-4 self-end">
-                  <div className="skeleton h-5 w-28" />
-                  <div className="skeleton h-10 w-full" />
-                  <div className="skeleton h-5 w-4/5" />
-                  <div className="skeleton h-9 w-36" />
-                </div>
-              </div>
-            ) : destaque ? (
-              <article className="thumb thumb-hero relative flex h-auto min-h-[380px] flex-col justify-end overflow-hidden rounded-xl border border-line p-8">
-                {destaque.image_url && (
-                  <>
-                    <img onError={(e) => { e.currentTarget.style.display = "none"; }}
-                      src={destaque.image_url} alt={destaque.image_alt || destaque.title}
-                      width={1200} height={630}
-                      className="absolute inset-0 h-full w-full object-cover object-center"
-                      decoding="async" {...({ fetchpriority: "high" } as any)} />
-                    <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/15" />
-                    {destaque.image_credit && (
-                      <span className="absolute right-3 top-3 z-10 rounded bg-black/50 px-2 py-0.5 font-mono text-[10px] text-white/70">
-                        {destaque.image_credit}
-                      </span>
-                    )}
-                  </>
-                )}
-                <div className="orb h-56 w-56 bg-ultra/40" style={{ top: "-30px", right: "6%" }} />
-                <div className="relative z-10">
-                  <div className="mb-4 flex flex-wrap items-center gap-2">
-                    <span className="badge-feat">{destaque.breaking ? "Breaking" : "Featured"}</span>
-                    <span className="font-mono text-[10px] uppercase tracking-widest text-signal">ai news</span>
-                  </div>
-                  <h1 className="max-w-xl font-display text-3xl font-bold leading-tight tracking-tight md:text-4xl">
-                    {destaque.title}
-                  </h1>
-                  {destaque.excerpt && <p className="mt-3 max-w-lg text-slateui">{destaque.excerpt}</p>}
-                  <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
-                    <p className="font-mono text-xs text-slateui">
-                      {(destaque as any).author || "AION Editorial"} · {dataBr(destaque.published_at)}
-                      {destaque.reading_time ? ` · ${destaque.reading_time} min` : ""}
-                    </p>
-                    <Link to={`/article/${destaque.slug}`} className="btn-primary !py-2 text-sm">
-                      Read story →
-                    </Link>
-                  </div>
-                </div>
-              </article>
-            ) : (
-              <div className="empty-state min-h-[380px] justify-center">
-                <span className="font-mono text-2xl text-signal">▸_</span>
-                <p className="font-display font-bold text-ink">The first featured story is coming soon</p>
-              </div>
-            )}
-
-            <AdSlot slot="aion-home-top" className="mt-6" />
-
-            {/* LATEST NEWS */}
-            <section className="mt-10 min-h-[1080px] sm:min-h-[540px] lg:min-h-[270px]" aria-label="Latest news">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="font-display text-lg font-bold uppercase tracking-wide">Latest news</h2>
-                <Link to="/articles" className="text-sm text-signal hover:underline">View all →</Link>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {loading ? [0, 1, 2, 3].map((i) => (
-                  <div key={i} className="card !p-3" aria-hidden>
-                    <div className="skeleton mb-3 h-36" />
-                    <div className="skeleton h-3 w-20" />
-                    <div className="skeleton mt-3 h-5 w-full" />
-                    <div className="skeleton mt-3 h-3 w-28" />
-                  </div>
-                )) : ultimas.map((a) => (
-                  <Link key={a.id} to={`/article/${a.slug}`} className="card card-hover !p-3">
-                    <div className="thumb mb-3">
-                      <span className="grad-text relative z-0 font-display text-3xl font-bold">
-                        {(a.category || "ai").slice(0, 1).toUpperCase()}
-                      </span>
-                      <img onError={(e) => { e.currentTarget.style.display = "none"; }} src={a.image_url} alt={a.image_alt || a.title}
-                        loading="lazy" decoding="async" width={1200} height={630}
-                        className="absolute inset-0 z-10 h-full w-full object-cover" />
-                    </div>
-                    {a.category && <p className="tag text-signal">{a.category}</p>}
-                    <p className="mt-1 text-sm font-medium leading-snug">{a.title}</p>
-                    <p className="mt-2 font-mono text-[11px] text-slateui">
-                      {dataBr(a.published_at)}{a.reading_time ? ` · ${a.reading_time} min` : ""}
-                    </p>
-                  </Link>
-                ))}
-              </div>
-            </section>
-
-            {/* AGENT HUB */}
-            <section className="mt-10" aria-label="Agent hub">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="font-display text-lg font-bold uppercase tracking-wide">Agent hub</h2>
-                <Link to="/about" className="text-sm text-signal hover:underline">Meet the team →</Link>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                {AGENTES.map((ag) => (
-                  <div key={ag.n} className="card card-hover !p-4">
-                    <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg text-white"
-                         style={{ backgroundImage: "var(--grad)" }} aria-hidden>▲</div>
-                    <p className="font-display text-sm font-bold">{ag.n}</p>
-                    <p className="mt-1 text-xs leading-snug text-slateui">{ag.d}</p>
-                    <p className="tag mt-2 text-signal">{ag.r} →</p>
-                  </div>
-                ))}
-              </div>
-            </section>
-          </section>
-
-          {/* SIDEBAR */}
-          <aside className="space-y-6">
-            <section className="card min-h-[360px]" aria-label="Today in AI">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="font-display font-bold uppercase tracking-wide">Today in AI</h2>
-                <span className="badge-live"><span className="status-dot h-1.5 w-1.5 rounded-full bg-emerald-400" />live</span>
-              </div>
-              <ul className="space-y-4">
-                {loading ? [0, 1, 2, 3].map((i) => (
-                  <li key={i} className="flex gap-3" aria-hidden>
-                    <div className="skeleton h-12 w-12 shrink-0" />
-                    <div className="flex-1 space-y-2"><div className="skeleton h-3 w-16" /><div className="skeleton h-4 w-full" /></div>
-                  </li>
-                )) : hoje.map((a) => (
-                  <li key={a.id} className="flex gap-3">
-                    <div className="thumb !h-12 !w-12 shrink-0 !rounded-md">
-                      {a.image_url
-                        ? <img onError={(e) => { e.currentTarget.style.display = "none"; }} src={a.image_url} alt={a.image_alt || a.title} loading="lazy"
-                            className="absolute inset-0 h-full w-full rounded-md object-cover" />
-                        : <span className="grad-text relative z-10 font-display text-sm font-bold">▲</span>}
-                    </div>
-                    <div>
-                      <p className="font-mono text-[10px] uppercase tracking-widest text-slateui">{horaBr(a.published_at)}</p>
-                      <Link to={`/article/${a.slug}`} className="text-sm font-medium leading-snug hover:text-signal">{a.title}</Link>
-                    </div>
-                  </li>
-                ))}
-                {!loading && hoje.length === 0 && <li className="text-sm text-slateui">Today's first stories are on their way.</li>}
-              </ul>
-              <Link to="/articles" className="btn-ghost mt-5 w-full !py-2 text-sm">View all updates →</Link>
-            </section>
-
-            <section id="newsletter" className="card scroll-mt-24" aria-label="Newsletter">
-              <h2 className="font-display font-bold uppercase tracking-wide">Newsletter</h2>
-              <p className="mt-2 text-sm text-slateui">Get the best of AI, tools and analysis in your inbox.</p>
-              <form onSubmit={assinar} className="mt-4 flex gap-2">
-                <input className="field !py-2" type="email" required placeholder="Your email"
-                  value={email} onChange={(e) => setEmail(e.target.value)} aria-label="Newsletter email" />
-                <button className="btn-primary !px-4 !py-2 text-sm">Subscribe</button>
-              </form>
-              {newsMsg && <p className="mt-2 text-xs text-emerald-300" aria-live="polite">{newsMsg}</p>}
-              <p className="mt-2 font-mono text-[10px] text-slateui">No spam. Unsubscribe anytime.</p>
-            </section>
-
-            <AdSlot slot="aion-sidebar" />
-            <section className="card min-h-[180px]" aria-label="Trending topics">
-              <h2 className="font-display font-bold uppercase tracking-wide">Trending topics</h2>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {loading ? [0, 1, 2, 3, 4].map((i) => <span key={i} className="skeleton h-7 w-20 rounded-full" aria-hidden />) : tags.slice(0, 9).map((t) => (
-                  <Link key={t.tag} to={`/articles?tag=${encodeURIComponent(t.tag)}`} className="chip !py-1 text-xs">
-                    #{t.tag}
-                  </Link>
-                ))}
-                {!loading && tags.length === 0 && <p className="text-sm text-slateui">Tags appear as articles get published.</p>}
-              </div>
-              <Link to="/tags" className="btn-ghost mt-5 w-full !py-2 text-sm">View all topics →</Link>
-            </section>
-          </aside>
+    <main id="main-content" className="mx-auto max-w-7xl px-5 py-8 sm:px-8 sm:py-12" aria-busy={loading}>
+      <section aria-labelledby="top-stories-heading">
+        <div className="section-heading">
+          <div><p className="eyebrow">AION Daily</p><h1 id="top-stories-heading">The intelligence that matters now</h1></div>
+          <p className="max-w-md text-sm leading-relaxed text-slateui">Source-led reporting and practical analysis of models, agents, products, policy and the companies shaping AI.</p>
         </div>
-      </main>
-
-      <div className="mx-auto max-w-6xl px-6"><AdSlot slot="aion-footer" className="mb-6" /></div>
-      <footer className="border-t border-line">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-8 text-sm text-slateui">
-          <span className="flex items-center gap-2 font-display font-bold text-ink">
-            <span aria-hidden className="grad-text">▲</span>AION AI NEWS OS
-          </span>
-          <div className="flex gap-4 text-xs">
-            <Link to="/categories" className="hover:text-ink">Categories</Link>
-            <Link to="/tags" className="hover:text-ink">Tags</Link>
-            <Link to="/privacy" className="hover:text-ink">Privacy</Link>
-            <Link to="/terms" className="hover:text-ink">Terms</Link>
-            <Link to="/contact" className="hover:text-ink">Contact</Link>
+        {loading ? (
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.75fr)_minmax(280px,.75fr)]">
+            <div className="skeleton aspect-[16/10]" /><div className="space-y-6"><div className="skeleton h-64" /><div className="skeleton h-64" /></div>
           </div>
-          <span className="font-mono text-xs">© {new Date().getFullYear()} · built by agents, supervised by humans</span>
+        ) : featured ? (
+          <div className="grid gap-7 lg:grid-cols-[minmax(0,1.75fr)_minmax(280px,.75fr)]">
+            <article>
+              <Link to={`/article/${featured.slug}`} className="block"><StoryImage story={featured} eager className="aspect-[16/9]" /></Link>
+              <div className="pt-5">
+                <p className="eyebrow">{featured.breaking ? "Breaking" : featured.category || "Featured"}</p>
+                <Link to={`/article/${featured.slug}`}><h2 className="mt-2 font-display text-4xl font-bold leading-[1.04] tracking-[-0.025em] hover:text-signal md:text-5xl">{featured.title}</h2></Link>
+                {featured.excerpt && <p className="mt-4 max-w-3xl text-lg leading-relaxed text-slateui">{featured.excerpt}</p>}
+                <Meta story={featured} showAuthor />
+              </div>
+            </article>
+            <div className="divide-y divide-line border-y border-line">
+              {leadStories.map((story) => <article key={story.id} className="py-5 first:pt-0">
+                <Link to={`/article/${story.slug}`}><StoryImage story={story} className="aspect-[16/9]" /></Link>
+                <p className="eyebrow mt-4">{story.category || "News"}</p>
+                <Link to={`/article/${story.slug}`}><h2 className="mt-1 font-display text-2xl font-bold leading-tight hover:text-signal">{story.title}</h2></Link>
+                <Meta story={story} />
+              </article>)}
+            </div>
+          </div>
+        ) : <div className="empty-state"><p className="font-display text-2xl font-bold">The next AION briefing is being prepared.</p></div>}
+      </section>
+
+      <AdSlot slot="aion-home-top" className="my-10" />
+
+      <div className="mt-14 grid gap-12 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <section aria-labelledby="latest-heading">
+          <div className="section-heading !mb-6">
+            <div><p className="eyebrow">Newsroom</p><h2 id="latest-heading">Latest stories</h2></div>
+            <Link to="/articles" className="text-sm font-semibold text-signal hover:underline">See all stories →</Link>
+          </div>
+          <div className="divide-y divide-line border-t border-line">
+            {latest.map((story) => <article key={story.id} className="grid gap-5 py-6 sm:grid-cols-[220px_1fr]">
+              <Link to={`/article/${story.slug}`}><StoryImage story={story} className="aspect-[16/10]" /></Link>
+              <div className="self-center">
+                <p className="eyebrow">{story.category || "News"}</p>
+                <Link to={`/article/${story.slug}`}><h3 className="mt-1 font-display text-2xl font-bold leading-tight hover:text-signal">{story.title}</h3></Link>
+                {story.excerpt && <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-slateui">{story.excerpt}</p>}
+                <Meta story={story} />
+              </div>
+            </article>)}
+          </div>
+        </section>
+
+        <aside className="space-y-8">
+          <section id="newsletter" className="newsletter-panel scroll-mt-24" aria-labelledby="newsletter-heading">
+            <p className="eyebrow !text-white/70">The AION Brief</p>
+            <h2 id="newsletter-heading" className="mt-2 font-display text-3xl font-bold">One useful AI briefing. No hype.</h2>
+            <p className="mt-3 text-sm leading-relaxed text-white/70">The most important developments, what they mean, and what to watch next.</p>
+            <form onSubmit={subscribe} className="mt-5 space-y-3">
+              <input className="field !border-white/20 !bg-black/20 !text-white placeholder:!text-white/50" type="email" required placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)} aria-label="Newsletter email" />
+              <button className="w-full rounded-md bg-white px-4 py-2.5 text-sm font-bold text-black hover:bg-white/90">Join the briefing</button>
+            </form>
+            {newsletterMessage && <p className="mt-3 text-xs text-white" aria-live="polite">{newsletterMessage}</p>}
+            <p className="mt-3 text-[11px] text-white/55">Free. No spam. Unsubscribe anytime.</p>
+          </section>
+          <section className="border-t border-line pt-6" aria-labelledby="topics-heading">
+            <div className="flex items-center justify-between"><h2 id="topics-heading" className="font-display text-2xl font-bold">Topics to follow</h2><Link to="/tags" className="text-xs text-signal">All topics</Link></div>
+            <div className="mt-4 flex flex-wrap gap-2">{tags.slice(0, 10).map((item) => <Link key={item.tag} to={`/articles?tag=${encodeURIComponent(item.tag)}`} className="chip !py-1 text-xs">{item.tag}</Link>)}</div>
+          </section>
+          <section className="border-t border-line pt-6" aria-labelledby="standards-heading">
+            <p className="eyebrow">Why trust AION</p><h2 id="standards-heading" className="mt-2 font-display text-2xl font-bold">Sources before speed</h2>
+            <p className="mt-3 text-sm leading-relaxed text-slateui">Every publishable story must include attributable sourcing, a useful original angle and a verified editorial image.</p>
+            <div className="mt-4 flex gap-4 text-xs font-semibold"><Link to="/editorial-policy" className="text-signal hover:underline">Editorial policy</Link><Link to="/corrections-policy" className="text-signal hover:underline">Corrections</Link></div>
+          </section>
+          <AdSlot slot="aion-sidebar" />
+        </aside>
+      </div>
+
+      <section className="mt-16 border-y border-line py-10" aria-labelledby="start-heading">
+        <p className="eyebrow">Start here</p>
+        <div className="mt-2 grid gap-8 md:grid-cols-[1fr_2fr]">
+          <h2 id="start-heading" className="font-display text-3xl font-bold">Follow AI by the question you need answered.</h2>
+          <div className="grid gap-3 sm:grid-cols-2">{[
+            ["Choosing AI tools", "Comparisons and practical buyer guides", "/articles?category=comparisons"],
+            ["Building with agents", "Workflows, reliability and real-world use", "/articles?tag=agents"],
+            ["Understanding models", "Clear explainers without the benchmark fog", "/articles?category=guides"],
+            ["Tracking the industry", "Companies, policy, funding and power", "/articles?category=news"],
+          ].map(([title, description, path]) => <Link key={title} to={path} className="topic-path"><strong>{title}</strong><span>{description}</span><b aria-hidden>→</b></Link>)}</div>
         </div>
-      </footer>
-    </div>
-  );
+      </section>
+    </main>
+
+    <div className="mx-auto max-w-7xl px-5 sm:px-8"><AdSlot slot="aion-footer" className="mb-8" /></div>
+    <footer className="border-t border-line bg-surface/40">
+      <div className="mx-auto grid max-w-7xl gap-8 px-5 py-10 sm:px-8 md:grid-cols-[1.2fr_2fr]">
+        <div><Link to="/" className="brand-lockup"><span className="brand-mark" aria-hidden>A</span><span><strong>AION</strong><small>AI NEWS</small></span></Link><p className="mt-4 max-w-xs text-sm leading-relaxed text-slateui">Independent AI intelligence for builders, leaders and curious minds.</p></div>
+        <div className="footer-links grid grid-cols-2 gap-6 text-sm sm:grid-cols-3">
+          <div><p className="footer-title">Explore</p><Link to="/articles">Latest</Link><Link to="/categories">Categories</Link><Link to="/tags">Topics</Link></div>
+          <div><p className="footer-title">Standards</p><Link to="/about">About</Link><Link to="/editorial-policy">Editorial policy</Link><Link to="/corrections-policy">Corrections</Link></div>
+          <div><p className="footer-title">Legal</p><Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link><Link to="/contact">Contact</Link></div>
+        </div>
+      </div>
+      <div className="mx-auto flex max-w-7xl flex-wrap justify-between gap-2 border-t border-line px-5 py-5 text-xs text-slateui sm:px-8"><span>© {new Date().getFullYear()} AION AI News</span><span>Built by agents. Supervised by humans.</span></div>
+    </footer>
+  </div>;
 }
