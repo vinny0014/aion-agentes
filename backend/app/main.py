@@ -298,8 +298,14 @@ def server_rendered_article(slug: str):
     title = (article["seo_title"] or article["title"])[:60]
     description = (article["seo_description"] or article["excerpt"])[:160]
     from .agents.imagegen import managed_image_path
-    image = (article["hero_image_url"] if managed_image_path(article["hero_image_url"] or "")
-             else article["image_url"])
+    if managed_image_path(article["hero_image_url"] or ""):
+        image = article["hero_image_url"]
+        image_alt = article["hero_image_alt"] or article["image_alt"] or article["title"]
+        image_credit = article["hero_image_credit"] or article["image_credit"] or "AION Editorial"
+    else:
+        image = article["image_url"]
+        image_alt = article["image_alt"] or article["title"]
+        image_credit = article["image_credit"] or "AION Editorial"
     logo = f"{SITE_URL}/logo.png"
     jsonld = {
         "@context": "https://schema.org", "@type": "NewsArticle",
@@ -311,8 +317,7 @@ def server_rendered_article(slug: str):
         "articleSection": article["category"] or "news",
         "keywords": [tag.strip() for tag in (article["tags"] or "").split(",") if tag.strip()],
         "image": {"@type": "ImageObject", "url": image, "width": 1200, "height": 630,
-                  "caption": article["image_alt"] or article["title"],
-                  "creditText": article["image_credit"] or "AION Editorial"},
+                  "caption": image_alt, "creditText": image_credit},
         "author": {"@type": "Organization", "name": article["author"] or "AION Editorial",
                    "url": SITE_URL + "/about"},
         "publisher": {"@type": "NewsMediaOrganization", "name": "AION AI NEWS OS",
@@ -333,8 +338,8 @@ def server_rendered_article(slug: str):
             f' · <a href="{html.escape(article["source_url"], quote=True)}" '
             'rel="noopener noreferrer">Primary source ↗</a>'
         )
-    credit = article["image_credit"] or ""
-    caption = article["image_alt"] or article["title"]
+    credit = image_credit
+    caption = image_alt
     caption_html = (
         f'<figcaption>{html.escape(caption)}'
         f'{" · " + html.escape(credit) if credit else ""}</figcaption>'
@@ -348,12 +353,12 @@ def server_rendered_article(slug: str):
 <link rel="canonical" href="{html.escape(canonical, quote=True)}"><link rel="alternate" hreflang="en-US" href="{html.escape(canonical, quote=True)}"><link rel="alternate" hreflang="x-default" href="{html.escape(canonical, quote=True)}"><link rel="icon" type="image/png" href="{SITE_URL}/logo.png">
 <meta property="og:type" content="article"><meta property="og:site_name" content="AION AI NEWS OS">
 <meta property="og:title" content="{html.escape(title, quote=True)}"><meta property="og:description" content="{html.escape(description, quote=True)}">
-<meta property="og:url" content="{html.escape(canonical, quote=True)}"><meta property="og:image" content="{html.escape(image, quote=True)}"><meta property="og:image:alt" content="{html.escape(article['image_alt'] or article['title'], quote=True)}">
+<meta property="og:url" content="{html.escape(canonical, quote=True)}"><meta property="og:image" content="{html.escape(image, quote=True)}"><meta property="og:image:alt" content="{html.escape(image_alt, quote=True)}">
 <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:locale" content="en_US">
 <meta property="article:published_time" content="{html.escape((article['published_at'] or '').replace(' ', 'T') + 'Z', quote=True)}"><meta property="article:modified_time" content="{html.escape((article['updated_at'] or '').replace(' ', 'T') + 'Z', quote=True)}">
 <meta property="article:section" content="{html.escape(article['category'] or 'news', quote=True)}">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="{html.escape(title, quote=True)}">
-<meta name="twitter:description" content="{html.escape(description, quote=True)}"><meta name="twitter:image" content="{html.escape(image, quote=True)}"><meta name="twitter:image:alt" content="{html.escape(article['image_alt'] or article['title'], quote=True)}">
+<meta name="twitter:description" content="{html.escape(description, quote=True)}"><meta name="twitter:image" content="{html.escape(image, quote=True)}"><meta name="twitter:image:alt" content="{html.escape(image_alt, quote=True)}">
 <script type="application/ld+json">{json.dumps(jsonld, ensure_ascii=False).replace('</', '<\\/')}</script>
 <script type="application/ld+json">{json.dumps(breadcrumb, ensure_ascii=False).replace('</', '<\\/')}</script>
 <style>
