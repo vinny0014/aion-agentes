@@ -55,6 +55,13 @@ def publication_issues(content: dict) -> list[str]:
     taxonomy = set(re.findall(r"[a-z]+", f"{content.get('category', '')} {content.get('tags', '')}".lower()))
     if taxonomy & PORTUGUESE_TAXONOMY:
         issues.append("Public categories and tags must be written in English")
+    if int(content.get("visual_review_required") or 0):
+        from .agents.visual_desk import visual_publication_issues
+        hero = bool(content.get("featured") or content.get("pinned") or
+                    content.get("breaking_flag"))
+        issues.extend(visual_publication_issues(
+            int(content.get("id") or 0), asset_url=image_url, hero=hero
+        ))
     return issues
 
 

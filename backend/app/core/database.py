@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS contents (
     hero_image_width TEXT NOT NULL DEFAULT '',
     hero_image_height TEXT NOT NULL DEFAULT '',
     hero_image_source TEXT NOT NULL DEFAULT '',
+    visual_review_required INTEGER NOT NULL DEFAULT 0,
     published_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -191,6 +192,16 @@ def init_db():
                 conn.execute(f"ALTER TABLE contents ADD COLUMN {col} TEXT NOT NULL DEFAULT ''")
             except Exception:
                 pass  # coluna já existe
+        # Existing production stories predate the Visual Desk. Keep them online
+        # while every newly-created story is explicitly opted into the gate by
+        # its INSERT path. This migration is intentionally non-destructive.
+        try:
+            conn.execute(
+                "ALTER TABLE contents ADD COLUMN visual_review_required "
+                "INTEGER NOT NULL DEFAULT 0"
+            )
+        except Exception:
+            pass
 
 
 def query(sql: str, params: tuple = ()) -> list[dict]:

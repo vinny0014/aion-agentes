@@ -5,6 +5,7 @@ import { Nav } from "./Landing";
 import AdSlot from "../lib/AdSlot";
 import { API_BASE } from "../lib/api";
 import { usePageMetadata } from "../lib/seo";
+import EditorialImage from "../components/EditorialImage";
 
 type Artigo = {
   id: number; title: string; slug: string; excerpt: string;
@@ -118,8 +119,11 @@ export function Conteudos() {
             {artigos.map((a) => (
               <li key={a.id} className="grid gap-5 py-7 sm:grid-cols-[260px_1fr]">
                 <Link to={`/article/${a.slug}`} className="editorial-image block aspect-[16/10] overflow-hidden">
-                  <img src={a.image_url} alt={a.image_alt || a.title} width={1200} height={630}
-                    loading="lazy" decoding="async" className="aspect-[1200/630] h-full w-full object-cover" />
+                  <EditorialImage src={a.image_url} alt={a.image_alt || a.title}
+                    category={a.category}
+                    width={a.image_width} height={a.image_height}
+                    sizes="(min-width: 640px) 260px, calc(100vw - 40px)"
+                    className="h-full w-full object-cover object-center" />
                 </Link>
                 <div className="self-center">
                   <p className="eyebrow">{a.category || "News"}</p>
@@ -173,9 +177,13 @@ export function Artigo() {
         setMeta('meta[property="og:description"]', "content", a.seo_description || a.excerpt || "");
         setMeta('meta[property="og:url"]', "content", `${SITE}/article/${a.slug}`);
         setMeta('meta[property="og:image"]', "content", a.image_url || `${SITE}/og-cover.png`);
+        setMeta('meta[property="og:image:alt"]', "content", a.image_alt || a.title);
+        setMeta('meta[property="og:image:width"]', "content", String(Number(a.image_width) || 1200));
+        setMeta('meta[property="og:image:height"]', "content", String(Number(a.image_height) || 630));
         setMeta('meta[name="twitter:title"]', "content", a.seo_title || a.title);
         setMeta('meta[name="twitter:description"]', "content", a.seo_description || a.excerpt || "");
         setMeta('meta[name="twitter:image"]', "content", a.image_url || `${SITE}/og-cover.png`);
+        setMeta('meta[name="twitter:image:alt"]', "content", a.image_alt || a.title);
         setMeta('link[rel="canonical"]', "href", `${SITE}/article/${a.slug}`);
         setMeta('link[rel="alternate"][hreflang="en-US"]', "href", `${SITE}/article/${a.slug}`);
         setMeta('link[rel="alternate"][hreflang="x-default"]', "href", `${SITE}/article/${a.slug}`);
@@ -243,15 +251,16 @@ export function Artigo() {
           {artigo.reading_time ? <><span>·</span><span>{artigo.reading_time} min read</span></> : null}
           {artigo.source_url ? <><span>·</span><a className="font-semibold text-signal hover:underline" href={artigo.source_url} target="_blank" rel="noopener noreferrer">Primary source ↗</a></> : null}
         </div>
-        {artigo.image_url && (
-          <figure className="mt-8">
-            <div className="editorial-image aspect-[16/9]">
-              <img onError={(e) => { e.currentTarget.style.display = "none"; }} src={artigo.image_url} alt={artigo.image_alt || artigo.title}
-                width={1200} height={630} decoding="async" {...({ fetchpriority: "high" } as any)} className="h-full w-full object-cover" />
-            </div>
-            {(artigo.image_credit || artigo.image_alt) && <figcaption className="mt-2 text-xs leading-relaxed text-slateui">{artigo.image_alt || artigo.title}{artigo.image_credit ? ` · ${artigo.image_credit}` : ""}</figcaption>}
-          </figure>
-        )}
+        <figure className="mt-8">
+          <div className="editorial-image aspect-[16/9]">
+            <EditorialImage src={artigo.image_url} alt={artigo.image_alt || artigo.title}
+              category={artigo.category}
+              width={artigo.image_width} height={artigo.image_height} priority
+              sizes="(min-width: 896px) 832px, calc(100vw - 40px)"
+              className="h-full w-full object-cover object-center" />
+          </div>
+          {artigo.image_url && (artigo.image_credit || artigo.image_alt) && <figcaption className="mt-2 text-xs leading-relaxed text-slateui">{artigo.image_alt || artigo.title}{artigo.image_credit ? ` · ${artigo.image_credit}` : ""}</figcaption>}
+        </figure>
         <div className="article-body mt-10">
           {(artigo.body || "").split(/\n\n+/).filter(Boolean).map((p, i) => <div key={i}>
             {i === 3 && <AdSlot slot="aion-artigo-inline" className="my-8" />}
@@ -274,8 +283,11 @@ export function Artigo() {
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               {relacionados.map((r) => (
                 <Link key={r.id} to={`/article/${r.slug}`} className="card card-hover !p-3">
-                  {r.image_url && <img onError={(e) => { e.currentTarget.style.display = "none"; }} src={r.image_url} alt={r.image_alt || r.title} loading="lazy"
-                    className="mb-2 h-24 w-full rounded-md object-cover" />}
+                  <EditorialImage src={r.image_url} alt={r.image_alt || r.title}
+                    category={r.category}
+                    width={r.image_width} height={r.image_height}
+                    sizes="(min-width: 640px) 250px, calc(100vw - 64px)"
+                    className="mb-2 h-24 w-full rounded-md object-cover object-center" />
                   <p className="tag">{dataBr(r.published_at)}</p>
                   <p className="mt-1 text-sm font-medium leading-snug">{r.title}</p>
                 </Link>

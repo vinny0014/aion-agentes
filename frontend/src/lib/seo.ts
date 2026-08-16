@@ -39,9 +39,13 @@ export function usePageMetadata({ title, description, path, robots = "index,foll
     upsertMeta('meta[property="og:description"]', { property: "og:description", content: description });
     upsertMeta('meta[property="og:url"]', { property: "og:url", content: canonical });
     upsertMeta('meta[property="og:image"]', { property: "og:image", content: image });
+    upsertMeta('meta[property="og:image:alt"]', { property: "og:image:alt", content: "AION AI NEWS OS" });
+    upsertMeta('meta[property="og:image:width"]', { property: "og:image:width", content: "1200" });
+    upsertMeta('meta[property="og:image:height"]', { property: "og:image:height", content: "630" });
     upsertMeta('meta[name="twitter:title"]', { name: "twitter:title", content: fullTitle });
     upsertMeta('meta[name="twitter:description"]', { name: "twitter:description", content: description });
     upsertMeta('meta[name="twitter:image"]', { name: "twitter:image", content: image });
+    upsertMeta('meta[name="twitter:image:alt"]', { name: "twitter:image:alt", content: "AION AI NEWS OS" });
     upsertLink('link[rel="canonical"]', { rel: "canonical", href: canonical });
     upsertLink('link[rel="alternate"][hreflang="en-US"]', { rel: "alternate", hreflang: "en-US", href: canonical });
     upsertLink('link[rel="alternate"][hreflang="x-default"]', { rel: "alternate", hreflang: "x-default", href: canonical });

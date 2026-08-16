@@ -115,16 +115,17 @@ def create_content(data: ContentIn, user: dict = Depends(require_admin)):
     img, alt = data.image_url.strip(), data.image_alt.strip()
     image_credit = ""
     if data.status == "published":
-        from ..agents.imagegen import publication_image
+        from ..agents.imagegen import managed_image_path, publication_image
+        already_managed = managed_image_path(img) is not None
         prepared = publication_image(img, data.title)
-        if not prepared:
+        if not prepared or not already_managed:
             raise HTTPException(
                 status.HTTP_422_UNPROCESSABLE_CONTENT,
-                "Publication blocked: provide a valid HTTP/HTTPS raster image of at least 600x315",
+                "Publication blocked: upload the owned raster first or create a draft for Visual Desk review",
             )
         img = prepared["image_url"]
         alt = alt or f"Editorial image for {data.title[:90]}"
-        image_credit = "Source image processed by AION"
+        image_credit = "AION Editorial · administrator-supplied asset"
         from ..content_rules import publication_issues
         candidate = data.model_dump()
         candidate["image_url"] = img
@@ -137,8 +138,8 @@ def create_content(data: ContentIn, user: dict = Depends(require_admin)):
         f"""INSERT INTO contents (title, slug, body, excerpt, status, author_id, agent_id,
             seo_title, seo_description, category, tags, author, image_url, image_alt,
             image_credit, image_width, image_height, featured, pinned, breaking_flag,
-            editors_pick, scheduled_at, source_url, published_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'1200','630',?,?,?,?,?,?,{pub})""",
+            editors_pick, scheduled_at, source_url, visual_review_required, published_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'1200','630',?,?,?,?,?,?,?,{pub})""",
         (data.title, data.slug, data.body, data.excerpt, data.status,
          user["id"], data.agent_id, (data.seo_title or data.title)[:60],
          (data.seo_description or data.excerpt)[:160], data.category.strip().lower(),
@@ -146,8 +147,24 @@ def create_content(data: ContentIn, user: dict = Depends(require_admin)):
          data.author or "AION Editorial", img, alt or f"Image: {data.title[:90]}",
          image_credit,
          data.featured, data.pinned, data.breaking_flag, data.editors_pick,
-         data.scheduled_at, data.source_url),
+         data.scheduled_at, data.source_url, 0 if data.status == "published" else 1),
     )
+    if data.status != "published":
+        from ..agents.imagegen import managed_image_path
+        if managed_image_path(img):
+            from ..agents.core import mem_set
+            mem_set("agent:image-rights-attribution", f"acquisition:{cid}", {
+                "source_url": img,
+                "original_asset_url": img,
+                "asset_url": img,
+                "credit": "AION Editorial · administrator-supplied asset",
+                "rights_basis": "owned",
+                "author": user.get("email") or "AION Editorial",
+                "license_name": "AION-owned editorial asset",
+                "license_url": "",
+                "visual_type": "administrator-supplied editorial image",
+                "focal_subject": data.title[:160],
+            })
     if data.status == "published":
         db.execute(
             "UPDATE contents SET hero_image_url=image_url, hero_image_alt=image_alt, "
