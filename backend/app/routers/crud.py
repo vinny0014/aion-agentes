@@ -149,6 +149,22 @@ def create_content(data: ContentIn, user: dict = Depends(require_admin)):
          data.featured, data.pinned, data.breaking_flag, data.editors_pick,
          data.scheduled_at, data.source_url, 0 if data.status == "published" else 1),
     )
+    if data.status != "published":
+        from ..agents.imagegen import managed_image_path
+        if managed_image_path(img):
+            from ..agents.core import mem_set
+            mem_set("agent:image-rights-attribution", f"acquisition:{cid}", {
+                "source_url": img,
+                "original_asset_url": img,
+                "asset_url": img,
+                "credit": "AION Editorial · administrator-supplied asset",
+                "rights_basis": "owned",
+                "author": user.get("email") or "AION Editorial",
+                "license_name": "AION-owned editorial asset",
+                "license_url": "",
+                "visual_type": "administrator-supplied editorial image",
+                "focal_subject": data.title[:160],
+            })
     if data.status == "published":
         db.execute(
             "UPDATE contents SET hero_image_url=image_url, hero_image_alt=image_alt, "

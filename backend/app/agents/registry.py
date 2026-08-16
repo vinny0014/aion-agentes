@@ -274,6 +274,13 @@ def process_queue_once() -> dict:
             )
             offline += 1
     # Due Editorial Studio items are evaluated during the hourly queue cycle too.
+    # Run the same visual desks first so this shortcut can never bypass the
+    # orchestrator's publication order.
+    from . import team as _team
+    _team.visual_editor_agent({})
+    _team.image_rights_attribution_agent({})
+    _team.image_quality_auditor_agent({})
+    _team.homepage_art_director_agent({})
     from ..content_rules import publication_issues
     scheduled = db.query("SELECT * FROM contents WHERE status='draft' "
                          "AND scheduled_at != '' AND scheduled_at <= datetime('now')")
