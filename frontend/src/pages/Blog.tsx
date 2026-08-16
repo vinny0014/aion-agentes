@@ -1,11 +1,11 @@
 import { SITE } from "../lib/site";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { Nav } from "./Landing";
 import AdSlot from "../lib/AdSlot";
 import { API_BASE } from "../lib/api";
 import { usePageMetadata } from "../lib/seo";
-import { CONSENT_EVENT, trackEvent, trackEventOnce } from "../lib/telemetry";
+import EditorialImage from "../components/EditorialImage";
 
 type Artigo = {
   id: number; title: string; slug: string; excerpt: string;
@@ -60,13 +60,6 @@ export function Conteudos() {
 
   useEffect(() => { setPage(1); }, [categoria, tag, q]);
   useEffect(() => {
-    if (!categoria) return;
-    const send = () => trackEventOnce("category_view", categoria, { category: categoria });
-    send();
-    window.addEventListener(CONSENT_EVENT, send);
-    return () => window.removeEventListener(CONSENT_EVENT, send);
-  }, [categoria]);
-  useEffect(() => {
     setLoading(true); setErro("");
     const u = new URLSearchParams({ page: String(page), per_page: String(perPage) });
     if (categoria) u.set("category", categoria);
@@ -90,13 +83,7 @@ export function Conteudos() {
           <p className="max-w-md text-sm leading-relaxed text-slateui">Source-led news, analysis and practical guides from across the AI industry.</p>
         </div>
         <form className="mt-6 flex gap-2" onSubmit={(e) => { e.preventDefault();
-          const p = new URLSearchParams(params); search ? p.set("q", search) : p.delete("q");
-          if (search.trim()) trackEvent("search_performed", {
-            search_scope: "articles",
-            has_category_filter: Boolean(categoria),
-            has_tag_filter: Boolean(tag),
-          });
-          setParams(p); }}>
+          const p = new URLSearchParams(params); search ? p.set("q", search) : p.delete("q"); setParams(p); }}>
           <input className="field max-w-sm" placeholder="Search articles…" value={search}
             onChange={(e) => setBusca(e.target.value)} aria-label="Search articles" />
           <button className="btn-primary !py-2">Search</button>
@@ -132,8 +119,11 @@ export function Conteudos() {
             {artigos.map((a) => (
               <li key={a.id} className="grid gap-5 py-7 sm:grid-cols-[260px_1fr]">
                 <Link to={`/article/${a.slug}`} className="editorial-image block aspect-[16/10] overflow-hidden">
-                  <img src={a.image_url} alt={a.image_alt || a.title} width={1200} height={630}
-                    loading="lazy" decoding="async" className="aspect-[1200/630] h-full w-full object-cover" />
+                  <EditorialImage src={a.image_url} alt={a.image_alt || a.title}
+                    category={a.category}
+                    width={a.image_width} height={a.image_height}
+                    sizes="(min-width: 640px) 260px, calc(100vw - 40px)"
+                    className="h-full w-full object-cover object-center" />
                 </Link>
                 <div className="self-center">
                   <p className="eyebrow">{a.category || "News"}</p>
@@ -167,38 +157,6 @@ export function Artigo() {
   const [artigo, setArtigo] = useState<Artigo | null>(null);
   const [relacionados, setRelacionados] = useState<Artigo[]>([]);
   const [erro, setErro] = useState(false);
-  const articleRef = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    if (!artigo) return;
-    const parameters = {
-      slug: artigo.slug,
-      category: artigo.category || "news",
-      author: artigo.author || "AION Editorial",
-      published_date: artigo.published_at || "",
-    };
-    const sendArticleView = () => trackEventOnce("article_view", artigo.slug, parameters);
-    const sendScroll = () => {
-      const element = articleRef.current;
-      if (!element) return;
-      const scrollable = Math.max(element.scrollHeight - window.innerHeight, 1);
-      const progress = Math.min(100, Math.max(0, ((window.scrollY - element.offsetTop) / scrollable) * 100));
-      for (const threshold of [25, 50, 90]) {
-        if (progress >= threshold) {
-          trackEventOnce(`article_scroll_${threshold}`, artigo.slug, { ...parameters, percent_scrolled: threshold });
-        }
-      }
-    };
-    sendArticleView();
-    window.addEventListener(CONSENT_EVENT, sendArticleView);
-    window.addEventListener(CONSENT_EVENT, sendScroll);
-    window.addEventListener("scroll", sendScroll, { passive: true });
-    return () => {
-      window.removeEventListener(CONSENT_EVENT, sendArticleView);
-      window.removeEventListener(CONSENT_EVENT, sendScroll);
-      window.removeEventListener("scroll", sendScroll);
-    };
-  }, [artigo]);
 
   useEffect(() => {
     setArtigo(null); setRelacionados([]); setErro(false);
@@ -219,9 +177,13 @@ export function Artigo() {
         setMeta('meta[property="og:description"]', "content", a.seo_description || a.excerpt || "");
         setMeta('meta[property="og:url"]', "content", `${SITE}/article/${a.slug}`);
         setMeta('meta[property="og:image"]', "content", a.image_url || `${SITE}/og-cover.png`);
+        setMeta('meta[property="og:image:alt"]', "content", a.image_alt || a.title);
+        setMeta('meta[property="og:image:width"]', "content", String(Number(a.image_width) || 1200));
+        setMeta('meta[property="og:image:height"]', "content", String(Number(a.image_height) || 630));
         setMeta('meta[name="twitter:title"]', "content", a.seo_title || a.title);
         setMeta('meta[name="twitter:description"]', "content", a.seo_description || a.excerpt || "");
         setMeta('meta[name="twitter:image"]', "content", a.image_url || `${SITE}/og-cover.png`);
+        setMeta('meta[name="twitter:image:alt"]', "content", a.image_alt || a.title);
         setMeta('link[rel="canonical"]', "href", `${SITE}/article/${a.slug}`);
         setMeta('link[rel="alternate"][hreflang="en-US"]', "href", `${SITE}/article/${a.slug}`);
         setMeta('link[rel="alternate"][hreflang="x-default"]', "href", `${SITE}/article/${a.slug}`);
@@ -279,7 +241,7 @@ export function Artigo() {
   return (
     <div className="min-h-screen">
       <Nav />
-      <article ref={articleRef} id="main-content" className="mx-auto max-w-4xl px-5 py-12 sm:px-8 sm:py-16">
+      <article id="main-content" className="mx-auto max-w-4xl px-5 py-12 sm:px-8 sm:py-16">
         <p className="eyebrow mb-4">{artigo.category || "AI intelligence"}</p>
         <h1 className="font-display text-4xl font-bold leading-[1.05] tracking-[-0.025em] sm:text-6xl">{artigo.title}</h1>
         {artigo.excerpt && <p className="mt-5 max-w-3xl text-xl leading-relaxed text-slateui">{artigo.excerpt}</p>}
@@ -287,22 +249,18 @@ export function Artigo() {
           <span className="font-semibold text-ink">By {artigo.author || "AION Editorial"}</span>
           <span>·</span><time>{dataBr(artigo.published_at)}</time>
           {artigo.reading_time ? <><span>·</span><span>{artigo.reading_time} min read</span></> : null}
-          {artigo.source_url ? <><span>·</span><a className="font-semibold text-signal hover:underline" href={artigo.source_url} target="_blank" rel="noopener noreferrer"
-            onClick={() => trackEvent("outbound_source_click", {
-              slug: artigo.slug,
-              category: artigo.category || "news",
-              source_host: (() => { try { return new URL(artigo.source_url || "").hostname; } catch { return "unknown"; } })(),
-            })}>Primary source ↗</a></> : null}
+          {artigo.source_url ? <><span>·</span><a className="font-semibold text-signal hover:underline" href={artigo.source_url} target="_blank" rel="noopener noreferrer">Primary source ↗</a></> : null}
         </div>
-        {artigo.image_url && (
-          <figure className="mt-8">
-            <div className="editorial-image aspect-[16/9]">
-              <img onError={(e) => { e.currentTarget.style.display = "none"; }} src={artigo.image_url} alt={artigo.image_alt || artigo.title}
-                width={1200} height={630} decoding="async" {...({ fetchpriority: "high" } as any)} className="h-full w-full object-cover" />
-            </div>
-            {(artigo.image_credit || artigo.image_alt) && <figcaption className="mt-2 text-xs leading-relaxed text-slateui">{artigo.image_alt || artigo.title}{artigo.image_credit ? ` · ${artigo.image_credit}` : ""}</figcaption>}
-          </figure>
-        )}
+        <figure className="mt-8">
+          <div className="editorial-image aspect-[16/9]">
+            <EditorialImage src={artigo.image_url} alt={artigo.image_alt || artigo.title}
+              category={artigo.category}
+              width={artigo.image_width} height={artigo.image_height} priority
+              sizes="(min-width: 896px) 832px, calc(100vw - 40px)"
+              className="h-full w-full object-cover object-center" />
+          </div>
+          {artigo.image_url && (artigo.image_credit || artigo.image_alt) && <figcaption className="mt-2 text-xs leading-relaxed text-slateui">{artigo.image_alt || artigo.title}{artigo.image_credit ? ` · ${artigo.image_credit}` : ""}</figcaption>}
+        </figure>
         <div className="article-body mt-10">
           {(artigo.body || "").split(/\n\n+/).filter(Boolean).map((p, i) => <div key={i}>
             {i === 3 && <AdSlot slot="aion-artigo-inline" className="my-8" />}
@@ -325,8 +283,11 @@ export function Artigo() {
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               {relacionados.map((r) => (
                 <Link key={r.id} to={`/article/${r.slug}`} className="card card-hover !p-3">
-                  {r.image_url && <img onError={(e) => { e.currentTarget.style.display = "none"; }} src={r.image_url} alt={r.image_alt || r.title} loading="lazy"
-                    className="mb-2 h-24 w-full rounded-md object-cover" />}
+                  <EditorialImage src={r.image_url} alt={r.image_alt || r.title}
+                    category={r.category}
+                    width={r.image_width} height={r.image_height}
+                    sizes="(min-width: 640px) 250px, calc(100vw - 64px)"
+                    className="mb-2 h-24 w-full rounded-md object-cover object-center" />
                   <p className="tag">{dataBr(r.published_at)}</p>
                   <p className="mt-1 text-sm font-medium leading-snug">{r.title}</p>
                 </Link>
