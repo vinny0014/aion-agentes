@@ -4,6 +4,7 @@ import { API_BASE } from "../lib/api";
 import { usePageMetadata } from "../lib/seo";
 import AdSlot from "../lib/AdSlot";
 import EditorialImage from "../components/EditorialImage";
+import { trackEvent } from "../lib/telemetry";
 
 type Art = {
   id: number; title: string; slug: string; excerpt: string; category?: string;
@@ -149,7 +150,10 @@ export default function Landing() {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }),
       });
       setNewsletterMessage(response.ok ? "You're on the list." : "Could not subscribe right now.");
-      if (response.ok) setEmail("");
+      if (response.ok) {
+        trackEvent("newsletter_subscribe", { placement: "homepage" });
+        setEmail("");
+      }
     } catch { setNewsletterMessage("Could not subscribe right now."); }
   }
 
