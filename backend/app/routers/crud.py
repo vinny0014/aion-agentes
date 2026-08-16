@@ -164,6 +164,13 @@ def create_content(data: ContentIn, user: dict = Depends(require_admin)):
                 "license_url": "",
                 "visual_type": "administrator-supplied editorial image",
                 "focal_subject": data.title[:160],
+                # An authenticated administrator-supplied owned asset is the
+                # explicit human review path; automated providers never set this.
+                "scores": {
+                    "editorial_relevance": 30, "visual_quality": 20,
+                    "credibility": 15, "provenance": 15, "crop": 10,
+                    "originality": 5, "naturalness": 5,
+                },
             })
     if data.status == "published":
         db.execute(
