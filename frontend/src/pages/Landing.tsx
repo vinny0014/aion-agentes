@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { API_BASE } from "../lib/api";
 import { usePageMetadata } from "../lib/seo";
 import AdSlot from "../lib/AdSlot";
+import EditorialImage from "../components/EditorialImage";
 import { trackEvent } from "../lib/telemetry";
 
 type Art = {
@@ -21,13 +22,16 @@ function formatDate(iso?: string | null) {
 function StoryImage({ story, className = "", eager = false }: { story: Art; className?: string; eager?: boolean }) {
   return (
     <div className={`editorial-image ${className}`}>
-      {story.image_url ? (
-        <img src={story.image_url} alt={story.image_alt || story.title} width={1200} height={630}
-          loading={eager ? "eager" : "lazy"} decoding="async"
-          {...(eager ? ({ fetchpriority: "high" } as any) : {})}
-          onError={(event) => { event.currentTarget.style.display = "none"; }}
-          className="h-full w-full object-cover" />
-      ) : <div className="flex h-full items-center justify-center bg-surface text-4xl font-bold text-signal">A</div>}
+      <EditorialImage
+        src={story.image_url}
+        alt={story.image_alt || story.title}
+        category={story.category}
+        priority={eager}
+        sizes={eager
+          ? "(min-width: 1280px) 848px, (min-width: 1024px) 66vw, calc(100vw - 40px)"
+          : "(min-width: 1024px) 296px, (min-width: 640px) 220px, calc(100vw - 40px)"}
+        className="h-full w-full object-cover object-center"
+      />
     </div>
   );
 }
