@@ -372,6 +372,14 @@ def visual_editor_agent(payload: dict) -> dict:
         if acquisition.get("asset_url") != c["image_url"] or not managed_image_path(c["image_url"]):
             rejected += 1
             continue
+        scores = acquisition.get("scores")
+        if not isinstance(scores, dict) or any(key not in scores for key in (
+                "editorial_relevance", "visual_quality", "credibility", "provenance",
+                "crop", "originality", "naturalness")):
+            # A successful download or a strong prompt is not a visual review.
+            # Generated/provider images remain drafts until real evidence is supplied.
+            rejected += 1
+            continue
         measured = probe_image(c["image_url"])
         rights = RightsMetadata(
             source_url=acquisition.get("original_asset_url") or acquisition.get("source_url", ""),
@@ -383,8 +391,11 @@ def visual_editor_agent(payload: dict) -> dict:
         )
         candidate = VisualCandidate(
             asset_url=c["image_url"], rights=rights,
-            editorial_relevance=27, visual_quality=18, credibility=12,
-            provenance=15, crop=10, originality=5, naturalness=4,
+            editorial_relevance=int(scores["editorial_relevance"]),
+            visual_quality=int(scores["visual_quality"]),
+            credibility=int(scores["credibility"]), provenance=int(scores["provenance"]),
+            crop=int(scores["crop"]), originality=int(scores["originality"]),
+            naturalness=int(scores["naturalness"]),
             width=int(measured.get("w") or 0), height=int(measured.get("h") or 0),
             visual_type=acquisition.get("visual_type", ""),
             dominant_color=acquisition.get("dominant_color", "unknown"),
