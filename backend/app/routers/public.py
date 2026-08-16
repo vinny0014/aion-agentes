@@ -137,7 +137,7 @@ def newsletter_subscribe(data: EmailIn):
 @router.get("/images/{filename}", include_in_schema=False)
 def public_image(filename: str):
     """Serve only validated raster files stored by the image pipeline."""
-    if not re.fullmatch(r"[a-z0-9-]+\.(?:webp|png|jpe?g)", filename):
+    if not re.fullmatch(r"[a-z0-9-]+\.(?:avif|webp|png|jpe?g)", filename):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Image not found")
     from ..agents.imagegen import _upload_dir
     path = _upload_dir() / filename

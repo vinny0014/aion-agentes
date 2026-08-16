@@ -36,6 +36,18 @@ AGENT_DEFINITIONS = [
      "Validates and persists a real 1200x630 raster image before publication."),
     ("image-quality", "Image Quality Check", "image-quality",
      "Blocks invalid images and requeues content for a verified raster asset."),
+    ("aion-visual-editor", "AION Visual Editor", "visual-editor-in-chief",
+     "Scores every lead image, verifies editorial relevance and releases only approved visuals."),
+    ("image-quality-auditor", "Image Quality Auditor", "independent-visual-audit",
+     "Independently rejects deformation, weak crops, repetition and unconvincing visuals."),
+    ("homepage-art-director", "Homepage Art Director", "homepage-art-direction",
+     "Audits the complete homepage for visual diversity, rhythm, balance and hero quality."),
+    ("image-rights-attribution", "Image Rights & Attribution", "visual-rights",
+     "Requires verified origin, rights basis, source URL and truthful credit before publication."),
+    ("discover-social-visual-editor", "Discover / Social Visual Editor", "visual-distribution",
+     "Approves reusable crops for Discover, Open Graph and social distribution from one master asset."),
+    ("aion-news-commander", "AION News Commander", "visual-operations",
+     "Coordinates visual desk tasks and always advances the next reversible zero-cost action."),
     ("image-repair", "Image Repair Agent", "image-repair",
      "Scans the archive and repairs missing images without duplication."),
     ("image-prompt", "Image Prompt Agent", "images",
@@ -177,9 +189,9 @@ def _save_draft(item: dict, title: str, slug: str, body: str, excerpt: str,
                        if isinstance(url, str) and url.startswith(("http://", "https://"))), "")
     cid = db.execute(
         """INSERT INTO contents (title, slug, body, excerpt, status, agent_id,
-           seo_title, seo_description, category, tags, source_url)
+           seo_title, seo_description, category, tags, source_url, visual_review_required)
            VALUES (?,?,?,?,?,
-                   (SELECT id FROM agents WHERE slug = 'content'), ?, ?, ?, ?, ?)""",
+                   (SELECT id FROM agents WHERE slug = 'content'), ?, ?, ?, ?, ?, 1)""",
         (title, _unique_slug(slug), body, excerpt, status, title, excerpt[:160],
          categoria, tags, source_url),
     )
