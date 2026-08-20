@@ -23,11 +23,11 @@ os.environ.update({
     "DATABASE_URL": f"sqlite:///{TEST_ROOT / 'aion.db'}",
     "UPLOAD_DIR": str(TEST_ROOT / "uploads"),
     "PUBLIC_API_URL": "https://aion-news-api.onrender.com",
-    "SITE_URL": "https://aion-news-os.vercel.app",
+    "SITE_URL": "https://aionnews.cloud",
     "IMAGE_PROVIDER": "none",
     "SECRET_KEY": "test-secret-key-with-at-least-32-characters",
     "ADMIN_SETUP_TOKEN": "test-owner-setup-token",
-    "CORS_ORIGINS": "https://aion-news-os.vercel.app",
+    "CORS_ORIGINS": "https://aionnews.cloud,https://www.aionnews.cloud",
     "ENV": "test",
 })
 
@@ -162,7 +162,7 @@ def test_production_boots_without_synthesizing_an_unknown_setup_token():
         ENV="production",
         SECRET_KEY="a-production-secret-key-that-is-long-enough",
         ADMIN_SETUP_TOKEN="",
-        CORS_ORIGINS="https://aion-news-os.vercel.app",
+        CORS_ORIGINS="https://aionnews.cloud",
     )
     assert production.ADMIN_SETUP_TOKEN == ""
     with pytest.raises(ValueError):
@@ -171,7 +171,7 @@ def test_production_boots_without_synthesizing_an_unknown_setup_token():
             ENV="production",
             SECRET_KEY="a-production-secret-key-that-is-long-enough",
             ADMIN_SETUP_TOKEN="short",
-            CORS_ORIGINS="https://aion-news-os.vercel.app",
+            CORS_ORIGINS="https://aionnews.cloud",
         )
 
 
@@ -308,7 +308,7 @@ def test_brand_assets_are_real_pngs():
 def test_robots_uses_only_official_domain_and_three_sitemaps():
     response = client.get("/robots.txt")
     text = response.text
-    assert text.count("Sitemap: https://aion-news-os.vercel.app/") == 3
+    assert text.count("Sitemap: https://aionnews.cloud/") == 3
     assert "Disallow: /dashboard" in text
     assert "aion-agentes" + ".vercel.app" not in text
     assert "stale-while-revalidate=86400" in response.headers["cache-control"]
@@ -328,7 +328,7 @@ def test_sitemap_is_valid_and_contains_public_article():
     response = client.get("/sitemap.xml")
     root = ET.fromstring(response.content)
     assert root.tag.endswith("urlset")
-    assert f"https://aion-news-os.vercel.app/article/{PRIMARY['slug']}" in response.text
+    assert f"https://aionnews.cloud/article/{PRIMARY['slug']}" in response.text
     assert "/conte" + "udos" not in response.text and "/catego" + "rias" not in response.text
 
 
@@ -364,7 +364,7 @@ def test_server_rendered_article_has_complete_metadata():
     assert response.status_code == 200
     html = response.text
     assert '<html lang="en-US">' in html
-    assert f'<link rel="canonical" href="https://aion-news-os.vercel.app/article/{PRIMARY["slug"]}">' in html
+    assert f'<link rel="canonical" href="https://aionnews.cloud/article/{PRIMARY["slug"]}">' in html
     assert '<meta property="og:type" content="article">' in html
     assert '<meta name="twitter:card" content="summary_large_image">' in html
     assert '"@type": "NewsArticle"' in html and '"@type": "BreadcrumbList"' in html
@@ -372,6 +372,8 @@ def test_server_rendered_article_has_complete_metadata():
     assert "Independent intelligence for the AI economy" in html
     assert "Editorial policy" in html and "Corrections" in html
     assert "<figcaption>" in html and "All stories" in html
+    for section in ("Key takeaways", "Why it matters", "Sources", "Related stories", "Read next", "One useful AI briefing"):
+        assert section in html
     assert "AION Editorial · administrator-supplied asset" in html
     assert client.get("/article/not-published").status_code == 404
     from app.main import _rich_text
@@ -512,9 +514,9 @@ def test_agents_tasks_memory_logs_and_secret_settings_controls():
 
 def test_cors_allows_only_official_frontend():
     allowed = client.options("/api/public/articles", headers={
-        "Origin": "https://aion-news-os.vercel.app", "Access-Control-Request-Method": "GET",
+        "Origin": "https://aionnews.cloud", "Access-Control-Request-Method": "GET",
     })
-    assert allowed.headers.get("access-control-allow-origin") == "https://aion-news-os.vercel.app"
+    assert allowed.headers.get("access-control-allow-origin") == "https://aionnews.cloud"
     denied = client.options("/api/public/articles", headers={
         "Origin": "https://old.example.com", "Access-Control-Request-Method": "GET",
     })
@@ -524,7 +526,7 @@ def test_cors_allows_only_official_frontend():
 def test_deployment_configs_align_official_services():
     render = (ROOT / "render.yaml").read_text()
     assert "name: aion-news-api" in render
-    assert "https://aion-news-os.vercel.app" in render
+    assert "https://aionnews.cloud" in render
     assert "https://aion-news-api.onrender.com" in render
     assert "autoDeployTrigger: checksPass" in render
     assert "value: 3.12.13" in render

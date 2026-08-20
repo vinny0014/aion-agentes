@@ -347,6 +347,57 @@ def server_rendered_article(slug: str):
     published = html.escape((article["published_at"] or "")[:10])
     from .agents.discovery import reading_time_minutes
     reading_time = f' · {reading_time_minutes(article["body"] or "")} min read'
+    plain_body = re.sub(r"(?m)^#+\s+.*$", " ", article["body"] or "")
+    plain_body = re.sub(r"\*\*|\[([^]]+)\]\([^)]+\)", lambda match: match.group(1) or "", plain_body)
+    takeaways = []
+    for sentence in re.split(r"(?<=[.!?])\s+", f"{article['excerpt'] or ''} {plain_body}"):
+        sentence = sentence.strip()
+        if len(sentence) > 35 and sentence not in takeaways:
+            takeaways.append(sentence)
+        if len(takeaways) == 3:
+            break
+    takeaways_html = "".join(f"<li>{html.escape(item)}</li>" for item in takeaways)
+    why_match = re.search(
+        r"(?ims)^##?\s+Why it matters\s*$\s*(.*?)(?=^##?\s|\Z)", article["body"] or ""
+    )
+    why_text = (why_match.group(1).strip() if why_match else article["excerpt"] or "")
+    sources_html = ""
+    if article["source_url"]:
+        escaped_source = html.escape(article["source_url"], quote=True)
+        sources_html = (
+            '<section class="sources"><p class="eyebrow">Evidence</p><h2>Sources</h2><ul>'
+            f'<li><a class="source-link" href="{escaped_source}" rel="noopener noreferrer">Primary source ↗</a></li>'
+            "</ul></section>"
+        )
+    tags_html = "".join(
+        f'<a class="topic-link" data-topic="{html.escape(tag, quote=True)}" '
+        f'href="/articles?tag={html.escape(tag, quote=True)}">{html.escape(tag)}</a>'
+        for tag in [value.strip() for value in (article["tags"] or "").split(",") if value.strip()]
+    )
+    related = db.query(
+        """SELECT id, title, slug, published_at, category FROM contents
+           WHERE status='published' AND id<>?
+           ORDER BY CASE WHEN category=? THEN 0 ELSE 1 END, published_at DESC LIMIT 3""",
+        (article["id"], article["category"] or "news"),
+    )
+    related_cards = "".join(
+        f'<a class="related-link" data-to-slug="{html.escape(item["slug"], quote=True)}" '
+        f'href="/article/{html.escape(item["slug"], quote=True)}"><small>{html.escape(item["category"] or "News")}</small>'
+        f'<strong>{html.escape(item["title"])}</strong><span>{html.escape((item["published_at"] or "")[:10])}</span></a>'
+        for item in related
+    )
+    related_html = (
+        f'<aside class="related"><p class="eyebrow">Keep reading</p><h2>Related stories</h2><div class="related-grid">{related_cards}</div></aside>'
+        if related_cards else ""
+    )
+    next_html = ""
+    if related:
+        next_story = related[0]
+        next_html = (
+            '<section class="read-next"><p class="eyebrow">Continue the briefing</p><h2>Read next</h2>'
+            f'<a class="next-story-link" data-to-slug="{html.escape(next_story["slug"], quote=True)}" '
+            f'href="/article/{html.escape(next_story["slug"], quote=True)}">{html.escape(next_story["title"])} →</a></section>'
+        )
     page = f"""<!doctype html><html lang="en-US"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(title)} — AION</title>
 <meta name="description" content="{html.escape(description, quote=True)}"><meta name="robots" content="index,follow,max-image-preview:large">
@@ -371,14 +422,18 @@ a{{color:inherit;text-decoration:none}}a:hover{{color:var(--accent)}}.site-heade
 .eyebrow{{margin:0 0 14px;color:var(--accent);font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase}}h1,h2{{font-family:Georgia,Cambria,'Times New Roman',serif}}h1{{max-width:900px;margin:0;font-size:clamp(2.6rem,7vw,5.1rem);line-height:1.02;letter-spacing:-.035em}}.lead{{max-width:780px;margin:22px 0;color:var(--muted);font-size:1.25rem;line-height:1.6}}
 .byline{{display:flex;flex-wrap:wrap;gap:7px;margin:28px 0;border-block:1px solid var(--line);padding:14px 0;color:var(--muted);font-size:14px}}.byline strong{{color:var(--ink)}}.byline a{{color:var(--accent);font-weight:700}}
 figure{{margin:32px 0 42px}}figure img{{display:block;width:100%;height:auto;aspect-ratio:16/9;object-fit:cover}}figcaption{{margin-top:8px;color:var(--muted);font-size:12px}}.body{{max-width:760px;margin:auto;font-size:1.12rem;line-height:1.9}}.body p{{margin:0 0 26px}}.body h2{{margin:50px 0 18px;border-top:1px solid var(--line);padding-top:28px;font-size:2rem;line-height:1.2}}.body a{{color:var(--accent);text-decoration:underline;text-decoration-color:#c084fc66;text-underline-offset:3px}}.body ul{{padding-left:24px}}
-.story-end{{max-width:760px;margin:48px auto 0;border-top:1px solid var(--line);padding-top:24px}}footer{{border-top:1px solid var(--line);padding:34px 0;color:var(--muted);font-size:13px}}.footer-inner{{display:flex;flex-wrap:wrap;justify-content:space-between;gap:20px}}.footer-links{{display:flex;flex-wrap:wrap;gap:18px}}
-@media(max-width:640px){{.header-inner,.article,.footer-inner{{width:min(100% - 30px,1120px)}}.tagline,.nav-links a:nth-child(n+4){{display:none}}.nav-links{{overflow:auto}}.article{{padding-top:38px}}h1{{font-size:2.7rem}}.lead{{font-size:1.1rem}}}}
+.takeaways,.why,.sources,.related,.read-next,.newsletter,.topics,.story-end{{max-width:760px;margin:42px auto 0}}.takeaways{{border-left:4px solid var(--accent);background:var(--surface);padding:24px}}.takeaways h2,.why h2,.sources h2,.related h2,.read-next h2{{margin:6px 0 14px;font-size:1.75rem;line-height:1.2}}.takeaways li{{margin:9px 0}}.why,.sources,.related,.read-next{{border-top:1px solid var(--line);padding-top:26px}}.why p:last-child{{color:var(--muted);font-size:1.08rem}}.sources a,.read-next a{{color:var(--accent);font-weight:800}}.topics{{display:flex;flex-wrap:wrap;gap:8px}}.topic-link{{border:1px solid var(--line);border-radius:999px;padding:4px 12px;color:var(--muted);font-size:12px}}.related-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}}.related-link{{display:flex;min-height:150px;flex-direction:column;justify-content:flex-end;border:1px solid var(--line);background:var(--surface);padding:16px}}.related-link small{{color:var(--accent);font-weight:800;text-transform:uppercase}}.related-link strong{{margin:6px 0;line-height:1.3}}.related-link span{{color:var(--muted);font-size:12px}}.read-next>a{{display:block;font:700 1.8rem/1.2 Georgia,serif}}.newsletter{{border-radius:8px;padding:28px;background:linear-gradient(145deg,#2e1065,#6d28d9 60%,#a21caf 120%)}}.newsletter h2{{margin:6px 0;font-size:2rem}}.newsletter p{{color:#ffffffb3}}.newsletter a{{display:inline-block;margin-top:8px;border-radius:5px;background:#fff;padding:9px 16px;color:#000;font-weight:800}}.story-end{{border-top:1px solid var(--line);padding-top:24px}}footer{{border-top:1px solid var(--line);padding:34px 0;color:var(--muted);font-size:13px}}.footer-inner{{display:flex;flex-wrap:wrap;justify-content:space-between;gap:20px}}.footer-links{{display:flex;flex-wrap:wrap;gap:18px}}
+@media(max-width:640px){{.header-inner,.article,.footer-inner{{width:min(100% - 30px,1120px)}}.tagline,.nav-links a:nth-child(n+4){{display:none}}.nav-links{{overflow:auto}}.article{{padding-top:38px}}h1{{font-size:2.7rem}}.lead{{font-size:1.1rem}}.related-grid{{grid-template-columns:1fr}}}}
 </style></head>
 <body><header class="site-header"><div class="header-inner"><div class="header-top"><a class="brand" href="/"><span class="mark">A</span><span>AION<small>AI NEWS</small></span></a><span class="tagline">Independent intelligence for the AI economy</span></div><nav class="nav-links" aria-label="Primary navigation"><a href="/">Top stories</a><a href="/articles">Latest</a><a href="/articles?category=analysis">Analysis</a><a href="/articles?category=guides">Guides</a><a href="/categories">All topics</a></nav></div></header>
 <main><article class="article"><p class="eyebrow">{html.escape(article['category'] or 'AI intelligence')}</p><h1>{html.escape(article['title'])}</h1>
 <p class="lead">{html.escape(article['excerpt'] or '')}</p><div class="byline"><strong>By {html.escape(article['author'] or 'AION Editorial')}</strong><span>·</span><time>{published}</time><span>{reading_time}</span>{source_html}</div>
 <figure><img src="{html.escape(image, quote=True)}" alt="{html.escape(caption, quote=True)}" width="1200" height="630">{caption_html}</figure>
-<div class="body">{_article_body(article['body'])}</div><div class="story-end"><a href="/articles">← All stories</a></div></article></main>
+<aside class="takeaways"><p class="eyebrow">In brief</p><h2>Key takeaways</h2><ul>{takeaways_html}</ul></aside>
+<section class="why"><p class="eyebrow">Context</p><h2>Why it matters</h2><p>{html.escape(why_text)}</p></section>
+<div class="body">{_article_body(article['body'])}</div>{sources_html}<div class="topics">{tags_html}</div>{related_html}{next_html}
+<section class="newsletter"><p class="eyebrow">The AION Brief</p><h2>One useful AI briefing. No hype.</h2><p>The developments that matter, what they mean and what to watch next.</p><a class="newsletter-link" href="/#newsletter">Join the briefing</a></section>
+<div class="story-end"><a href="/articles">← All stories</a></div></article></main>
 <footer><div class="footer-inner"><span>© {datetime.now(timezone.utc).year} AION AI News · Built by agents. Supervised by humans.</span><div class="footer-links"><a href="/about">About</a><a href="/editorial-policy">Editorial policy</a><a href="/corrections-policy">Corrections</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/contact">Contact</a></div></div></footer></body></html>"""
     return HTMLResponse(page)
 
