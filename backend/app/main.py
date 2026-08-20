@@ -361,14 +361,23 @@ def server_rendered_article(slug: str):
         r"(?ims)^##?\s+Why it matters\s*$\s*(.*?)(?=^##?\s|\Z)", article["body"] or ""
     )
     why_text = (why_match.group(1).strip() if why_match else article["excerpt"] or "")
-    sources_html = ""
+    source_entries = []
     if article["source_url"]:
-        escaped_source = html.escape(article["source_url"], quote=True)
-        sources_html = (
-            '<section class="sources"><p class="eyebrow">Evidence</p><h2>Sources</h2><ul>'
-            f'<li><a class="source-link" href="{escaped_source}" rel="noopener noreferrer">Primary source ↗</a></li>'
-            "</ul></section>"
-        )
+        source_entries.append(("Primary source", article["source_url"]))
+    for source_match in re.finditer(r"\[([^]]+)\]\((https?://[^)]+)\)", article["body"] or ""):
+        entry = (source_match.group(1).strip(), source_match.group(2).strip())
+        if entry[1] not in [existing[1] for existing in source_entries]:
+            source_entries.append(entry)
+        if len(source_entries) == 12:
+            break
+    source_items = "".join(
+        f'<li><a class="source-link" href="{html.escape(url, quote=True)}" rel="noopener noreferrer">'
+        f'{html.escape(label)} ↗</a></li>' for label, url in source_entries
+    )
+    sources_html = (
+        '<section class="sources"><p class="eyebrow">Evidence</p><h2>Sources</h2>'
+        f'<ul>{source_items}</ul></section>' if source_items else ""
+    )
     tags_html = "".join(
         f'<a class="topic-link" data-topic="{html.escape(tag, quote=True)}" '
         f'href="/articles?tag={html.escape(tag, quote=True)}">{html.escape(tag)}</a>'
