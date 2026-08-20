@@ -69,7 +69,7 @@ test("reader and editor production journeys", async ({ page, request }) => {
   await expect(page.getByRole("heading", { name: title })).toBeVisible();
   await expect.poll(() => page.evaluate(() => (window.dataLayer || []).some((item: any) => item?.[0] === "event" && item?.[1] === "article_view"))).toBeTruthy();
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-  await expect.poll(() => page.evaluate(() => (window.dataLayer || []).some((item: any) => item?.[0] === "event" && item?.[1] === "article_scroll_90"))).toBeTruthy();
+  await expect.poll(() => page.evaluate(() => (window.dataLayer || []).some((item: any) => item?.[0] === "event" && item?.[1] === "scroll_90"))).toBeTruthy();
   await page.reload();
   await expect(page.locator('meta[name="aion-ga-measurement-id"]')).toHaveAttribute("content", "G-DVT2E73K18");
   await expect.poll(() => page.evaluate(() => (window.dataLayer || []).some((item: any) => item?.[0] === "event" && item?.[1] === "article_view"))).toBeTruthy();

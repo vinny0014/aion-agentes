@@ -1,6 +1,6 @@
 import { SITE } from "../lib/site";
 import { useEffect, useRef, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { Nav } from "./Landing";
 import AdSlot from "../lib/AdSlot";
 import { API_BASE } from "../lib/api";
@@ -42,10 +42,13 @@ function dataBr(iso: string | null) {
 }
 
 export function Conteudos() {
+  const location = useLocation();
+  const canonicalPath = location.pathname === "/news" || location.pathname === "/search" ? "/articles" : location.pathname;
   usePageMetadata({
     title: "AI articles",
     description: "Browse AION's latest artificial intelligence news, guides, comparisons and analysis.",
-    path: "/articles",
+    path: canonicalPath,
+    robots: location.pathname === "/search" ? "noindex,follow" : "index,follow,max-image-preview:large",
   });
   const [params, setParams] = useSearchParams();
   const categoria = params.get("category") || "";
@@ -186,8 +189,9 @@ export function Artigo() {
       if (!element) return;
       const scrollable = Math.max(element.scrollHeight - window.innerHeight, 1);
       const progress = Math.min(100, Math.max(0, ((window.scrollY - element.offsetTop) / scrollable) * 100));
-      for (const threshold of [25, 50, 90]) {
+      for (const threshold of [25, 50, 75, 90]) {
         if (progress >= threshold) {
+          trackEventOnce(`scroll_${threshold}`, artigo.slug, { ...parameters, percent_scrolled: threshold });
           trackEventOnce(`article_scroll_${threshold}`, artigo.slug, { ...parameters, percent_scrolled: threshold });
         }
       }
@@ -283,6 +287,11 @@ export function Artigo() {
   }
   if (!artigo) return <div className="p-10 font-mono text-sm text-slateui">Loading…</div>;
 
+  const bodyText = (artigo.body || "").replace(/^#+\s+.*$/gm, " ").replace(/\*\*/g, " ");
+  const takeaways = [...new Set(`${artigo.excerpt || ""} ${bodyText}`.split(/(?<=[.!?])\s+/).map((sentence) => sentence.trim()).filter((sentence) => sentence.length > 35))].slice(0, 3);
+  const whyMatch = (artigo.body || "").match(/##?\s+Why it matters\s*\n+([\s\S]*?)(?=\n+##?\s|$)/i);
+  const whyItMatters = whyMatch?.[1]?.replace(/\*\*/g, "").trim() || artigo.excerpt;
+
   return (
     <div className="min-h-screen">
       <Nav />
@@ -310,6 +319,11 @@ export function Artigo() {
           </div>
           {artigo.image_url && (artigo.image_credit || artigo.image_alt) && <figcaption className="mt-2 text-xs leading-relaxed text-slateui">{artigo.image_alt || artigo.title}{artigo.image_credit ? ` · ${artigo.image_credit}` : ""}</figcaption>}
         </figure>
+        {takeaways.length > 0 && <aside className="mt-10 border-l-4 border-signal bg-surface/60 p-6" aria-labelledby="takeaways-heading">
+          <p className="eyebrow">In brief</p><h2 id="takeaways-heading" className="mt-2 font-display text-2xl font-bold">Key takeaways</h2>
+          <ul className="mt-4 space-y-3 text-base leading-relaxed text-ink/90">{takeaways.map((takeaway) => <li key={takeaway} className="flex gap-3"><span className="text-signal" aria-hidden>●</span><span>{takeaway}</span></li>)}</ul>
+        </aside>}
+        {whyItMatters && <section className="mt-10 border-y border-line py-7" aria-labelledby="why-it-matters-heading"><p className="eyebrow">Context</p><h2 id="why-it-matters-heading" className="mt-2 font-display text-2xl font-bold">Why it matters</h2><p className="mt-3 text-lg leading-relaxed text-slateui">{whyItMatters}</p></section>}
         <div className="article-body mt-10">
           {(artigo.body || "").split(/\n\n+/).filter(Boolean).map((p, i) => <div key={i}>
             {i === 3 && <AdSlot slot="aion-artigo-inline" className="my-8" />}
@@ -319,10 +333,11 @@ export function Artigo() {
           </div>)}
         </div>
         <AdSlot slot="aion-artigo" className="mt-10" />
+        {artigo.source_url && <section className="mt-10 border-t border-line pt-7" aria-labelledby="sources-heading"><p className="eyebrow">Evidence</p><h2 id="sources-heading" className="mt-2 font-display text-2xl font-bold">Sources</h2><ul className="mt-4"><li><a href={artigo.source_url} target="_blank" rel="noopener noreferrer" className="font-semibold text-signal hover:underline" onClick={() => trackEvent("outbound_source_click", { slug: artigo.slug, placement: "sources_list" })}>Primary source ↗</a></li></ul></section>}
         {artigo.tags && (
           <div className="mt-8 flex flex-wrap gap-2">
             {artigo.tags.split(",").filter(Boolean).map((t) => (
-              <Link key={t} to={`/articles?tag=${encodeURIComponent(t)}`} className="chip !py-1 text-xs">{t}</Link>
+              <Link key={t} to={`/articles?tag=${encodeURIComponent(t)}`} onClick={() => trackEvent("topic_click", { topic: t, placement: "article_footer", slug: artigo.slug })} className="chip !py-1 text-xs">{t}</Link>
             ))}
           </div>
         )}
@@ -331,7 +346,7 @@ export function Artigo() {
             <h2 className="font-display text-xl font-bold">Related stories</h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               {relacionados.map((r) => (
-                <Link key={r.id} to={`/article/${r.slug}`} className="card card-hover !p-3">
+                <Link key={r.id} to={`/article/${r.slug}`} onClick={() => trackEvent("related_click", { from_slug: artigo.slug, to_slug: r.slug })} className="card card-hover !p-3">
                   <EditorialImage src={r.image_url} alt={r.image_alt || r.title}
                     category={r.category} width={r.image_width} height={r.image_height}
                     sizes="(min-width: 640px) 250px, calc(100vw - 64px)"
@@ -343,6 +358,8 @@ export function Artigo() {
             </div>
           </aside>
         )}
+        {relacionados[0] && <section className="mt-12 border-y-2 border-ink py-7" aria-labelledby="read-next-heading"><p className="eyebrow">Continue the briefing</p><h2 id="read-next-heading" className="mt-2 font-display text-2xl font-bold">Read next</h2><Link to={`/article/${relacionados[0].slug}`} onClick={() => trackEvent("next_story_click", { from_slug: artigo.slug, to_slug: relacionados[0].slug })} className="mt-3 block font-display text-3xl font-bold leading-tight hover:text-signal">{relacionados[0].title} →</Link></section>}
+        <section className="newsletter-panel mt-12" aria-labelledby="article-newsletter-heading"><p className="eyebrow !text-white/70">The AION Brief</p><h2 id="article-newsletter-heading" className="mt-2 font-display text-3xl font-bold">One useful AI briefing. No hype.</h2><p className="mt-3 max-w-xl text-sm text-white/70">Get the developments that matter, what they mean and what to watch next.</p><a href="/#newsletter" onClick={() => { trackEvent("newsletter_signup", { placement: "article_end", slug: artigo.slug }); trackEvent("newsletter_subscribe", { placement: "article_end", slug: artigo.slug }); }} className="mt-5 inline-block rounded-md bg-white px-5 py-2.5 text-sm font-bold text-black">Join the briefing</a></section>
         <footer className="mt-12 border-t border-line pt-6">
           <Link to="/articles" className="text-sm font-medium text-ultra hover:underline">← All articles</Link>
         </footer>
