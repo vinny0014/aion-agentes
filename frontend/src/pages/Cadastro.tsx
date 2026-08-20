@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api, login } from "../lib/api";
 import { Nav } from "./Landing";
 import { usePageMetadata } from "../lib/seo";
+import { trackEvent } from "../lib/telemetry";
 
 export default function Cadastro() {
   usePageMetadata({ title: "Create account", description: "Create an AION account.", path: "/signup", robots: "noindex,nofollow" });
@@ -23,6 +24,7 @@ export default function Cadastro() {
         body: JSON.stringify({ name: nome, email, password: senha, setup_token: setupToken || undefined }),
       });
       await login(email, senha);
+      trackEvent("sign_up", { method: "password", owner_setup: Boolean(setupToken) });
       nav("/dashboard");
     } catch (err: any) {
       setErro(err.message);

@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { login } from "../lib/api";
 import { Nav } from "./Landing";
 import { usePageMetadata } from "../lib/seo";
+import { trackEvent } from "../lib/telemetry";
 
 export default function Login() {
   usePageMetadata({ title: "Sign in", description: "Sign in to the AION editorial workspace.", path: "/login", robots: "noindex,nofollow" });
@@ -17,6 +18,7 @@ export default function Login() {
     setErro(""); setLoading(true);
     try {
       await login(email, senha);
+      trackEvent("login", { method: "password" });
       nav("/dashboard");
     } catch (err: any) {
       setErro(err.message);

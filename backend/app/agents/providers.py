@@ -29,7 +29,7 @@ def _openai_compat(url: str, key: str, model: str, prompt: str, extra_headers: d
     r = httpx.post(url, headers=headers, timeout=TIMEOUT, json={
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 1200,
+        "max_tokens": 2200,
     })
     r.raise_for_status()
     body = r.json()
@@ -52,7 +52,10 @@ def _anthropic(prompt: str) -> str:
         },
     )
     r.raise_for_status()
-    return "".join(b.get("text", "") for b in r.json()["content"])
+    body = r.json()
+    usage = body.get("usage", {})
+    LAST_USAGE["tokens"] = int(usage.get("input_tokens", 0)) + int(usage.get("output_tokens", 0))
+    return "".join(b.get("text", "") for b in body["content"])
 
 
 def _gemini(prompt: str) -> str:
@@ -63,7 +66,10 @@ def _gemini(prompt: str) -> str:
         json={"contents": [{"parts": [{"text": prompt}]}]},
     )
     r.raise_for_status()
-    return r.json()["candidates"][0]["content"]["parts"][0]["text"]
+    body = r.json()
+    usage = body.get("usageMetadata", {})
+    LAST_USAGE["tokens"] = int(usage.get("totalTokenCount", 0))
+    return body["candidates"][0]["content"]["parts"][0]["text"]
 
 
 def generate(provider: str, prompt: str) -> str:
@@ -99,7 +105,7 @@ def offline_draft(topic: str, template: str) -> dict:
         f"[Summarize the key points and suggest next steps for the reader.]"
     )
     return {
-        "title": topic.strip().capitalize(),
+        "title": topic.strip(),
         "slug": slugify(topic),
         "body": corpo,
         "excerpt": f"Editorial draft about {topic}, awaiting final copy.",

@@ -4,6 +4,8 @@ import io
 import ipaddress
 import re
 import socket
+import textwrap
+import time
 import urllib.parse
 from pathlib import Path
 from urllib.parse import urlparse
@@ -86,13 +88,23 @@ def _host_is_public(url: str) -> bool:
         return False
 
 
-def _download_raster(url: str) -> tuple[bytes, Image.Image] | None:
-    if not is_http_image_url(url) or not _host_is_public(url):
-        return None
+def _download_raster_once(url: str) -> tuple[bytes, Image.Image] | None:
     try:
         current = url
-        with httpx.Client(timeout=15, follow_redirects=False,
+        with httpx.Client(timeout=httpx.Timeout(10, connect=5), follow_redirects=False,
                           headers={"User-Agent": "AION-ImageValidator/2.0"}) as client:
+            # HEAD is a cheap preflight when the origin supports it. A rejected,
+            # incomplete or timed-out HEAD never blocks the required GET fallback.
+            try:
+                head = client.head(current, follow_redirects=True)
+                if head.status_code == 200 and _host_is_public(str(head.url)):
+                    declared_size = int(head.headers.get("content-length", "0") or 0)
+                    content_type = head.headers.get("content-type", "").split(";")[0].lower()
+                    if declared_size > MAX_IMAGE_BYTES or content_type == "image/svg+xml":
+                        return None
+                    current = str(head.url)
+            except Exception:
+                pass
             for _ in range(5):
                 if not _host_is_public(current):
                     return None
@@ -126,6 +138,18 @@ def _download_raster(url: str) -> tuple[bytes, Image.Image] | None:
                 return None
     except Exception:
         return None
+
+
+def _download_raster(url: str) -> tuple[bytes, Image.Image] | None:
+    if not is_http_image_url(url) or not _host_is_public(url):
+        return None
+    for attempt in range(2):
+        downloaded = _download_raster_once(url)
+        if downloaded:
+            return downloaded
+        if attempt < 1:
+            time.sleep(0.2 * (2 ** attempt))
+    return None
 
 
 def _safe_stem(text: str) -> str:
@@ -191,6 +215,56 @@ def materialize_uploaded_image(raw: bytes, title: str) -> dict | None:
         return _store_raster(image, raw, title)
     except Exception:
         return None
+
+
+def materialize_template_image(title: str, category: str = "news") -> dict:
+    """Create a deterministic, managed 1200x630 AION editorial fallback.
+
+    This keeps image failures from discarding an otherwise valid article while
+    still satisfying the same raster, dimensions and durable-storage gate.
+    """
+    width, height = 1200, 630
+    image = Image.new("RGB", (width, height), "#08080f")
+    draw = ImageDraw.Draw(image)
+    for y in range(height):
+        ratio = y / (height - 1)
+        draw.line((0, y, width, y), fill=(
+            int(9 + 22 * ratio), int(8 + 8 * ratio), int(22 + 46 * ratio)))
+    accent = "#8b5cf6"
+    draw.ellipse((820, -180, 1280, 280), fill="#312e81")
+    draw.ellipse((930, 250, 1320, 690), fill="#4c1d95")
+    draw.polygon([(850, 510), (1000, 120), (1150, 510)], outline=accent, width=10)
+    for x in range(0, width, 60):
+        draw.line((x, 0, x, height), fill="#17142b", width=1)
+    for y in range(0, height, 60):
+        draw.line((0, y, width, y), fill="#17142b", width=1)
+    try:
+        brand_font = ImageFont.truetype("DejaVuSans-Bold.ttf", 34)
+        category_font = ImageFont.truetype("DejaVuSans.ttf", 26)
+        title_font = ImageFont.truetype("DejaVuSans-Bold.ttf", 58)
+    except OSError:
+        brand_font = category_font = title_font = None
+    draw.text((72, 68), "▲  AION AI NEWS OS", fill="#ddd6fe", font=brand_font)
+    category_label = re.sub(r"[^A-Za-z0-9 &-]", "", category or "news")[:36].upper()
+    draw.rounded_rectangle((72, 132, 72 + max(180, len(category_label) * 18), 181),
+                           radius=18, fill="#6d28d9")
+    draw.text((92, 141), category_label, fill="white", font=category_font)
+    clean_title = re.sub(r"\s+", " ", html_title(title)).strip()[:150]
+    lines = textwrap.wrap(clean_title, width=31)[:3] or ["AION EDITORIAL"]
+    y = 225
+    for line in lines:
+        draw.text((72, y), line, fill="white", font=title_font, stroke_width=1,
+                  stroke_fill="#08080f")
+        y += 76
+    draw.text((72, 570), "Independent AI news, guides and analysis", fill="#a8a4b8",
+              font=category_font)
+    identity = f"aion-template-v2\n{category_label}\n{clean_title}".encode()
+    return _store_raster(image, identity, title)
+
+
+def html_title(value: str) -> str:
+    """Decode common feed entities without accepting markup in generated art."""
+    return __import__("html").unescape(re.sub(r"<[^>]+>", " ", value or ""))
 
 
 def publication_image(url: str, title: str) -> dict | None:

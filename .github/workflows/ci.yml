@@ -51,14 +51,17 @@ jobs:
         run: |
           npm audit --audit-level=high
           npm run build
+          npm run test:server
       - name: Smoke-test production preview
         working-directory: frontend
         run: |
-          npm run preview -- --host 127.0.0.1 > /tmp/aion-vite-preview.log 2>&1 &
+          PORT=4173 HOST=127.0.0.1 npm start > /tmp/aion-node-server.log 2>&1 &
           preview_pid=$!
           trap 'kill "$preview_pid"' EXIT
           curl --fail --retry 10 --retry-delay 1 --retry-connrefused http://127.0.0.1:4173/
           curl --fail http://127.0.0.1:4173/articles
+          curl --fail http://127.0.0.1:4173/healthz
+          test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:4173/does-not-exist)" = 404
 
   deployment-config:
     runs-on: ubuntu-latest
@@ -94,6 +97,8 @@ jobs:
         with: { node-version: "22.x", cache: npm, cache-dependency-path: frontend/package-lock.json }
       - name: Install and build frontend
         working-directory: frontend
+        env:
+          VITE_GA_MEASUREMENT_ID: G-DVT2E73K18
         run: |
           npm ci
           npm run build

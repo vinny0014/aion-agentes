@@ -1,10 +1,12 @@
 import { SITE } from "../lib/site";
-import { useEffect, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { Nav } from "./Landing";
 import AdSlot from "../lib/AdSlot";
 import { API_BASE } from "../lib/api";
 import { usePageMetadata } from "../lib/seo";
+import EditorialImage from "../components/EditorialImage";
+import { CONSENT_EVENT, trackEvent, trackEventOnce } from "../lib/telemetry";
 
 type Artigo = {
   id: number; title: string; slug: string; excerpt: string;
@@ -23,7 +25,7 @@ function Rich({ t }: { t: string }) {
         const b = p.match(/^\*\*([^*]+)\*\*$/);
         if (b) return <strong key={i}>{b[1]}</strong>;
         const l = p.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-        if (l && /^https?:\/\//i.test(l[2])) return <a key={i} href={l[2]} target="_blank" rel="noopener noreferrer nofollow" className="text-signal underline decoration-signal/40 hover:decoration-signal">{l[1]}</a>;
+        if (l && /^https?:\/\//i.test(l[2])) return <a key={i} href={l[2]} target="_blank" rel="noopener noreferrer" className="text-signal underline decoration-signal/40 hover:decoration-signal">{l[1]}</a>;
         if (l && /^\/(?!\/)/.test(l[2])) return <a key={i} href={l[2]} className="text-signal underline decoration-signal/40 hover:decoration-signal">{l[1]}</a>;
         if (l) return l[1];
         return p;
@@ -40,10 +42,13 @@ function dataBr(iso: string | null) {
 }
 
 export function Conteudos() {
+  const location = useLocation();
+  const canonicalPath = location.pathname === "/news" || location.pathname === "/search" ? "/articles" : location.pathname;
   usePageMetadata({
     title: "AI articles",
     description: "Browse AION's latest artificial intelligence news, guides, comparisons and analysis.",
-    path: "/articles",
+    path: canonicalPath,
+    robots: location.pathname === "/search" ? "noindex,follow" : "index,follow,max-image-preview:large",
   });
   const [params, setParams] = useSearchParams();
   const categoria = params.get("category") || "";
@@ -58,6 +63,13 @@ export function Conteudos() {
   const perPage = 10;
 
   useEffect(() => { setPage(1); }, [categoria, tag, q]);
+  useEffect(() => {
+    if (!categoria) return;
+    const send = () => trackEventOnce("category_view", categoria, { category: categoria });
+    send();
+    window.addEventListener(CONSENT_EVENT, send);
+    return () => window.removeEventListener(CONSENT_EVENT, send);
+  }, [categoria]);
   useEffect(() => {
     setLoading(true); setErro("");
     const u = new URLSearchParams({ page: String(page), per_page: String(perPage) });
@@ -76,11 +88,19 @@ export function Conteudos() {
   return (
     <div className="min-h-screen">
       <Nav />
-      <main id="main-content" className="mx-auto max-w-3xl px-6 py-14">
-        <p className="tag mb-2">daily publication</p>
-        <h1 className="font-display text-4xl font-bold tracking-tight">Articles</h1>
+      <main id="main-content" className="mx-auto max-w-5xl px-5 py-12 sm:px-8">
+        <div className="section-heading">
+          <div><p className="eyebrow">AION newsroom</p><h1>Latest AI stories</h1></div>
+          <p className="max-w-md text-sm leading-relaxed text-slateui">Source-led news, analysis and practical guides from across the AI industry.</p>
+        </div>
         <form className="mt-6 flex gap-2" onSubmit={(e) => { e.preventDefault();
-          const p = new URLSearchParams(params); search ? p.set("q", search) : p.delete("q"); setParams(p); }}>
+          const p = new URLSearchParams(params); search ? p.set("q", search) : p.delete("q");
+          if (search.trim()) trackEvent("search_performed", {
+            search_scope: "articles",
+            has_category_filter: Boolean(categoria),
+            has_tag_filter: Boolean(tag),
+          });
+          setParams(p); }}>
           <input className="field max-w-sm" placeholder="Search articles…" value={search}
             onChange={(e) => setBusca(e.target.value)} aria-label="Search articles" />
           <button className="btn-primary !py-2">Search</button>
@@ -112,20 +132,23 @@ export function Conteudos() {
             <p className="max-w-sm text-sm">Our agent team is preparing the first stories. Check back soon.</p>
           </div>
         ) : (
-          <ul className="mt-8 space-y-6">
+          <ul className="mt-8 divide-y divide-line border-t border-line">
             {artigos.map((a) => (
-              <li key={a.id} className="card card-hover grid gap-4 sm:grid-cols-[180px_1fr]">
-                <Link to={`/article/${a.slug}`} className="block overflow-hidden rounded-lg">
-                  <img src={a.image_url} alt={a.image_alt || a.title} width={1200} height={630}
-                    loading="lazy" decoding="async" className="aspect-[1200/630] h-full w-full object-cover" />
+              <li key={a.id} className="grid gap-5 py-7 sm:grid-cols-[260px_1fr]">
+                <Link to={`/article/${a.slug}`} className="editorial-image block aspect-[16/10] overflow-hidden">
+                  <EditorialImage src={a.image_url} alt={a.image_alt || a.title}
+                    category={a.category} width={a.image_width} height={a.image_height}
+                    sizes="(min-width: 640px) 260px, calc(100vw - 40px)"
+                    className="h-full w-full object-cover object-center" />
                 </Link>
-                <div>
-                  <p className="tag">{dataBr(a.published_at)}</p>
+                <div className="self-center">
+                  <p className="eyebrow">{a.category || "News"}</p>
                   <Link to={`/article/${a.slug}`}
-                    className="mt-1 block font-display text-xl font-bold hover:text-ultra">
+                    className="mt-1 block font-display text-2xl font-bold leading-tight hover:text-signal">
                     {a.title}
                   </Link>
-                  {a.excerpt && <p className="mt-2 text-sm text-slateui">{a.excerpt}</p>}
+                  {a.excerpt && <p className="mt-2 text-sm leading-relaxed text-slateui">{a.excerpt}</p>}
+                  <p className="story-meta">{dataBr(a.published_at)}{a.reading_time ? <> <span>·</span> {a.reading_time} min read</> : null}</p>
                 </div>
               </li>
             ))}
@@ -150,6 +173,39 @@ export function Artigo() {
   const [artigo, setArtigo] = useState<Artigo | null>(null);
   const [relacionados, setRelacionados] = useState<Artigo[]>([]);
   const [erro, setErro] = useState(false);
+  const articleRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!artigo) return;
+    const parameters = {
+      slug: artigo.slug,
+      category: artigo.category || "news",
+      author: artigo.author || "AION Editorial",
+      published_date: artigo.published_at || "",
+    };
+    const sendArticleView = () => trackEventOnce("article_view", artigo.slug, parameters);
+    const sendScroll = () => {
+      const element = articleRef.current;
+      if (!element) return;
+      const scrollable = Math.max(element.scrollHeight - window.innerHeight, 1);
+      const progress = Math.min(100, Math.max(0, ((window.scrollY - element.offsetTop) / scrollable) * 100));
+      for (const threshold of [25, 50, 75, 90]) {
+        if (progress >= threshold) {
+          trackEventOnce(`scroll_${threshold}`, artigo.slug, { ...parameters, percent_scrolled: threshold });
+          trackEventOnce(`article_scroll_${threshold}`, artigo.slug, { ...parameters, percent_scrolled: threshold });
+        }
+      }
+    };
+    sendArticleView();
+    window.addEventListener(CONSENT_EVENT, sendArticleView);
+    window.addEventListener(CONSENT_EVENT, sendScroll);
+    window.addEventListener("scroll", sendScroll, { passive: true });
+    return () => {
+      window.removeEventListener(CONSENT_EVENT, sendArticleView);
+      window.removeEventListener(CONSENT_EVENT, sendScroll);
+      window.removeEventListener("scroll", sendScroll);
+    };
+  }, [artigo]);
 
   useEffect(() => {
     setArtigo(null); setRelacionados([]); setErro(false);
@@ -170,9 +226,13 @@ export function Artigo() {
         setMeta('meta[property="og:description"]', "content", a.seo_description || a.excerpt || "");
         setMeta('meta[property="og:url"]', "content", `${SITE}/article/${a.slug}`);
         setMeta('meta[property="og:image"]', "content", a.image_url || `${SITE}/og-cover.png`);
+        setMeta('meta[property="og:image:alt"]', "content", a.image_alt || a.title);
+        setMeta('meta[property="og:image:width"]', "content", String(Number(a.image_width) || 1200));
+        setMeta('meta[property="og:image:height"]', "content", String(Number(a.image_height) || 630));
         setMeta('meta[name="twitter:title"]', "content", a.seo_title || a.title);
         setMeta('meta[name="twitter:description"]', "content", a.seo_description || a.excerpt || "");
         setMeta('meta[name="twitter:image"]', "content", a.image_url || `${SITE}/og-cover.png`);
+        setMeta('meta[name="twitter:image:alt"]', "content", a.image_alt || a.title);
         setMeta('link[rel="canonical"]', "href", `${SITE}/article/${a.slug}`);
         setMeta('link[rel="alternate"][hreflang="en-US"]', "href", `${SITE}/article/${a.slug}`);
         setMeta('link[rel="alternate"][hreflang="x-default"]', "href", `${SITE}/article/${a.slug}`);
@@ -227,35 +287,57 @@ export function Artigo() {
   }
   if (!artigo) return <div className="p-10 font-mono text-sm text-slateui">Loading…</div>;
 
+  const bodyText = (artigo.body || "").replace(/^#+\s+.*$/gm, " ").replace(/\*\*/g, " ");
+  const takeaways = [...new Set(`${artigo.excerpt || ""} ${bodyText}`.split(/(?<=[.!?])\s+/).map((sentence) => sentence.trim()).filter((sentence) => sentence.length > 35))].slice(0, 3);
+  const whyMatch = (artigo.body || "").match(/##?\s+Why it matters\s*\n+([\s\S]*?)(?=\n+##?\s|$)/i);
+  const whyItMatters = whyMatch?.[1]?.replace(/\*\*/g, "").trim() || artigo.excerpt;
+
   return (
     <div className="min-h-screen">
       <Nav />
-      <article id="main-content" className="mx-auto max-w-3xl px-6 py-14">
-        <p className="tag mb-2">
-          By {artigo.author || "AION Editorial"} · {dataBr(artigo.published_at)}
-          {artigo.reading_time ? <> · {artigo.reading_time} min read</> : null}
-          {artigo.category ? <> · {artigo.category}</> : null}
-          {artigo.source_url ? <> · <a className="text-signal hover:underline" href={artigo.source_url} target="_blank" rel="noopener nofollow">source</a></> : null}
-        </p>
-        <h1 className="font-display text-4xl font-bold leading-tight tracking-tight">{artigo.title}</h1>
-        {artigo.image_url && (
-          <img onError={(e) => { e.currentTarget.style.display = "none"; }} src={artigo.image_url} alt={artigo.image_alt || artigo.title}
-            width={1200} height={630} decoding="async" {...({ fetchpriority: "high" } as any)}
-            className="mt-6 w-full rounded-xl border border-line object-cover" />
-        )}
-        {artigo.excerpt && <p className="mt-4 text-lg text-slateui">{artigo.excerpt}</p>}
-        <div className="mt-8 space-y-4 leading-relaxed text-ink/90">
-          {(artigo.body || "").split(/\n\n+/).filter(Boolean).map((p, i) => {
-            if (p.startsWith("## ")) return <h2 key={i} className="pt-4 font-display text-2xl font-bold">{p.slice(3)}</h2>;
-            if (p.startsWith("# ")) return <h2 key={i} className="pt-4 font-display text-2xl font-bold">{p.slice(2)}</h2>;
-            return <p key={i}><Rich t={p} /></p>;
-          })}
+      <article ref={articleRef} id="main-content" className="mx-auto max-w-4xl px-5 py-12 sm:px-8 sm:py-16">
+        <p className="eyebrow mb-4">{artigo.category || "AI intelligence"}</p>
+        <h1 className="font-display text-4xl font-bold leading-[1.05] tracking-[-0.025em] sm:text-6xl">{artigo.title}</h1>
+        {artigo.excerpt && <p className="mt-5 max-w-3xl text-xl leading-relaxed text-slateui">{artigo.excerpt}</p>}
+        <div className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-2 border-y border-line py-4 text-sm text-slateui">
+          <span className="font-semibold text-ink">By {artigo.author || "AION Editorial"}</span>
+          <span>·</span><time>{dataBr(artigo.published_at)}</time>
+          {artigo.reading_time ? <><span>·</span><span>{artigo.reading_time} min read</span></> : null}
+          {artigo.source_url ? <><span>·</span><a className="font-semibold text-signal hover:underline" href={artigo.source_url} target="_blank" rel="noopener noreferrer"
+            onClick={() => trackEvent("outbound_source_click", {
+              slug: artigo.slug,
+              category: artigo.category || "news",
+              source_host: (() => { try { return new URL(artigo.source_url || "").hostname; } catch { return "unknown"; } })(),
+            })}>Primary source ↗</a></> : null}
         </div>
-        <AdSlot slot="aion-artigo" className="mt-8" />
+        <figure className="mt-8">
+          <div className="editorial-image aspect-[16/9]">
+            <EditorialImage src={artigo.image_url} alt={artigo.image_alt || artigo.title}
+              category={artigo.category} width={artigo.image_width} height={artigo.image_height}
+              priority sizes="(min-width: 896px) 832px, calc(100vw - 40px)"
+              className="h-full w-full object-cover object-center" />
+          </div>
+          {artigo.image_url && (artigo.image_credit || artigo.image_alt) && <figcaption className="mt-2 text-xs leading-relaxed text-slateui">{artigo.image_alt || artigo.title}{artigo.image_credit ? ` · ${artigo.image_credit}` : ""}</figcaption>}
+        </figure>
+        {takeaways.length > 0 && <aside className="mt-10 border-l-4 border-signal bg-surface/60 p-6" aria-labelledby="takeaways-heading">
+          <p className="eyebrow">In brief</p><h2 id="takeaways-heading" className="mt-2 font-display text-2xl font-bold">Key takeaways</h2>
+          <ul className="mt-4 space-y-3 text-base leading-relaxed text-ink/90">{takeaways.map((takeaway) => <li key={takeaway} className="flex gap-3"><span className="text-signal" aria-hidden>●</span><span>{takeaway}</span></li>)}</ul>
+        </aside>}
+        {whyItMatters && <section className="mt-10 border-y border-line py-7" aria-labelledby="why-it-matters-heading"><p className="eyebrow">Context</p><h2 id="why-it-matters-heading" className="mt-2 font-display text-2xl font-bold">Why it matters</h2><p className="mt-3 text-lg leading-relaxed text-slateui">{whyItMatters}</p></section>}
+        <div className="article-body mt-10">
+          {(artigo.body || "").split(/\n\n+/).filter(Boolean).map((p, i) => <div key={i}>
+            {i === 3 && <AdSlot slot="aion-artigo-inline" className="my-8" />}
+            {p.startsWith("## ") || p.startsWith("# ")
+              ? <h2>{p.replace(/^##? /, "")}</h2>
+              : <p><Rich t={p} /></p>}
+          </div>)}
+        </div>
+        <AdSlot slot="aion-artigo" className="mt-10" />
+        {artigo.source_url && <section className="mt-10 border-t border-line pt-7" aria-labelledby="sources-heading"><p className="eyebrow">Evidence</p><h2 id="sources-heading" className="mt-2 font-display text-2xl font-bold">Sources</h2><ul className="mt-4"><li><a href={artigo.source_url} target="_blank" rel="noopener noreferrer" className="font-semibold text-signal hover:underline" onClick={() => trackEvent("outbound_source_click", { slug: artigo.slug, placement: "sources_list" })}>Primary source ↗</a></li></ul></section>}
         {artigo.tags && (
           <div className="mt-8 flex flex-wrap gap-2">
             {artigo.tags.split(",").filter(Boolean).map((t) => (
-              <Link key={t} to={`/articles?tag=${encodeURIComponent(t)}`} className="chip !py-1 text-xs">{t}</Link>
+              <Link key={t} to={`/articles?tag=${encodeURIComponent(t)}`} onClick={() => trackEvent("topic_click", { topic: t, placement: "article_footer", slug: artigo.slug })} className="chip !py-1 text-xs">{t}</Link>
             ))}
           </div>
         )}
@@ -264,9 +346,11 @@ export function Artigo() {
             <h2 className="font-display text-xl font-bold">Related stories</h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               {relacionados.map((r) => (
-                <Link key={r.id} to={`/article/${r.slug}`} className="card card-hover !p-3">
-                  {r.image_url && <img onError={(e) => { e.currentTarget.style.display = "none"; }} src={r.image_url} alt={r.image_alt || r.title} loading="lazy"
-                    className="mb-2 h-24 w-full rounded-md object-cover" />}
+                <Link key={r.id} to={`/article/${r.slug}`} onClick={() => trackEvent("related_click", { from_slug: artigo.slug, to_slug: r.slug })} className="card card-hover !p-3">
+                  <EditorialImage src={r.image_url} alt={r.image_alt || r.title}
+                    category={r.category} width={r.image_width} height={r.image_height}
+                    sizes="(min-width: 640px) 250px, calc(100vw - 64px)"
+                    className="mb-2 h-24 w-full rounded-md object-cover object-center" />
                   <p className="tag">{dataBr(r.published_at)}</p>
                   <p className="mt-1 text-sm font-medium leading-snug">{r.title}</p>
                 </Link>
@@ -274,6 +358,8 @@ export function Artigo() {
             </div>
           </aside>
         )}
+        {relacionados[0] && <section className="mt-12 border-y-2 border-ink py-7" aria-labelledby="read-next-heading"><p className="eyebrow">Continue the briefing</p><h2 id="read-next-heading" className="mt-2 font-display text-2xl font-bold">Read next</h2><Link to={`/article/${relacionados[0].slug}`} onClick={() => trackEvent("next_story_click", { from_slug: artigo.slug, to_slug: relacionados[0].slug })} className="mt-3 block font-display text-3xl font-bold leading-tight hover:text-signal">{relacionados[0].title} →</Link></section>}
+        <section className="newsletter-panel mt-12" aria-labelledby="article-newsletter-heading"><p className="eyebrow !text-white/70">The AION Brief</p><h2 id="article-newsletter-heading" className="mt-2 font-display text-3xl font-bold">One useful AI briefing. No hype.</h2><p className="mt-3 max-w-xl text-sm text-white/70">Get the developments that matter, what they mean and what to watch next.</p><a href="/#newsletter" onClick={() => { trackEvent("newsletter_signup", { placement: "article_end", slug: artigo.slug }); trackEvent("newsletter_subscribe", { placement: "article_end", slug: artigo.slug }); }} className="mt-5 inline-block rounded-md bg-white px-5 py-2.5 text-sm font-bold text-black">Join the briefing</a></section>
         <footer className="mt-12 border-t border-line pt-6">
           <Link to="/articles" className="text-sm font-medium text-ultra hover:underline">← All articles</Link>
         </footer>

@@ -18,18 +18,28 @@ services:
         generateValue: true
       - key: ADMIN_SETUP_TOKEN
         generateValue: true
-      - key: SITE_URL
-        value: https://aion-news-os.vercel.app
+      - key: PUBLIC_SITE_URL
+        value: https://aionnews.cloud
       - key: PUBLIC_API_URL
         value: https://aion-news-api.onrender.com
       - key: CORS_ORIGINS
-        value: https://aion-news-os.vercel.app
+        value: https://aionnews.cloud,https://www.aionnews.cloud,https://aion-news-os.vercel.app
       - key: IMAGE_PROVIDER
         value: pollinations
       - key: UPLOAD_DIR
         value: /var/data/uploads
       - key: DATABASE_URL
         value: sqlite:////var/data/aion.db
+      # Manus bridge values are entered only in the Render dashboard. Blueprint
+      # updates must never overwrite or reveal them.
+      - key: MANUS_API_KEY
+        sync: false
+      - key: MANUS_WEBHOOK_PUBLIC_KEY
+        sync: false
+      - key: MANUS_PROJECT_ID
+        sync: false
+      - key: AION_BRIDGE_TOKEN
+        sync: false
     disk:
       name: aion-data
       mountPath: /var/data

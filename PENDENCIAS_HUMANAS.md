@@ -6,7 +6,8 @@ O código pode preparar a infraestrutura, mas estas ações exigem contas ou dec
 - Guardar os valores gerados de `SECRET_KEY` e `ADMIN_SETUP_TOKEN` fora do Git.
 - Criar o primeiro administrador usando o token de setup do Render.
 - Adicionar uma chave de provedor de IA se a redação automática completa for desejada.
-- Verificar `https://aion-news-os.vercel.app` no Google Search Console e enviar `sitemap.xml`, `news-sitemap.xml` e `image-sitemap.xml`.
+- Conectar `https://aionnews.cloud` ao projeto Vercel antes do merge da migração canônica.
+- Verificar `https://aionnews.cloud` no Google Search Console e enviar `sitemap.xml`, `news-sitemap.xml` e `image-sitemap.xml`.
 - Solicitar participação no Google News, quando editorialmente elegível.
 - Acompanhar Core Web Vitals, rastreamento, indexação e Discover após existirem dados reais de campo.
 - Configurar opcionalmente GA4, AdSense, Cloudflare Analytics e Clarity por variáveis protegidas da Vercel.

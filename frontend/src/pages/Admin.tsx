@@ -133,7 +133,7 @@ export default function Admin() {
             await api("/api/agents", { method: "POST", body: JSON.stringify(v) });
             await carregar();
           }} />
-          <Tabela cols={["id", "slug", "name", "role", "status"]} rows={dados}
+          <Tabela cols={["id", "slug", "name", "role", "classification", "status"]} rows={dados}
             onDelete={(id) => excluir("/api/agents", id)} />
         </>)}
 

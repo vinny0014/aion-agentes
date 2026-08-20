@@ -1,9 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import "./index.css";
 import Landing from "./pages/Landing";
-import { initializeTelemetry } from "./lib/telemetry";
+import { CONSENT_EVENT, initializeTelemetry, trackPageView } from "./lib/telemetry";
+import CookieConsent from "./lib/CookieConsent";
 const Sobre = React.lazy(() => import("./pages/Sobre"));
 const Login = React.lazy(() => import("./pages/Login"));
 const Cadastro = React.lazy(() => import("./pages/Cadastro"));
@@ -16,28 +17,56 @@ const NotFound = React.lazy(() => import("./pages/NotFound"));
 const Privacidade = React.lazy(() => import("./pages/Institucional").then(m => ({ default: m.Privacy })));
 const Termos = React.lazy(() => import("./pages/Institucional").then(m => ({ default: m.Terms })));
 const Contato = React.lazy(() => import("./pages/Institucional").then(m => ({ default: m.Contact })));
+const EditorialPolicy = React.lazy(() => import("./pages/Institucional").then(m => ({ default: m.EditorialPolicy })));
+const CorrectionsPolicy = React.lazy(() => import("./pages/Institucional").then(m => ({ default: m.CorrectionsPolicy })));
 const Categorias = React.lazy(() => import("./pages/Institucional").then(m => ({ default: (p: any) => m.Taxonomia({ tipo: "categories" }) })));
 const TagsPage = React.lazy(() => import("./pages/Institucional").then(m => ({ default: (p: any) => m.Taxonomia({ tipo: "tags" }) })));
+const TopicHub = React.lazy(() => import("./pages/TopicHub"));
+const Arena = React.lazy(() => import("./pages/Arena"));
+const ModelGuide = React.lazy(() => import("./pages/ModelGuide"));
+const ComparisonGuide = React.lazy(() => import("./pages/ModelGuide").then(m => ({ default: m.ComparisonGuide })));
 
 initializeTelemetry();
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
   window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => undefined));
 }
 
+function TelemetryRouteObserver() {
+  const location = useLocation();
+  React.useEffect(() => {
+    trackPageView(`${location.pathname}${location.search}`);
+    const onConsent = () => trackPageView(`${location.pathname}${location.search}`);
+    window.addEventListener(CONSENT_EVENT, onConsent);
+    return () => window.removeEventListener(CONSENT_EVENT, onConsent);
+  }, [location.pathname, location.search]);
+  return null;
+}
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <BrowserRouter>
+      <TelemetryRouteObserver />
       <React.Suspense fallback={<div className="p-10 font-mono text-sm text-slateui">Loading…</div>}>
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/about" element={<Sobre />} />
         <Route path="/articles" element={<Blog />} />
+        <Route path="/news" element={<Blog />} />
+        <Route path="/search" element={<Blog />} />
         <Route path="/article/:slug" element={<ArtigoLazy />} />
+        {(["openai", "anthropic", "google-ai", "models", "ai-agents", "ai-infrastructure", "robotics", "business", "policy", "research", "analysis", "guides"] as const).map((hub) =>
+          <Route key={hub} path={`/${hub}`} element={<TopicHub hub={hub} />} />
+        )}
+        <Route path="/ai-arena" element={<Arena />} />
+        {(["chatgpt", "claude", "gemini", "llama"] as const).map((model) => <Route key={model} path={`/ai/${model}`} element={<ModelGuide model={model} />} />)}
+        {(["chatgpt-vs-claude", "chatgpt-vs-gemini", "claude-vs-gemini"] as const).map((comparison) => <Route key={comparison} path={`/compare/${comparison}`} element={<ComparisonGuide comparison={comparison} />} />)}
         <Route path="/categories" element={<Categorias />} />
         <Route path="/tags" element={<TagsPage />} />
         <Route path="/privacy" element={<Privacidade />} />
         <Route path="/terms" element={<Termos />} />
         <Route path="/contact" element={<Contato />} />
+        <Route path="/editorial-policy" element={<EditorialPolicy />} />
+        <Route path="/corrections-policy" element={<CorrectionsPolicy />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Cadastro />} />
         <Route path="/dashboard" element={<Dashboard />} />
@@ -45,6 +74,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <Route path="/admin/editor/:id" element={<Editor />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
+      <CookieConsent />
       </React.Suspense>
     </BrowserRouter>
   </React.StrictMode>

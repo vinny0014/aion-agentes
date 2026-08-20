@@ -166,16 +166,15 @@ def google_health(user: dict = Depends(require_admin)):
 def generate_cover(title: str, category: str = "news",
                    user: dict = Depends(require_admin)):
     """Generate and persist a real 1200x630 raster cover for Editorial Studio."""
-    from ..agents.imagegen import materialize_remote_image, provider_photo_url
+    from ..agents.imagegen import materialize_remote_image, materialize_template_image, provider_photo_url
     candidate = provider_photo_url(title, category)
     prepared = materialize_remote_image(candidate[0], title) if candidate else None
+    credit = candidate[1] if prepared and candidate else ""
     if not prepared:
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            "A real cover image could not be generated. Keep the article in draft and retry later.",
-        )
+        prepared = materialize_template_image(title, category)
+        credit = "AION generated editorial template"
     return {**prepared, "image_alt": f"Editorial image for {title[:90]}",
-            "image_credit": candidate[1]}
+            "image_credit": credit}
 
 
 @orchestrator_router.post("/upload-image")
@@ -228,6 +227,13 @@ def health(request: Request):
         has_admin = bool(db.query_one("SELECT id FROM users WHERE role='admin' LIMIT 1"))
     except Exception:
         has_admin = False
+    from ..agents.core import mem_get
+    monitor = mem_get("agent:monitor", "last_report") or {"status": "awaiting_first_probe"}
+    latest_publication = db.query_one(
+        "SELECT slug,published_at FROM contents WHERE status='published' "
+        "ORDER BY published_at DESC LIMIT 1")
+    queue_counts = {row["status"]: row["n"] for row in db.query(
+        "SELECT status,COUNT(*) n FROM content_queue GROUP BY status")}
     return {
         "status": "ok" if db_ok else "degraded",
         "app": settings.APP_NAME,
@@ -237,6 +243,11 @@ def health(request: Request):
         "scheduler": {
             "status": "running" if scheduler_running else "not_started",
             "jobs": scheduler_jobs,
+        },
+        "pipeline": {
+            "latest_publication": latest_publication,
+            "queue": queue_counts,
+            "monitor": monitor,
         },
         "owner_setup": "ready" if has_admin or settings.ADMIN_SETUP_TOKEN else "configuration_required",
         "uptime_seconds": round(time.time() - START_TIME, 1),

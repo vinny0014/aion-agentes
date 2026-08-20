@@ -8,7 +8,7 @@ Monorepo existente com SPA React 18, Vite 8, TypeScript e Tailwind; API FastAPI 
 
 As rotas públicas são exclusivamente em inglês: Home, Articles, Article, Categories, Tags, About, Privacy, Terms e Contact. Artigos diretos são renderizados no backend para entregar canonical, Open Graph, Twitter Card, `NewsArticle`, `BreadcrumbList`, publisher e `ImageObject` antes do JavaScript.
 
-O domínio canônico único é `https://aion-news-os.vercel.app`; o backend oficial é `https://aion-news-api.onrender.com`. A Vercel encaminha API, HTML de artigos, imagens, `robots.txt`, três sitemaps e RSS ao Render.
+O domínio canônico único é `https://aionnews.cloud`; o backend oficial é `https://aion-news-api.onrender.com`. A Vercel encaminha API, HTML de artigos, imagens, `robots.txt`, três sitemaps e RSS ao Render.
 
 ## Publicação e imagens
 

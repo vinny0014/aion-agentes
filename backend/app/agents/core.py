@@ -32,7 +32,7 @@ def mem_set(scope: str, key: str, value) -> None:
 # ---------- orçamento (Cost Guard integra aqui) ----------
 def monthly_budget() -> float:
     row = db.query_one("SELECT value FROM app_settings WHERE key = 'orcamento_mensal_usd'")
-    return float(row["value"]) if row else 10.0  # regra: US$10/mês
+    return float(row["value"]) if row else 13.0  # US$7 Render + US$13 API = US$20 total
 
 
 def monthly_spent() -> float:
@@ -42,11 +42,16 @@ def monthly_spent() -> float:
 
 
 def budget_tier() -> dict:
-    """Níveis do Cost Guard: 50% alerta · 70% econômico · 85% redução ·
-    95% só principais · 100% IA suspensa (RSS/cache seguem funcionando)."""
+    """Cost Guard tiers; the standard US$13 API budget uses exact US$10/12/13 gates."""
     b, gasto = monthly_budget(), monthly_spent()
     pct = (gasto / b * 100) if b > 0 else 100.0
-    if pct >= 100: modo = "suspenso"
+    if b >= 13:
+        if gasto >= 13: modo = "suspenso"
+        elif gasto >= 12: modo = "apenas-principais"
+        elif gasto >= 10: modo = "economico"
+        elif gasto >= 8: modo = "alerta"
+        else: modo = "normal"
+    elif pct >= 100: modo = "suspenso"
     elif pct >= 95: modo = "apenas-principais"
     elif pct >= 85: modo = "reducao"
     elif pct >= 70: modo = "economico"
@@ -63,9 +68,9 @@ def budget_remaining() -> float:
 
 def record_cost(agent_slug: str, tokens: int, cost: float) -> None:
     db.execute(
-        "UPDATE agent_runs SET tokens = tokens + ?, cost = cost + ? "
-        "WHERE id = (SELECT MAX(id) FROM agent_runs WHERE agent_slug = ?)",
-        (tokens, cost, agent_slug),
+        "INSERT INTO agent_runs(agent_slug,status,input,output,tokens,cost) "
+        "VALUES(?,'usage','paid-provider-call','cost-recorded',?,?)",
+        (agent_slug, tokens, cost),
     )
 
 

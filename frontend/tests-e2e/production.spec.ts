@@ -15,9 +15,11 @@ Evidence, transparent reporting and continuous monitoring help teams improve art
 
 test("reader and editor production journeys", async ({ page, request }) => {
   const browserErrors: string[] = [];
+  await page.route("https://www.googletagmanager.com/**", (route) => route.fulfill({ status: 200, contentType: "application/javascript", body: "" }));
   page.on("console", (message) => { if (message.type() === "error") browserErrors.push(message.text()); });
   page.on("pageerror", (error) => browserErrors.push(error.message));
   await page.addInitScript(() => {
+    window.localStorage.setItem("aion_cookie_consent_v1", "granted");
     (window as any).__aionCLS = 0;
     new PerformanceObserver((list) => {
       for (const entry of list.getEntries() as any) {
@@ -41,6 +43,7 @@ test("reader and editor production journeys", async ({ page, request }) => {
   await page.getByLabel("Title", { exact: true }).fill(title);
   await page.getByLabel("Summary").fill("An evidence-based guide to evaluating and operating reliable artificial intelligence systems.");
   await page.getByLabel(/^Body/).fill(body);
+  await page.getByLabel(/Source URL/).fill("https://example.com/reliable-ai-systems");
 
   const cover = await request.get("http://127.0.0.1:8000/og-cover.png");
   expect(cover.ok()).toBeTruthy();
@@ -57,13 +60,19 @@ test("reader and editor production journeys", async ({ page, request }) => {
   await expect(page.getByText("Article published")).toBeVisible();
 
   await page.goto("/articles");
-  await expect(page.getByRole("heading", { name: "Articles" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Latest AI stories" })).toBeVisible();
   await expect(page.getByRole("link", { name: title }).first()).toBeVisible();
   await page.getByLabel("Search articles").fill("independent teams");
   await page.getByRole("button", { name: "Search" }).click();
   await expect(page.getByRole("link", { name: title }).first()).toBeVisible();
   await page.getByRole("link", { name: title }).first().click();
   await expect(page.getByRole("heading", { name: title })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (window.dataLayer || []).some((item: any) => item?.[0] === "event" && item?.[1] === "article_view"))).toBeTruthy();
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await expect.poll(() => page.evaluate(() => (window.dataLayer || []).some((item: any) => item?.[0] === "event" && item?.[1] === "scroll_90"))).toBeTruthy();
+  await page.reload();
+  await expect(page.locator('meta[name="aion-ga-measurement-id"]')).toHaveAttribute("content", "G-DVT2E73K18");
+  await expect.poll(() => page.evaluate(() => (window.dataLayer || []).some((item: any) => item?.[0] === "event" && item?.[1] === "article_view"))).toBeTruthy();
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", /\/article\/how-independent-teams/);
   await expect(page.locator("article img").first()).toHaveAttribute("src", /^http:\/\/127\.0\.0\.1:8000\/api\/public\/images\//);
 
@@ -80,8 +89,8 @@ test("reader and editor production journeys", async ({ page, request }) => {
   expect(await page.evaluate(() => (window as any).__aionCLS)).toBeLessThan(0.1);
   await page.unroute("**/api/public/**");
   await page.getByLabel("Newsletter email").fill("reader-e2e@example.com");
-  await page.getByRole("button", { name: "Subscribe" }).last().click();
-  await expect(page.getByText("Subscribed!")).toBeVisible();
+  await page.getByRole("button", { name: "Join the briefing" }).click();
+  await expect(page.getByText("You're on the list.")).toBeVisible();
 
   for (const path of ["/categories", "/tags", "/about", "/privacy", "/terms", "/contact"]) {
     await page.goto(path);
@@ -90,6 +99,9 @@ test("reader and editor production journeys", async ({ page, request }) => {
   await page.goto("/does-not-exist");
   await expect(page.getByRole("heading", { name: /Page not found/ })).toBeVisible();
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex,nofollow");
+  // The production server intentionally returns HTTP 404 while still rendering
+  // the React NotFound page. Chromium may log that expected navigation status.
+  browserErrors.length = 0;
 
   const rss = await request.get("http://127.0.0.1:8000/rss.xml");
   expect(rss.ok()).toBeTruthy();
@@ -110,4 +122,29 @@ test("reader and editor production journeys", async ({ page, request }) => {
   await page.goto("/articles");
   await expect(page.getByRole("link", { name: title })).toHaveCount(0);
   expect(browserErrors).toEqual([]);
+});
+
+test("GA4 stays blocked when rejected and sends one SPA page view after consent", async ({ page }) => {
+  const tagRequests: string[] = [];
+  await page.route("https://www.googletagmanager.com/**", (route) => {
+    tagRequests.push(route.request().url());
+    return route.fulfill({ status: 200, contentType: "application/javascript", body: "" });
+  });
+  await page.goto("/");
+  expect(tagRequests).toHaveLength(0);
+  await page.getByRole("button", { name: "Reject analytics" }).click();
+  await page.waitForTimeout(100);
+  expect(tagRequests).toHaveLength(0);
+  expect(await page.evaluate(() => (window.dataLayer || []).some((item: any) => item?.[0] === "event"))).toBeFalsy();
+
+  await page.evaluate(() => window.dispatchEvent(new Event("aion:open-cookie-preferences")));
+  await page.getByRole("checkbox", { name: /Analytics cookies/ }).check();
+  await page.getByRole("button", { name: "Save preferences" }).click();
+  await expect.poll(() => tagRequests.length).toBe(1);
+  await expect.poll(() => page.evaluate(() => (window.dataLayer || []).filter((item: any) => item?.[0] === "event" && item?.[1] === "page_view").length)).toBe(1);
+
+  await page.locator('a[href="/articles"]:visible').first().click();
+  await expect(page).toHaveURL(/\/articles$/);
+  await expect.poll(() => page.evaluate(() => (window.dataLayer || []).filter((item: any) => item?.[0] === "event" && item?.[1] === "page_view").length)).toBe(2);
+  expect(tagRequests).toHaveLength(1);
 });

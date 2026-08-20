@@ -6,6 +6,9 @@ import shutil
 import sys
 import asyncio
 import xml.etree.ElementTree as ET
+import base64
+import hashlib
+import time
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 
@@ -20,22 +23,26 @@ os.environ.update({
     "DATABASE_URL": f"sqlite:///{TEST_ROOT / 'aion.db'}",
     "UPLOAD_DIR": str(TEST_ROOT / "uploads"),
     "PUBLIC_API_URL": "https://aion-news-api.onrender.com",
-    "SITE_URL": "https://aion-news-os.vercel.app",
+    "PUBLIC_SITE_URL": "https://aionnews.cloud",
     "IMAGE_PROVIDER": "none",
     "SECRET_KEY": "test-secret-key-with-at-least-32-characters",
     "ADMIN_SETUP_TOKEN": "test-owner-setup-token",
-    "CORS_ORIGINS": "https://aion-news-os.vercel.app",
+    "CORS_ORIGINS": "https://aionnews.cloud,https://www.aionnews.cloud,https://aion-news-os.vercel.app",
     "ENV": "test",
 })
 
 import httpx  # noqa: E402
 import pytest  # noqa: E402
 from PIL import Image  # noqa: E402
+from cryptography.hazmat.primitives import hashes, serialization  # noqa: E402
+from cryptography.hazmat.primitives.asymmetric import padding, rsa  # noqa: E402
 
 from app.agents.imagegen import materialize_uploaded_image  # noqa: E402
 from app.agents.registry import seed_agents  # noqa: E402
 from app.core import database as db  # noqa: E402
+from app.core.config import settings  # noqa: E402
 from app.main import app  # noqa: E402
+from app.routers import manus_bridge  # noqa: E402
 
 db.init_db()
 seed_agents()
@@ -155,7 +162,7 @@ def test_production_boots_without_synthesizing_an_unknown_setup_token():
         ENV="production",
         SECRET_KEY="a-production-secret-key-that-is-long-enough",
         ADMIN_SETUP_TOKEN="",
-        CORS_ORIGINS="https://aion-news-os.vercel.app",
+        CORS_ORIGINS="https://aionnews.cloud",
     )
     assert production.ADMIN_SETUP_TOKEN == ""
     with pytest.raises(ValueError):
@@ -164,7 +171,7 @@ def test_production_boots_without_synthesizing_an_unknown_setup_token():
             ENV="production",
             SECRET_KEY="a-production-secret-key-that-is-long-enough",
             ADMIN_SETUP_TOKEN="short",
-            CORS_ORIGINS="https://aion-news-os.vercel.app",
+            CORS_ORIGINS="https://aionnews.cloud",
         )
 
 
@@ -281,11 +288,12 @@ def test_image_upload_validation_and_delivery():
     assert svg.status_code == 415
 
 
-def test_cover_generation_fails_closed_without_provider():
+def test_cover_generation_uses_managed_aion_template_without_provider():
     assert client.post("/api/orchestrator/cover?title=Test").status_code == 401
     response = client.post("/api/orchestrator/cover?title=Test", headers=ADMIN_HEADERS)
-    assert response.status_code == 503
-    assert "draft" in response.text
+    assert response.status_code == 200
+    assert response.json()["image_url"].startswith("https://aion-news-api.onrender.com/api/public/images/")
+    assert response.json()["image_credit"] == "AION generated editorial template"
 
 
 def test_brand_assets_are_real_pngs():
@@ -301,7 +309,7 @@ def test_brand_assets_are_real_pngs():
 def test_robots_uses_only_official_domain_and_three_sitemaps():
     response = client.get("/robots.txt")
     text = response.text
-    assert text.count("Sitemap: https://aion-news-os.vercel.app/") == 3
+    assert text.count("Sitemap: https://aionnews.cloud/") == 3
     assert "Disallow: /dashboard" in text
     assert "aion-agentes" + ".vercel.app" not in text
     assert "stale-while-revalidate=86400" in response.headers["cache-control"]
@@ -321,7 +329,7 @@ def test_sitemap_is_valid_and_contains_public_article():
     response = client.get("/sitemap.xml")
     root = ET.fromstring(response.content)
     assert root.tag.endswith("urlset")
-    assert f"https://aion-news-os.vercel.app/article/{PRIMARY['slug']}" in response.text
+    assert f"https://aionnews.cloud/article/{PRIMARY['slug']}" in response.text
     assert "/conte" + "udos" not in response.text and "/catego" + "rias" not in response.text
 
 
@@ -357,7 +365,7 @@ def test_server_rendered_article_has_complete_metadata():
     assert response.status_code == 200
     html = response.text
     assert '<html lang="en-US">' in html
-    assert f'<link rel="canonical" href="https://aion-news-os.vercel.app/article/{PRIMARY["slug"]}">' in html
+    assert f'<link rel="canonical" href="https://aionnews.cloud/article/{PRIMARY["slug"]}">' in html
     assert '<meta property="og:type" content="article">' in html
     assert '<meta name="twitter:card" content="summary_large_image">' in html
     assert '"@type": "NewsArticle"' in html and '"@type": "BreadcrumbList"' in html
@@ -424,6 +432,8 @@ def test_fact_check_and_publisher_respect_publication_gate():
          "analysis", "ai,evaluation", TEST_IMAGE_URL, "A model evaluation dashboard"),
     )
     from app.agents.team import fact_check_agent, publisher_agent
+    db.execute("UPDATE contents SET source_url='https://example.com/model-evaluation' WHERE id=?",
+               (content_id,))
     fact_check_agent({})
     published = publisher_agent({})
     assert published["auto_publicados"] >= 1
@@ -484,11 +494,113 @@ def test_agents_tasks_memory_logs_and_secret_settings_controls():
     assert client.get("/api/logs", headers=USER_HEADERS).status_code == 403
 
 
+def test_all_agents_have_honest_runtime_classification():
+    agents = client.get("/api/agents", headers=ADMIN_HEADERS).json()
+    assert len(agents) == 35
+    allowed = {"OPERATIONAL", "INTERNAL_MODULE", "PARTIAL", "INACTIVE", "BLOCKED_EXTERNAL"}
+    assert {agent["classification"] for agent in agents} <= allowed
+    by_slug = {agent["slug"]: agent for agent in agents}
+    assert by_slug["ceo-master"]["classification"] == "OPERATIONAL"
+    assert by_slug["github"]["classification"] == "BLOCKED_EXTERNAL"
+    assert by_slug["newsletter"]["classification"] == "PARTIAL"
+    assert by_slug["scheduler"]["classification"] == "INTERNAL_MODULE"
+    assert by_slug["developer"]["runtime"]["handler"] is None
+
+
+def test_discovery_rejects_nonsense_stale_and_near_duplicate_topics():
+    from app.agents.team import (_canonical_story_url, _headline_rejection,
+                                 _is_near_duplicate)
+    assert _canonical_story_url("https://Example.com/ai/story/?utm_source=x&id=2#top") == \
+           "https://example.com/ai/story?id=2"
+    assert _headline_rejection(
+        "Artificial intelligence artificial intelligence artificial intelligence artificial intelligence",
+        "artificial intelligence",
+    ) == "repetitive_title"
+    assert _headline_rejection("Summer travel discounts announced for families", "Hotel sale") == \
+           "low_ai_relevance"
+    assert _headline_rejection(
+        "OpenAI releases a new evaluation framework for production AI agents",
+        "The framework measures agent reliability.", "2020-01-01T00:00:00+00:00",
+    ) == "stale_or_future_date"
+    assert _is_near_duplicate(
+        "NVIDIA unveils a new chip for AI data centers",
+        ["Nvidia unveils new chip for artificial intelligence data centers"], 0.75,
+    )
+
+
+def test_single_provider_call_payload_preserves_metadata_and_capitalization():
+    from app.agents.registry import _parse_generated_article
+    raw = json.dumps({
+        "title": "NVIDIA and OpenAI announce a new AI infrastructure project",
+        "excerpt": "The companies announced a sourced infrastructure project.",
+        "body": "## What happened\n\nThe companies announced a documented project with independent sources. " * 8,
+        "category": "news", "tags": ["NVIDIA", "OpenAI", "infrastructure"],
+        "seo_title": "NVIDIA and OpenAI infrastructure project",
+        "meta_description": "A sourced report on the NVIDIA and OpenAI infrastructure project.",
+        "social_text": "NVIDIA and OpenAI announced an infrastructure project.",
+    })
+    article = _parse_generated_article(raw, "fallback topic", "noticia_curta")
+    assert article["title"].startswith("NVIDIA and OpenAI")
+    assert article["category"] == "news"
+    assert len(article["body"]) > 200
+
+
+def test_monitor_recovers_stale_queues_and_creates_idempotent_incidents():
+    content_queue_id = db.execute(
+        "INSERT INTO content_queue(topic,status,created_at) VALUES(?, 'processing', datetime('now','-2 hours'))",
+        ("AI queue recovery test",),
+    )
+    image_queue_id = db.execute(
+        "INSERT INTO image_queue(content_id,status,attempts) VALUES(?, 'failed', 1)",
+        (PRIMARY["id"],),
+    )
+    from app.agents.team import monitor_agent
+    first = monitor_agent({})
+    second = monitor_agent({})
+    assert first["content_requeued"] == 1 and first["images_requeued"] == 1
+    assert second["content_requeued"] == 0 and second["images_requeued"] == 0
+    assert db.query_one("SELECT status FROM content_queue WHERE id=?", (content_queue_id,))["status"] == "queued"
+    assert db.query_one("SELECT status FROM image_queue WHERE id=?", (image_queue_id,))["status"] == "queued"
+    assert db.query_one("SELECT COUNT(*) n FROM tasks WHERE title LIKE '[INCIDENT:queue-stuck]%' ")["n"] == 1
+
+
+def test_orchestrator_recovers_a_stale_persistent_lock(monkeypatch):
+    from app.agents import orchestrator
+    from app.agents.core import mem_get, mem_set
+    mem_set("agent:ceo-master", "lock", {"state": "on", "acquired_at": 1})
+    monkeypatch.setattr(orchestrator, "PIPELINE", [])
+    result = orchestrator.run_cycle("stale-lock-test")
+    assert result["trigger"] == "stale-lock-test"
+    assert mem_get("agent:ceo-master", "lock")["state"] == "off"
+
+
+def test_ga4_spa_events_and_editorial_home_are_wired_in_code():
+    telemetry = (ROOT / "frontend" / "src" / "lib" / "telemetry.ts").read_text()
+    main = (ROOT / "frontend" / "src" / "main.tsx").read_text()
+    landing = (ROOT / "frontend" / "src" / "pages" / "Landing.tsx").read_text()
+    blog = (ROOT / "frontend" / "src" / "pages" / "Blog.tsx").read_text()
+    consent = (ROOT / "frontend" / "src" / "lib" / "CookieConsent.tsx").read_text()
+    assert "send_page_view: false" in telemetry and '"page_view"' in telemetry
+    assert 'getAnalyticsConsent() !== "granted"' in telemetry
+    assert "Accept analytics" in consent and "Reject analytics" in consent and "Save preferences" in consent
+    assert "TelemetryRouteObserver" in main
+    for event in ("newsletter_subscribe", "search_performed", "article_view",
+                  "outbound_source_click", "category_view"):
+        assert event in landing + blog
+    assert "[25, 50, 75, 90]" in blog
+    assert "`scroll_${threshold}`" in blog and "`article_scroll_${threshold}`" in blog
+    for editorial_marker in ("The intelligence that matters now",
+                             "Independent intelligence for the AI economy",
+                             "Start here"):
+        assert editorial_marker in landing
+    assert "Agent Hub" not in landing
+
+
 def test_cors_allows_only_official_frontend():
     allowed = client.options("/api/public/articles", headers={
-        "Origin": "https://aion-news-os.vercel.app", "Access-Control-Request-Method": "GET",
+        "Origin": "https://aionnews.cloud", "Access-Control-Request-Method": "GET",
     })
-    assert allowed.headers.get("access-control-allow-origin") == "https://aion-news-os.vercel.app"
+    assert allowed.headers.get("access-control-allow-origin") == "https://aionnews.cloud"
     denied = client.options("/api/public/articles", headers={
         "Origin": "https://old.example.com", "Access-Control-Request-Method": "GET",
     })
@@ -498,15 +610,21 @@ def test_cors_allows_only_official_frontend():
 def test_deployment_configs_align_official_services():
     render = (ROOT / "render.yaml").read_text()
     assert "name: aion-news-api" in render
-    assert "https://aion-news-os.vercel.app" in render
+    assert "https://aionnews.cloud" in render
+    assert "PUBLIC_SITE_URL" in render
     assert "https://aion-news-api.onrender.com" in render
     assert "autoDeployTrigger: checksPass" in render
     assert "value: 3.12.13" in render
+    for bridge_key in ("MANUS_API_KEY", "MANUS_WEBHOOK_PUBLIC_KEY",
+                       "MANUS_PROJECT_ID", "AION_BRIDGE_TOKEN"):
+        assert f"key: {bridge_key}" in render
     for path in (ROOT / "vercel.json", ROOT / "frontend" / "vercel.json"):
         config = json.loads(path.read_text())
         destinations = " ".join(rewrite["destination"] for rewrite in config["rewrites"])
         assert "https://aion-news-api.onrender.com/api/:path*" in destinations
         assert "https://aion-news-api.onrender.com/rss.xml" in destinations
+        redirects = config["redirects"]
+        assert any(r["destination"] == "https://aionnews.cloud/:path*" for r in redirects)
         assert config["headers"][0]["source"] == "/(.*)"
         assert any(header["key"] == "Content-Security-Policy" for block in config["headers"] for header in block["headers"])
         csp = next(header["value"] for block in config["headers"] for header in block["headers"]
@@ -544,11 +662,12 @@ def test_no_deprecated_domains_or_committed_secrets():
                  "aion-agentes-api" + ".onrender.com")
     source_files = [
         ROOT / "backend" / "app" / "main.py", ROOT / "backend" / "app" / "core" / "config.py",
-        ROOT / "render.yaml", ROOT / "vercel.json", ROOT / "frontend" / "vercel.json",
         ROOT / "frontend" / "index.html", ROOT / "frontend" / "src" / "lib" / "site.ts",
     ]
     text = "\n".join(path.read_text() for path in source_files)
     assert not any(domain in text for domain in forbidden)
+    assert "aion-news-os.vercel.app" not in text
+    assert text.count("https://aionnews.cloud") >= 2
     assert not (ROOT / "backend" / ".env").exists()
     assert "CHANGE_ME_IN_ENV" not in (ROOT / "render.yaml").read_text()
 
@@ -558,3 +677,155 @@ def test_ci_runs_backend_and_frontend_validation():
     assert "python -m pytest" in workflow
     assert "npm ci" in workflow and "npm run build" in workflow
     assert "playwright install --with-deps chromium" in workflow and "npm run test:e2e" in workflow
+
+
+def _signed_manus_headers(private_key, raw_body: bytes, timestamp: int | None = None) -> dict:
+    timestamp = timestamp or int(time.time())
+    body_hash = hashlib.sha256(raw_body).hexdigest()
+    signed = (
+        f"{timestamp}.https://aion-news-api.onrender.com/internal/manus/webhook.{body_hash}"
+    ).encode()
+    signature = private_key.sign(signed, padding.PKCS1v15(), hashes.SHA256())
+    return {
+        "Content-Type": "application/json",
+        "X-Webhook-Timestamp": str(timestamp),
+        "X-Webhook-Signature": base64.b64encode(signature).decode(),
+    }
+
+
+def test_manus_webhook_bootstrap_is_inert_and_bounded(monkeypatch):
+    monkeypatch.setattr(settings, "MANUS_WEBHOOK_PUBLIC_KEY", "")
+    before = db.query_one("SELECT COUNT(*) AS total FROM manus_bridge_events")["total"]
+    response = client.post("/internal/manus/webhook", json={"probe": True})
+    assert response.status_code == 200
+    assert response.json() == {"status": "webhook_registration_pending"}
+    after = db.query_one("SELECT COUNT(*) AS total FROM manus_bridge_events")["total"]
+    assert after == before
+
+    oversized = client.post(
+        "/internal/manus/webhook",
+        content=b"x" * (64 * 1024 + 1),
+        headers={"Content-Type": "application/json"},
+    )
+    assert oversized.status_code == 413
+
+
+def test_manus_webhook_requires_signature_and_is_idempotent(monkeypatch):
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    public_pem = private_key.public_key().public_bytes(
+        serialization.Encoding.PEM,
+        serialization.PublicFormat.SubjectPublicKeyInfo,
+    ).decode()
+    monkeypatch.setattr(settings, "MANUS_WEBHOOK_PUBLIC_KEY", public_pem)
+    payload = {
+        "event_id": "task_stopped_bridge_test_1",
+        "event_type": "task_stopped",
+        "task_detail": {
+            "task_id": "task_bridge_123",
+            "task_title": "Validate AION News production",
+            "task_url": "https://manus.im/app/task_bridge_123",
+            "message": "Production validation completed.",
+            "stop_reason": "finish",
+            "attachments": [{
+                "file_name": "report.txt",
+                "url": "https://signed.example/secret-download-token",
+                "size_bytes": 42,
+            }],
+        },
+    }
+    raw = json.dumps(payload, separators=(",", ":")).encode()
+    headers = _signed_manus_headers(private_key, raw)
+
+    response = client.post("/internal/manus/webhook", content=raw, headers=headers)
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "accepted"
+    duplicate = client.post("/internal/manus/webhook", content=raw, headers=headers)
+    assert duplicate.status_code == 200
+    assert db.query_one(
+        "SELECT COUNT(*) AS total FROM manus_bridge_events WHERE event_id = ?",
+        (payload["event_id"],),
+    )["total"] == 1
+    stored = db.query_one(
+        "SELECT payload_json FROM manus_bridge_events WHERE event_id = ?",
+        (payload["event_id"],),
+    )["payload_json"]
+    assert "secret-download-token" not in stored
+
+    invalid = client.post(
+        "/internal/manus/webhook",
+        content=raw + b" ",
+        headers=headers,
+    )
+    assert invalid.status_code == 401
+    stale_headers = _signed_manus_headers(private_key, raw, int(time.time()) - 301)
+    stale = client.post("/internal/manus/webhook", content=raw, headers=stale_headers)
+    assert stale.status_code == 401
+
+
+def test_manus_bridge_control_endpoints_require_separate_token(monkeypatch):
+    token = "bridge-test-token-with-more-than-32-characters"
+    monkeypatch.setattr(settings, "AION_BRIDGE_TOKEN", token)
+    denied = client.get("/internal/manus/events")
+    assert denied.status_code == 401
+    headers = {"X-Aion-Bridge-Token": token}
+    events = client.get("/internal/manus/events?status=all", headers=headers)
+    assert events.status_code == 200
+    assert any(event["event_id"] == "task_stopped_bridge_test_1" for event in events.json())
+    acknowledged = client.post(
+        "/internal/manus/events/task_stopped_bridge_test_1/ack", headers=headers
+    )
+    assert acknowledged.status_code == 200
+
+    monkeypatch.setattr(settings, "MANUS_API_KEY", "")
+    unavailable = client.post(
+        "/internal/manus/tasks",
+        headers=headers,
+        json={"title": "Test", "prompt": "Do not execute externally."},
+    )
+    assert unavailable.status_code == 503
+
+
+def test_manus_bridge_public_status_never_exposes_credentials(monkeypatch):
+    monkeypatch.setattr(settings, "MANUS_API_KEY", "sensitive-manus-key")
+    monkeypatch.setattr(settings, "MANUS_WEBHOOK_PUBLIC_KEY", "public-key")
+    monkeypatch.setattr(
+        settings, "AION_BRIDGE_TOKEN", "sensitive-control-token-with-32-characters"
+    )
+    response = client.get("/internal/manus/status")
+    assert response.status_code == 200
+    body = response.text
+    assert response.json() == {
+        "webhook_verification": True,
+        "outbound_api": True,
+        "control_auth": True,
+    }
+    assert "sensitive" not in body
+
+
+def test_manus_outbound_tasks_always_include_automation_guardrails(monkeypatch):
+    token = "bridge-test-token-with-more-than-32-characters"
+    monkeypatch.setattr(settings, "AION_BRIDGE_TOKEN", token)
+    captured = {}
+
+    async def fake_post(endpoint, payload):
+        captured["endpoint"] = endpoint
+        captured["payload"] = payload
+        return {
+            "ok": True,
+            "task_id": "task_guardrail_123",
+            "task_title": "Safe task",
+            "task_url": "https://manus.im/app/task_guardrail_123",
+        }
+
+    monkeypatch.setattr(manus_bridge, "_manus_post", fake_post)
+    response = client.post(
+        "/internal/manus/tasks",
+        headers={"X-Aion-Bridge-Token": token},
+        json={"title": "Safe task", "prompt": "Validate the production home page."},
+    )
+    assert response.status_code == 200, response.text
+    sent = captured["payload"]["message"]["content"][0]["text"]
+    assert captured["endpoint"] == "task.create"
+    assert "Do not make payments" in sent
+    assert "AION Crypto" in sent
+    assert sent.endswith("Validate the production home page.")

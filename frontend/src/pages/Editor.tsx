@@ -224,7 +224,7 @@ export default function Editor() {
                 onChange={(e) => set("scheduled_at", e.target.value ? e.target.value.replace("T", " ") + ":00" : "")} />
             </label>
             <label className="mt-4 block text-sm font-medium">
-              Source URL <span className="font-normal text-slateui">(optional attribution)</span>
+              Source URL <span className="font-normal text-slateui">(required for news and analysis)</span>
               <input className="field mt-1.5 font-mono text-xs" value={v.source_url}
                 onChange={(e) => set("source_url", e.target.value)} />
             </label>
@@ -234,7 +234,7 @@ export default function Editor() {
             <legend className="tag px-1">seo preview</legend>
             <div className="rounded-md border border-line bg-black/20 p-4">
               <p className="truncate text-lg text-[#8ab4f8]">{v.seo_title || v.title || "Page title"}</p>
-              <p className="truncate text-xs text-emerald-400">aion-news-os.vercel.app › article › {v.slug || "slug"}</p>
+              <p className="truncate text-xs text-emerald-400">aionnews.cloud › article › {v.slug || "slug"}</p>
               <p className="mt-1 line-clamp-2 text-sm text-slateui">{v.seo_description || v.excerpt || "Meta description preview…"}</p>
             </div>
             <label className="mt-4 block text-sm font-medium">

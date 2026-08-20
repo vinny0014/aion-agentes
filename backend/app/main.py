@@ -24,6 +24,7 @@ from .core.security import require_admin
 from .content_rules import quarantine_noncompliant_public_content
 from .routers.auth import router as auth_router
 from .routers.public import router as public_router
+from .routers.manus_bridge import router as manus_bridge_router
 from .routers.crud import agents_router, content_router, tasks_router, users_router
 from .routers.system import (
     growth_router, orchestrator_router, health_router, logs_router, memory_router, queue_router, settings_router,
@@ -42,9 +43,16 @@ async def lifespan(app: FastAPI):
         seed_initial_content()
     quarantine_noncompliant_public_content()
     # Process the editorial queue every hour.
-    scheduler.add_job(process_queue_once, "interval", hours=1, id="content-pipeline")
+    scheduler.add_job(process_queue_once, "interval", hours=1, id="content-pipeline",
+                      max_instances=1, coalesce=True, misfire_grace_time=900)
     from .agents.orchestrator import run_cycle
-    scheduler.add_job(lambda: run_cycle("scheduler"), "interval", hours=2, id="agent-orchestrator")
+    scheduler.add_job(lambda: run_cycle("scheduler"), "interval", hours=2, id="agent-orchestrator",
+                      max_instances=1, coalesce=True, misfire_grace_time=1800)
+    from .agents.core import run_agent
+    from .agents.team import monitor_agent
+    scheduler.add_job(lambda: run_agent("monitor", monitor_agent), "interval", minutes=5,
+                      id="monitor-recovery", max_instances=1, coalesce=True,
+                      misfire_grace_time=300)
     # Run the first orchestrator cycle after startup.
     from datetime import datetime, timedelta
     scheduler.add_job(lambda: run_cycle("bootstrap"), "date",
@@ -81,7 +89,8 @@ app.add_middleware(
 # ---------------- Middlewares de segurança ----------------
 _BUCKETS: dict[str, list[float]] = defaultdict(list)
 _RATE_LIMITS = {"/api/auth/login": (10, 60), "/api/auth/register": (5, 60),
-                "/api/public/contact": (5, 60), "/api/public/newsletter": (5, 60)}  # (req, janela s)
+                "/api/public/contact": (5, 60), "/api/public/newsletter": (5, 60),
+                "/internal/manus/webhook": (120, 60)}  # (req, janela s)
 
 
 @app.middleware("http")
@@ -133,6 +142,8 @@ for r in (auth_router, users_router, agents_router, content_router, tasks_router
           logs_router, memory_router, settings_router, queue_router, health_router, public_router, growth_router, orchestrator_router):
     app.include_router(r)
 
+app.include_router(manus_bridge_router)
+
 
 # ---------------- Endpoints públicos de SEO ----------------
 @app.get("/robots.txt", response_class=PlainTextResponse, tags=["seo"])
@@ -148,8 +159,9 @@ def robots():
 def sitemap():
     quarantine_noncompliant_public_content()
     base = SITE_URL
-    static = ["", "/articles", "/categories", "/tags",
-              "/about", "/privacy", "/terms", "/contact"]
+    static = ["", "/articles", "/news", "/search", "/categories", "/tags",
+              "/about", "/privacy", "/terms", "/contact",
+              "/editorial-policy", "/corrections-policy"]
     urls = [f"<url><loc>{xml_escape(base + p)}</loc></url>" for p in static]
     for c in db.query("SELECT slug, updated_at FROM contents WHERE status = 'published'"):
         urls.append(

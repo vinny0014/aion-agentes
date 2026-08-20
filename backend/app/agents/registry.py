@@ -84,15 +84,89 @@ AGENT_DEFINITIONS = [
      "AdSense/Trends, Bing Webmaster and Cloudflare Analytics."),
 ]
 
+PRIMARY_AGENTS = {
+    "ceo-master", "discovery", "content", "fact-check", "image",
+    "image-quality", "seo", "monitor", "cost-guard",
+}
+PARTIAL_AGENTS = {
+    "social-media", "newsletter", "analytics", "adsense-opt", "google-discover",
+    "search-console", "revenue",
+}
+BLOCKED_EXTERNAL_AGENTS = {"github", "deploy"}
+AGENT_HANDLERS = {
+    "ceo-master": "orchestrator.run_cycle",
+    "discovery": "team.discovery_agent",
+    "research": "team.research_agent",
+    "trend-hunter": "team.trend_hunter_agent",
+    "breaking-news": "team.breaking_news_agent",
+    "content": "team.content_writer_agent",
+    "seo": "team.seo_agent",
+    "image": "team.image_agent",
+    "image-prompt": "team.image_prompt_agent",
+    "image-repair": "team.image_repair_agent",
+    "image-optimization": "team.image_optimization_agent",
+    "image-quality": "team.image_quality_agent",
+    "fact-check": "team.fact_check_agent",
+    "publisher": "team.publisher_agent",
+    "dashboard": "team.dashboard_agent",
+    "google-discover": "team.google_discover_agent",
+    "google-news": "team.google_news_agent",
+    "rss": "team.rss_agent",
+    "newsletter": "team.newsletter_agent",
+    "social-media": "team.social_media_agent",
+    "translation": "team.translation_agent",
+    "analytics": "team.analytics_agent",
+    "discovery-growth": "team.discovery_growth_agent",
+    "search-console": "team.search_console_agent",
+    "adsense-opt": "team.adsense_agent",
+    "revenue": "team.revenue_agent",
+    "cost-guard": "team.cost_guard_agent",
+    "performance": "team.performance_agent",
+    "qa": "team.qa_agent",
+    "security": "team.security_agent",
+    "monitor": "team.monitor_agent",
+    "scheduler": "app.lifespan.APScheduler",
+}
+
+
+def agent_classification(slug: str) -> str:
+    if slug in PRIMARY_AGENTS:
+        return "OPERATIONAL"
+    if slug in PARTIAL_AGENTS:
+        return "PARTIAL"
+    if slug in BLOCKED_EXTERNAL_AGENTS:
+        return "BLOCKED_EXTERNAL"
+    return "INTERNAL_MODULE"
+
+
+def agent_runtime_config(slug: str) -> dict:
+    classification = agent_classification(slug)
+    handler = AGENT_HANDLERS.get(slug)
+    return {
+        "classification": classification,
+        "entrypoint": "run_agent" if handler and slug not in {"ceo-master", "scheduler"} else handler,
+        "handler": handler,
+        "input": "JSON task payload",
+        "execution": ("orchestrator pipeline" if handler else
+                      "external connector" if slug in BLOCKED_EXTERNAL_AGENTS else
+                      "registered capability without an executable handler"),
+        "output": "structured JSON",
+        "log": "agent_runs + logs",
+        "database": "SQLite persistent disk",
+        "handoff": "memory + pipeline result",
+        "cost": "recorded in agent_runs",
+    }
+
 
 def seed_agents() -> None:
     """Registra os agentes padrão (idempotente)."""
     for slug, name, role, desc in AGENT_DEFINITIONS:
+        config = json.dumps(agent_runtime_config(slug), separators=(",", ":"))
         db.execute(
-            """INSERT INTO agents (slug, name, role, description) VALUES (?,?,?,?)
+            """INSERT INTO agents (slug, name, role, description, config_json) VALUES (?,?,?,?,?)
                ON CONFLICT(slug) DO UPDATE SET name=excluded.name, role=excluded.role,
-               description=excluded.description""",
-            (slug, name, role, desc),
+               description=excluded.description, config_json=excluded.config_json""",
+            (slug, name, role, desc, config),
         )
 
 
@@ -164,24 +238,62 @@ _TEMPLATE_CATEGORIA = {"noticia_curta": "news", "artigo_padrao": "news",
 
 
 def _save_draft(item: dict, title: str, slug: str, body: str, excerpt: str,
-                status: str = "draft") -> int:
+                status: str = "draft", metadata: dict | None = None) -> int:
     from .core import mem_get as _mg
     brief = _mg("agent:research", f"briefing:{item['id']}") or {}
-    tags = ",".join((brief.get("keywords") or ["ai"])[:5])
-    categoria = _TEMPLATE_CATEGORIA.get(item.get("template", ""), "news")
+    metadata = metadata or {}
+    tags_value = metadata.get("tags") or brief.get("keywords") or ["ai"]
+    if isinstance(tags_value, str):
+        tags_value = [part.strip() for part in tags_value.split(",")]
+    tags = ",".join(str(tag).strip().lower() for tag in tags_value[:5] if str(tag).strip())
+    categoria = str(metadata.get("category") or
+                    _TEMPLATE_CATEGORIA.get(item.get("template", ""), "news")).strip().lower()
+    seo_title = str(metadata.get("seo_title") or title)[:60]
+    seo_description = str(metadata.get("meta_description") or excerpt)[:160]
+    source_url = next((url for url in brief.get("fontes", []) if url), "")
     cid = db.execute(
         """INSERT INTO contents (title, slug, body, excerpt, status, agent_id,
-           seo_title, seo_description, category, tags)
+           seo_title, seo_description, category, tags, source_url)
            VALUES (?,?,?,?,?,
-                   (SELECT id FROM agents WHERE slug = 'content'), ?, ?, ?, ?)""",
-        (title, _unique_slug(slug), body, excerpt, status, title, excerpt[:160],
-         categoria, tags),
+                   (SELECT id FROM agents WHERE slug = 'content'), ?, ?, ?, ?, ?)""",
+        (title, _unique_slug(slug), body, excerpt, status, seo_title, seo_description,
+         categoria, tags, source_url),
     )
+    if metadata.get("social_text"):
+        from .core import mem_set as _ms
+        _ms("agent:social-media", f"draft:{cid}", str(metadata["social_text"])[:600])
     db.execute(
         "UPDATE content_queue SET status = 'done', result_content_id = ? WHERE id = ?",
         (cid, item["id"]),
     )
     return cid
+
+
+def _parse_generated_article(raw: str, topic: str, template: str) -> dict:
+    """Parse the single provider response; retain a safe draft if JSON is malformed."""
+    candidate = (raw or "").strip()
+    if candidate.startswith("```"):
+        candidate = candidate.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+    try:
+        data = json.loads(candidate)
+    except Exception:
+        match = __import__("re").search(r"\{.*\}", candidate, __import__("re").S)
+        try:
+            data = json.loads(match.group(0)) if match else {}
+        except Exception:
+            data = {}
+    if not isinstance(data, dict) or len(str(data.get("body") or "")) < 200:
+        body = raw.strip()
+        first = next((line.strip("# ") for line in body.splitlines() if len(line.strip()) > 40), topic)
+        return {
+            "title": topic.strip(), "excerpt": first[:160], "body": body,
+            "category": _TEMPLATE_CATEGORIA.get(template, "news"), "tags": ["ai"],
+            "seo_title": topic.strip()[:60], "meta_description": first[:160],
+        }
+    data["title"] = str(data.get("title") or topic).strip()[:200]
+    data["excerpt"] = str(data.get("excerpt") or data["body"][:160]).strip()[:240]
+    data["body"] = str(data["body"]).strip()
+    return data
 
 
 def process_queue_once() -> dict:
@@ -208,6 +320,12 @@ def process_queue_once() -> dict:
         try:
             provider = resolve_provider(item["provider"])
             prompt = TEMPLATES[template].format(topic=item["topic"])
+            prompt += (
+                "\nReturn only one valid JSON object with these keys: title, excerpt, body, "
+                "category, tags (array), seo_title, meta_description, social_text. "
+                "The body must be Markdown. Preserve official capitalization of product, company "
+                "and person names. Do not add facts that are absent from the supplied sources."
+            )
             from .core import mem_get as _mg
             brief = _mg("agent:research", f"briefing:{item['id']}")
             if brief:
@@ -225,15 +343,16 @@ def process_queue_once() -> dict:
             limite -= 1
             try:
                 prov.LAST_USAGE["tokens"] = 0
-                body = prov.generate(provider, prompt)
+                raw = prov.generate(provider, prompt)
+                article = _parse_generated_article(raw, item["topic"], template)
                 preco = db.query_one(
                     "SELECT value FROM app_settings WHERE key='preco_por_1k_tokens_usd'")
                 custo = (prov.LAST_USAGE["tokens"] / 1000.0) * (
                     float(preco["value"]) if preco else 0.0006)
                 record_cost("content", prov.LAST_USAGE["tokens"], custo)
-                title = item["topic"].strip().capitalize()
-                _save_draft(item, title, prov.slugify(item["topic"]), body,
-                            f"Article about {item['topic']} generated via {provider}.")
+                title = article["title"]
+                _save_draft(item, title, prov.slugify(title), article["body"],
+                            article["excerpt"], metadata=article)
                 processed += 1
             except Exception as exc:  # falha de rede/quota — não derruba a fila
                 db.execute(

@@ -92,7 +92,7 @@ CEO Master (orquestração) · Developer · QA · Content · SEO · GitHub · De
 
 ## Deploy
 
-**Frontend (Vercel):** projeto oficial `https://aion-news-os.vercel.app`. Importe o repositório com root `frontend/`, build `npm run build` e output `dist/`. `frontend/vercel.json` encaminha API, artigos SSR, RSS e sitemaps ao backend oficial; `VITE_API_URL` pode permanecer vazio para usar o mesmo domínio.
+**Frontend (Vercel):** domínio oficial `https://aionnews.cloud` no projeto Vercel existente. O hostname legado `aion-news-os.vercel.app` redireciona permanentemente após a ativação do DNS. Use root `frontend/`, build `npm run build` e output `dist/`. `frontend/vercel.json` encaminha API, artigos SSR, RSS e sitemaps ao backend oficial; `VITE_API_URL` pode permanecer vazio para usar o mesmo domínio.
 
 **Backend (Render):** `https://aion-news-api.onrender.com`. O `render.yaml` cria `aion-news-api`, disco persistente, `SECRET_KEY` e `ADMIN_SETUP_TOKEN`; CORS aceita somente o frontend oficial.
 
