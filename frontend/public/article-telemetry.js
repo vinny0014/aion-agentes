@@ -14,13 +14,14 @@
     } catch (_) { return null; }
   }
   function articleData() {
-    var meta = document.querySelector(".meta");
-    var parts = meta ? meta.textContent.split("·").map(function (value) { return value.trim(); }) : [];
+    var byline = document.querySelector(".byline");
+    var author = byline && byline.querySelector("strong");
+    var category = document.querySelector("article > .eyebrow");
     var published = document.querySelector('meta[property="article:published_time"]');
     return {
       slug: location.pathname.replace(/^\/article\//, ""),
-      category: parts[0] || "news",
-      author: parts[1] || "AION Editorial",
+      category: category ? category.textContent.trim() : "news",
+      author: author ? author.textContent.replace(/^By\s+/, "").trim() : "AION Editorial",
       published_date: published ? published.content : ""
     };
   }
@@ -73,19 +74,30 @@
   document.getElementById("aion-accept")?.addEventListener("click", function () { save("granted"); });
   document.getElementById("aion-reject")?.addEventListener("click", function () { save("denied"); });
   document.addEventListener("click", function (event) {
-    var link = event.target.closest && event.target.closest('article a[href^="http"]');
+    var link = event.target.closest && event.target.closest("article a[href]");
     if (!link || !loaded || consent() !== "granted") return;
     var data = articleData();
-    try { data.source_host = new URL(link.href).hostname; } catch (_) { data.source_host = "unknown"; }
-    gtag("event", "outbound_source_click", data);
+    if (link.classList.contains("related-link")) {
+      data.to_slug = link.dataset.toSlug || ""; gtag("event", "related_click", data);
+    } else if (link.classList.contains("next-story-link")) {
+      data.to_slug = link.dataset.toSlug || ""; gtag("event", "next_story_click", data);
+    } else if (link.classList.contains("topic-link")) {
+      data.topic = link.dataset.topic || link.textContent.trim(); gtag("event", "topic_click", data);
+    } else if (link.classList.contains("newsletter-link")) {
+      data.placement = "article_end"; gtag("event", "newsletter_signup", data); gtag("event", "newsletter_subscribe", data);
+    } else if (/^https?:/i.test(link.href)) {
+      try { data.source_host = new URL(link.href).hostname; } catch (_) { data.source_host = "unknown"; }
+      gtag("event", "outbound_source_click", data);
+    }
   });
   window.addEventListener("scroll", function () {
     var height = Math.max(document.documentElement.scrollHeight - innerHeight, 1);
     var progress = Math.min(100, Math.max(0, scrollY / height * 100));
-    [25, 50, 90].forEach(function (threshold) {
+    [25, 50, 75, 90].forEach(function (threshold) {
       if (progress >= threshold) {
         var data = articleData();
         data.percent_scrolled = threshold;
+        eventOnce("scroll_" + threshold, data);
         eventOnce("article_scroll_" + threshold, data);
       }
     });
