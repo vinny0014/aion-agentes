@@ -17,6 +17,9 @@ const SPA_PATHS = [
   /^\/$/,
   /^\/(?:news|articles|search|categories|tags|about|privacy|terms|contact)\/?$/,
   /^\/(?:editorial-policy|corrections-policy)\/?$/,
+  /^\/(?:openai|anthropic|google-ai|models|ai-agents|ai-infrastructure|robotics|business|policy|research|analysis|guides|ai-arena)\/?$/,
+  /^\/ai\/(?:chatgpt|claude|gemini|llama)\/?$/,
+  /^\/compare\/(?:chatgpt-vs-claude|chatgpt-vs-gemini|claude-vs-gemini)\/?$/,
   /^\/(?:login|signup|dashboard|admin)\/?$/,
   /^\/admin\/editor\/[^/]+\/?$/,
 ];

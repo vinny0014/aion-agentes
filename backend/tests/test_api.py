@@ -587,7 +587,8 @@ def test_ga4_spa_events_and_editorial_home_are_wired_in_code():
     for event in ("newsletter_subscribe", "search_performed", "article_view",
                   "outbound_source_click", "category_view"):
         assert event in landing + blog
-    assert "[25, 50, 90]" in blog and "`article_scroll_${threshold}`" in blog
+    assert "[25, 50, 75, 90]" in blog
+    assert "`scroll_${threshold}`" in blog and "`article_scroll_${threshold}`" in blog
     for editorial_marker in ("The intelligence that matters now",
                              "Independent intelligence for the AI economy",
                              "Start here"):

@@ -21,6 +21,10 @@ const EditorialPolicy = React.lazy(() => import("./pages/Institucional").then(m 
 const CorrectionsPolicy = React.lazy(() => import("./pages/Institucional").then(m => ({ default: m.CorrectionsPolicy })));
 const Categorias = React.lazy(() => import("./pages/Institucional").then(m => ({ default: (p: any) => m.Taxonomia({ tipo: "categories" }) })));
 const TagsPage = React.lazy(() => import("./pages/Institucional").then(m => ({ default: (p: any) => m.Taxonomia({ tipo: "tags" }) })));
+const TopicHub = React.lazy(() => import("./pages/TopicHub"));
+const Arena = React.lazy(() => import("./pages/Arena"));
+const ModelGuide = React.lazy(() => import("./pages/ModelGuide"));
+const ComparisonGuide = React.lazy(() => import("./pages/ModelGuide").then(m => ({ default: m.ComparisonGuide })));
 
 initializeTelemetry();
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
@@ -50,6 +54,12 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <Route path="/news" element={<Blog />} />
         <Route path="/search" element={<Blog />} />
         <Route path="/article/:slug" element={<ArtigoLazy />} />
+        {(["openai", "anthropic", "google-ai", "models", "ai-agents", "ai-infrastructure", "robotics", "business", "policy", "research", "analysis", "guides"] as const).map((hub) =>
+          <Route key={hub} path={`/${hub}`} element={<TopicHub hub={hub} />} />
+        )}
+        <Route path="/ai-arena" element={<Arena />} />
+        {(["chatgpt", "claude", "gemini", "llama"] as const).map((model) => <Route key={model} path={`/ai/${model}`} element={<ModelGuide model={model} />} />)}
+        {(["chatgpt-vs-claude", "chatgpt-vs-gemini", "claude-vs-gemini"] as const).map((comparison) => <Route key={comparison} path={`/compare/${comparison}`} element={<ComparisonGuide comparison={comparison} />} />)}
         <Route path="/categories" element={<Categorias />} />
         <Route path="/tags" element={<TagsPage />} />
         <Route path="/privacy" element={<Privacidade />} />

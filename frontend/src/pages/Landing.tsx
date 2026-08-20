@@ -9,8 +9,24 @@ import { trackEvent } from "../lib/telemetry";
 type Art = {
   id: number; title: string; slug: string; excerpt: string; category?: string;
   tags?: string; published_at: string; reading_time?: number; image_url?: string;
-  image_alt?: string; image_credit?: string; breaking?: boolean; author?: string;
+  image_alt?: string; image_credit?: string; breaking?: boolean; breaking_flag?: number;
+  editors_pick?: number; author?: string;
 };
+
+const COVERAGE_DESKS = [
+  ["OpenAI", "/openai", "Products, research and strategy"],
+  ["Anthropic", "/anthropic", "Claude, safety and enterprise"],
+  ["Google & DeepMind", "/google-ai", "Gemini and frontier research"],
+  ["Models", "/models", "Releases, benchmarks and context"],
+  ["AI Agents", "/ai-agents", "Workflows, tools and reliability"],
+  ["Infrastructure", "/ai-infrastructure", "Chips, cloud, energy and data"],
+  ["Robotics", "/robotics", "Embodied AI and automation"],
+  ["Business", "/business", "Funding, deals and market power"],
+  ["Policy", "/policy", "Rules, courts and public interest"],
+  ["Research", "/research", "Papers and scientific progress"],
+  ["Analysis", "/analysis", "What the news means"],
+  ["Guides", "/guides", "Practical, decision-useful explainers"],
+] as const;
 
 function formatDate(iso?: string | null) {
   if (!iso) return "";
@@ -79,10 +95,11 @@ export function Nav() {
         <nav className="hidden items-center gap-6 overflow-x-auto py-3 text-sm sm:flex" aria-label="Primary navigation">
           <Link to="/" className="font-semibold text-ink">Top stories</Link>
           <Link to="/articles" className="text-slateui hover:text-ink">Latest</Link>
-          <Link to="/articles?category=analysis" className="text-slateui hover:text-ink">Analysis</Link>
-          <Link to="/articles?category=guides" className="text-slateui hover:text-ink">Guides</Link>
-          <Link to="/articles?tag=agents" className="text-slateui hover:text-ink">AI agents</Link>
-          <Link to="/articles?tag=openai" className="text-slateui hover:text-ink">OpenAI</Link>
+          <Link to="/analysis" className="text-slateui hover:text-ink">Analysis</Link>
+          <Link to="/guides" className="text-slateui hover:text-ink">Guides</Link>
+          <Link to="/ai-agents" className="text-slateui hover:text-ink">AI agents</Link>
+          <Link to="/openai" className="text-slateui hover:text-ink">OpenAI</Link>
+          <Link to="/ai-arena" className="text-slateui hover:text-ink">AI Arena</Link>
           <Link to="/categories" className="text-slateui hover:text-ink">All topics</Link>
           <Link to="/about" className="ml-auto text-slateui hover:text-ink">About AION</Link>
         </nav>
@@ -132,7 +149,7 @@ export default function Landing() {
     const controller = new AbortController();
     Promise.allSettled([
       readJson<Art | null>("/api/public/hero", controller.signal),
-      readJson<{ items: Art[] }>("/api/public/articles?per_page=12", controller.signal),
+      readJson<{ items: Art[] }>("/api/public/articles?per_page=50", controller.signal),
       readJson<{ tag: string; total: number }[]>("/api/public/tags", controller.signal),
     ]).then(([heroResult, articleResult, tagResult]) => {
       if (controller.signal.aborted) return;
@@ -151,6 +168,7 @@ export default function Landing() {
       });
       setNewsletterMessage(response.ok ? "You're on the list." : "Could not subscribe right now.");
       if (response.ok) {
+        trackEvent("newsletter_signup", { placement: "homepage" });
         trackEvent("newsletter_subscribe", { placement: "homepage" });
         setEmail("");
       }
@@ -159,12 +177,15 @@ export default function Landing() {
 
   const featured = hero || articles[0];
   const withoutFeatured = useMemo(() => articles.filter((article) => article.id !== featured?.id), [articles, featured]);
-  const leadStories = withoutFeatured.slice(0, 2);
-  const latest = withoutFeatured.slice(2, 8);
+  const leadStories = withoutFeatured.slice(0, 4);
+  const latest = withoutFeatured.slice(4, 14);
+  const editorsPicks = withoutFeatured.filter((article) => Boolean(article.editors_pick)).slice(0, 4);
+  const moreStories = withoutFeatured.slice(14, 30);
+  const breakingStories = articles.filter((article) => Boolean(article.breaking || article.breaking_flag)).slice(0, 5);
 
   return <div className="min-h-screen pb-16 sm:pb-0">
     <Nav />
-    <NewsTicker stories={articles.slice(0, 6)} loading={loading} />
+    <NewsTicker stories={(breakingStories.length ? breakingStories : articles).slice(0, 8)} loading={loading} />
 
     <main id="main-content" className="mx-auto max-w-7xl px-5 py-8 sm:px-8 sm:py-12" aria-busy={loading}>
       <section aria-labelledby="top-stories-heading">
@@ -187,7 +208,7 @@ export default function Landing() {
                 <Meta story={featured} showAuthor />
               </div>
             </article>
-            <div className="divide-y divide-line border-y border-line">
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-1">
               {leadStories.map((story) => <article key={story.id} className="py-5 first:pt-0">
                 <Link to={`/article/${story.slug}`}><StoryImage story={story} className="aspect-[16/9]" /></Link>
                 <p className="eyebrow mt-4">{story.category || "News"}</p>
@@ -245,13 +266,37 @@ export default function Landing() {
         </aside>
       </div>
 
+      {editorsPicks.length > 0 && <section className="mt-16" aria-labelledby="editors-picks-heading">
+        <div className="section-heading"><div><p className="eyebrow">Selected by the newsroom</p><h2 id="editors-picks-heading">Editors’ picks</h2></div><p className="max-w-md text-sm text-slateui">Stories chosen for consequence, clarity and lasting usefulness — never a fabricated popularity list.</p></div>
+        <div className="grid gap-7 sm:grid-cols-2 lg:grid-cols-4">{editorsPicks.map((story) => <article key={story.id}>
+          <Link to={`/article/${story.slug}`} onClick={() => trackEvent("editors_pick_click", { slug: story.slug })}><StoryImage story={story} className="aspect-[16/10]" /></Link>
+          <p className="eyebrow mt-4">{story.category || "Analysis"}</p>
+          <Link to={`/article/${story.slug}`}><h3 className="mt-1 font-display text-xl font-bold leading-tight hover:text-signal">{story.title}</h3></Link>
+          <Meta story={story} />
+        </article>)}</div>
+      </section>}
+
+      <section className="mt-16" aria-labelledby="desks-heading">
+        <div className="section-heading"><div><p className="eyebrow">Coverage map</p><h2 id="desks-heading">Explore the AI economy</h2></div><p className="max-w-md text-sm text-slateui">Dedicated desks connect fast-moving news with the context readers need to make decisions.</p></div>
+        <div className="grid border-l border-t border-line sm:grid-cols-2 lg:grid-cols-3">{COVERAGE_DESKS.map(([title, path, description]) => <Link key={path} to={path} onClick={() => trackEvent("topic_click", { topic: title, placement: "homepage_desks" })} className="group min-h-32 border-b border-r border-line p-5 hover:bg-surface/60">
+          <span className="eyebrow">AION desk</span><h3 className="mt-3 font-display text-xl font-bold group-hover:text-signal">{title} <span aria-hidden>→</span></h3><p className="mt-2 text-sm text-slateui">{description}</p>
+        </Link>)}</div>
+      </section>
+
+      {moreStories.length > 0 && <section className="mt-16" aria-labelledby="more-stories-heading">
+        <div className="section-heading"><div><p className="eyebrow">Keep reading</p><h2 id="more-stories-heading">More stories</h2></div><Link to="/articles" className="text-sm font-semibold text-signal hover:underline">Open the full news feed →</Link></div>
+        <div className="grid gap-x-8 border-t border-line md:grid-cols-2">{moreStories.map((story) => <article key={story.id} className="border-b border-line py-5">
+          <p className="eyebrow">{story.category || "News"}</p><Link to={`/article/${story.slug}`}><h3 className="mt-1 font-display text-xl font-bold leading-tight hover:text-signal">{story.title}</h3></Link><Meta story={story} />
+        </article>)}</div>
+      </section>}
+
       <section className="mt-16 border-y border-line py-10" aria-labelledby="start-heading">
         <p className="eyebrow">Start here</p>
         <div className="mt-2 grid gap-8 md:grid-cols-[1fr_2fr]">
           <h2 id="start-heading" className="font-display text-3xl font-bold">Follow AI by the question you need answered.</h2>
           <div className="grid gap-3 sm:grid-cols-2">{[
             ["Choosing AI tools", "Comparisons and practical buyer guides", "/articles?category=comparisons"],
-            ["Building with agents", "Workflows, reliability and real-world use", "/articles?tag=agents"],
+            ["Building with agents", "Workflows, reliability and real-world use", "/ai-agents"],
             ["Understanding models", "Clear explainers without the benchmark fog", "/articles?category=guides"],
             ["Tracking the industry", "Companies, policy, funding and power", "/articles?category=news"],
           ].map(([title, description, path]) => <Link key={title} to={path} className="topic-path"><strong>{title}</strong><span>{description}</span><b aria-hidden>→</b></Link>)}</div>
@@ -264,7 +309,7 @@ export default function Landing() {
       <div className="mx-auto grid max-w-7xl gap-8 px-5 py-10 sm:px-8 md:grid-cols-[1.2fr_2fr]">
         <div><Link to="/" className="brand-lockup"><span className="brand-mark" aria-hidden>A</span><span><strong>AION</strong><small>AI NEWS</small></span></Link><p className="mt-4 max-w-xs text-sm leading-relaxed text-slateui">Independent AI intelligence for builders, leaders and curious minds.</p></div>
         <div className="footer-links grid grid-cols-2 gap-6 text-sm sm:grid-cols-3">
-          <div><p className="footer-title">Explore</p><Link to="/articles">Latest</Link><Link to="/categories">Categories</Link><Link to="/tags">Topics</Link></div>
+          <div><p className="footer-title">Explore</p><Link to="/articles">Latest</Link><Link to="/categories">Categories</Link><Link to="/tags">Topics</Link><Link to="/ai-arena">AI Arena</Link></div>
           <div><p className="footer-title">Standards</p><Link to="/about">About</Link><Link to="/editorial-policy">Editorial policy</Link><Link to="/corrections-policy">Corrections</Link></div>
           <div><p className="footer-title">Legal</p><Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link><Link to="/contact">Contact</Link></div>
         </div>

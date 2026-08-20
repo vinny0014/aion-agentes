@@ -50,6 +50,12 @@ test("Hostinger server serves the SPA and proxies API/SEO/article routes", async
   assert.equal(articles.status, 200);
   assert.match(await articles.text(), /AION SPA/);
 
+  for (const route of ["/openai", "/analysis", "/ai-arena", "/ai/chatgpt", "/compare/chatgpt-vs-claude"]) {
+    const response = await fetch(`${base}${route}`);
+    assert.equal(response.status, 200);
+    assert.match(await response.text(), /AION SPA/);
+  }
+
   const missing = await fetch(`${base}/does-not-exist`);
   assert.equal(missing.status, 404);
   assert.match(await missing.text(), /AION SPA/);
