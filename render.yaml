@@ -19,11 +19,11 @@ services:
       - key: ADMIN_SETUP_TOKEN
         generateValue: true
       - key: SITE_URL
-        value: https://aion-news-os.vercel.app
+        value: https://aionnews.cloud
       - key: PUBLIC_API_URL
         value: https://aion-news-api.onrender.com
       - key: CORS_ORIGINS
-        value: https://aion-news-os.vercel.app
+        value: https://aionnews.cloud,https://www.aionnews.cloud
       - key: IMAGE_PROVIDER
         value: pollinations
       - key: UPLOAD_DIR

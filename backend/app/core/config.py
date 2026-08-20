@@ -4,7 +4,7 @@ from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-SITE_URL_DEFAULT = "https://aion-news-os.vercel.app"
+SITE_URL_DEFAULT = "https://aionnews.cloud"
 
 
 class Settings(BaseSettings):
