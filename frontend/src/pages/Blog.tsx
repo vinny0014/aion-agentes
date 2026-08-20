@@ -41,6 +41,17 @@ function dataBr(iso: string | null) {
   });
 }
 
+function articleSources(article: Artigo) {
+  const sources: { label: string; url: string }[] = [];
+  if (article.source_url) sources.push({ label: "Primary source", url: article.source_url });
+  const links = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g;
+  let match: RegExpExecArray | null;
+  while ((match = links.exec(article.body || "")) && sources.length < 12) {
+    if (!sources.some((source) => source.url === match?.[2])) sources.push({ label: match[1], url: match[2] });
+  }
+  return sources;
+}
+
 export function Conteudos() {
   const location = useLocation();
   const canonicalPath = location.pathname === "/news" || location.pathname === "/search" ? "/articles" : location.pathname;
@@ -291,6 +302,7 @@ export function Artigo() {
   const takeaways = [...new Set(`${artigo.excerpt || ""} ${bodyText}`.split(/(?<=[.!?])\s+/).map((sentence) => sentence.trim()).filter((sentence) => sentence.length > 35))].slice(0, 3);
   const whyMatch = (artigo.body || "").match(/##?\s+Why it matters\s*\n+([\s\S]*?)(?=\n+##?\s|$)/i);
   const whyItMatters = whyMatch?.[1]?.replace(/\*\*/g, "").trim() || artigo.excerpt;
+  const sources = articleSources(artigo);
 
   return (
     <div className="min-h-screen">
@@ -333,7 +345,7 @@ export function Artigo() {
           </div>)}
         </div>
         <AdSlot slot="aion-artigo" className="mt-10" />
-        {artigo.source_url && <section className="mt-10 border-t border-line pt-7" aria-labelledby="sources-heading"><p className="eyebrow">Evidence</p><h2 id="sources-heading" className="mt-2 font-display text-2xl font-bold">Sources</h2><ul className="mt-4"><li><a href={artigo.source_url} target="_blank" rel="noopener noreferrer" className="font-semibold text-signal hover:underline" onClick={() => trackEvent("outbound_source_click", { slug: artigo.slug, placement: "sources_list" })}>Primary source ↗</a></li></ul></section>}
+        {sources.length > 0 && <section className="mt-10 border-t border-line pt-7" aria-labelledby="sources-heading"><p className="eyebrow">Evidence</p><h2 id="sources-heading" className="mt-2 font-display text-2xl font-bold">Sources</h2><ul className="mt-4 grid gap-3 sm:grid-cols-2">{sources.map((source) => <li key={source.url}><a href={source.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-signal hover:underline" onClick={() => trackEvent("outbound_source_click", { slug: artigo.slug, placement: "sources_list", source_host: new URL(source.url).hostname })}>{source.label} ↗</a></li>)}</ul></section>}
         {artigo.tags && (
           <div className="mt-8 flex flex-wrap gap-2">
             {artigo.tags.split(",").filter(Boolean).map((t) => (
