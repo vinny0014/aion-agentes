@@ -54,7 +54,7 @@ function articleSources(article: Artigo) {
 
 export function Conteudos() {
   const location = useLocation();
-  const canonicalPath = location.pathname === "/news" || location.pathname === "/search" ? "/articles" : location.pathname;
+  const canonicalPath = location.pathname;
   usePageMetadata({
     title: "AI articles",
     description: "Browse AION's latest artificial intelligence news, guides, comparisons and analysis.",
@@ -316,11 +316,11 @@ export function Artigo() {
           <span>·</span><time>{dataBr(artigo.published_at)}</time>
           {artigo.reading_time ? <><span>·</span><span>{artigo.reading_time} min read</span></> : null}
           {artigo.source_url ? <><span>·</span><a className="font-semibold text-signal hover:underline" href={artigo.source_url} target="_blank" rel="noopener noreferrer"
-            onClick={() => trackEvent("outbound_source_click", {
-              slug: artigo.slug,
-              category: artigo.category || "news",
-              source_host: (() => { try { return new URL(artigo.source_url || "").hostname; } catch { return "unknown"; } })(),
-            })}>Primary source ↗</a></> : null}
+            onClick={() => {
+              const data = { slug: artigo.slug, category: artigo.category || "news", source_host: (() => { try { return new URL(artigo.source_url || "").hostname; } catch { return "unknown"; } })() };
+              trackEvent("source_click", data);
+              trackEvent("outbound_source_click", data);
+            }}>Primary source ↗</a></> : null}
         </div>
         <figure className="mt-8">
           <div className="editorial-image aspect-[16/9]">
@@ -345,7 +345,7 @@ export function Artigo() {
           </div>)}
         </div>
         <AdSlot slot="aion-artigo" className="mt-10" />
-        {sources.length > 0 && <section className="mt-10 border-t border-line pt-7" aria-labelledby="sources-heading"><p className="eyebrow">Evidence</p><h2 id="sources-heading" className="mt-2 font-display text-2xl font-bold">Sources</h2><ul className="mt-4 grid gap-3 sm:grid-cols-2">{sources.map((source) => <li key={source.url}><a href={source.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-signal hover:underline" onClick={() => trackEvent("outbound_source_click", { slug: artigo.slug, placement: "sources_list", source_host: new URL(source.url).hostname })}>{source.label} ↗</a></li>)}</ul></section>}
+        {sources.length > 0 && <section className="mt-10 border-t border-line pt-7" aria-labelledby="sources-heading"><p className="eyebrow">Evidence</p><h2 id="sources-heading" className="mt-2 font-display text-2xl font-bold">Sources</h2><ul className="mt-4 grid gap-3 sm:grid-cols-2">{sources.map((source) => <li key={source.url}><a href={source.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-signal hover:underline" onClick={() => { const data = { slug: artigo.slug, placement: "sources_list", source_host: new URL(source.url).hostname }; trackEvent("source_click", data); trackEvent("outbound_source_click", data); }}>{source.label} ↗</a></li>)}</ul></section>}
         {artigo.tags && (
           <div className="mt-8 flex flex-wrap gap-2">
             {artigo.tags.split(",").filter(Boolean).map((t) => (
@@ -370,7 +370,7 @@ export function Artigo() {
             </div>
           </aside>
         )}
-        {relacionados[0] && <section className="mt-12 border-y-2 border-ink py-7" aria-labelledby="read-next-heading"><p className="eyebrow">Continue the briefing</p><h2 id="read-next-heading" className="mt-2 font-display text-2xl font-bold">Read next</h2><Link to={`/article/${relacionados[0].slug}`} onClick={() => trackEvent("next_story_click", { from_slug: artigo.slug, to_slug: relacionados[0].slug })} className="mt-3 block font-display text-3xl font-bold leading-tight hover:text-signal">{relacionados[0].title} →</Link></section>}
+        {relacionados[0] && <section className="mt-12 border-y-2 border-ink py-7" aria-labelledby="read-next-heading"><p className="eyebrow">Continue the briefing</p><h2 id="read-next-heading" className="mt-2 font-display text-2xl font-bold">Read next</h2><Link to={`/article/${relacionados[0].slug}`} onClick={() => { const data = { from_slug: artigo.slug, to_slug: relacionados[0].slug }; trackEvent("read_next_click", data); trackEvent("next_story_click", data); }} className="mt-3 block font-display text-3xl font-bold leading-tight hover:text-signal">{relacionados[0].title} →</Link></section>}
         <section className="newsletter-panel mt-12" aria-labelledby="article-newsletter-heading"><p className="eyebrow !text-white/70">The AION Brief</p><h2 id="article-newsletter-heading" className="mt-2 font-display text-3xl font-bold">One useful AI briefing. No hype.</h2><p className="mt-3 max-w-xl text-sm text-white/70">Get the developments that matter, what they mean and what to watch next.</p><a href="/#newsletter" onClick={() => { trackEvent("newsletter_signup", { placement: "article_end", slug: artigo.slug }); trackEvent("newsletter_subscribe", { placement: "article_end", slug: artigo.slug }); }} className="mt-5 inline-block rounded-md bg-white px-5 py-2.5 text-sm font-bold text-black">Join the briefing</a></section>
         <footer className="mt-12 border-t border-line pt-6">
           <Link to="/articles" className="text-sm font-medium text-ultra hover:underline">← All articles</Link>
