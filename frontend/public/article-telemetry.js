@@ -80,14 +80,14 @@
     if (link.classList.contains("related-link")) {
       data.to_slug = link.dataset.toSlug || ""; gtag("event", "related_click", data);
     } else if (link.classList.contains("next-story-link")) {
-      data.to_slug = link.dataset.toSlug || ""; gtag("event", "next_story_click", data);
+      data.to_slug = link.dataset.toSlug || ""; gtag("event", "read_next_click", data); gtag("event", "next_story_click", data);
     } else if (link.classList.contains("topic-link")) {
       data.topic = link.dataset.topic || link.textContent.trim(); gtag("event", "topic_click", data);
     } else if (link.classList.contains("newsletter-link")) {
       data.placement = "article_end"; gtag("event", "newsletter_signup", data); gtag("event", "newsletter_subscribe", data);
     } else if (/^https?:/i.test(link.href)) {
       try { data.source_host = new URL(link.href).hostname; } catch (_) { data.source_host = "unknown"; }
-      gtag("event", "outbound_source_click", data);
+      gtag("event", "source_click", data); gtag("event", "outbound_source_click", data);
     }
   });
   window.addEventListener("scroll", function () {

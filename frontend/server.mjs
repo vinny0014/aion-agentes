@@ -1,5 +1,5 @@
 import { createReadStream, readFileSync } from "node:fs";
-import { stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -48,6 +48,74 @@ const MIME_TYPES = {
   ".webp": "image/webp",
   ".xml": "application/xml; charset=utf-8",
 };
+
+const SITE = "https://aionnews.cloud";
+const DEFAULT_METADATA = {
+  title: "AION AI NEWS OS — AI news, guides and analysis",
+  description: "AI news portal run by autonomous agents: daily AI Radar, guides, comparisons and analysis with sources.",
+  robots: "index, follow, max-image-preview:large",
+};
+const ROUTE_METADATA = new Map([
+  ["/", DEFAULT_METADATA],
+  ["/articles", { title: "AI Articles — AION AI NEWS OS", description: "Browse AION's latest artificial intelligence news, guides, comparisons and analysis.", robots: DEFAULT_METADATA.robots }],
+  ["/news", { title: "Latest AI News — AION AI NEWS OS", description: "Read the latest source-led artificial intelligence news and newsroom coverage from AION.", robots: DEFAULT_METADATA.robots }],
+  ["/search", { title: "Search — AION AI NEWS OS", description: "Search AION's artificial intelligence reporting, guides and analysis.", robots: "noindex, follow" }],
+  ["/analysis", { title: "AI Analysis — AION AI NEWS OS", description: "Independent analysis of the decisions, products and research shaping artificial intelligence.", robots: DEFAULT_METADATA.robots }],
+  ["/guides", { title: "AI Guides — AION AI NEWS OS", description: "Practical, source-led guides to artificial intelligence models, tools and concepts.", robots: DEFAULT_METADATA.robots }],
+  ["/ai-arena", { title: "AION AI Arena — Compare leading AI models", description: "Compare leading AI assistants with transparent, local-only preference voting.", robots: DEFAULT_METADATA.robots }],
+  ["/ai/chatgpt", { title: "ChatGPT Guide — AION AI NEWS OS", description: "A practical guide to ChatGPT, its capabilities, limits and primary sources.", robots: DEFAULT_METADATA.robots }],
+  ["/ai/claude", { title: "Claude Guide — AION AI NEWS OS", description: "A practical guide to Claude, its capabilities, limits and primary sources.", robots: DEFAULT_METADATA.robots }],
+  ["/ai/gemini", { title: "Gemini Guide — AION AI NEWS OS", description: "A practical guide to Gemini, its capabilities, limits and primary sources.", robots: DEFAULT_METADATA.robots }],
+  ["/ai/llama", { title: "Llama Guide — AION AI NEWS OS", description: "A practical guide to Llama, its capabilities, limits and primary sources.", robots: DEFAULT_METADATA.robots }],
+  ["/compare/chatgpt-vs-claude", { title: "ChatGPT vs Claude — AION AI NEWS OS", description: "A source-led comparison of ChatGPT and Claude for real-world use.", robots: DEFAULT_METADATA.robots }],
+  ["/compare/chatgpt-vs-gemini", { title: "ChatGPT vs Gemini — AION AI NEWS OS", description: "A source-led comparison of ChatGPT and Gemini for real-world use.", robots: DEFAULT_METADATA.robots }],
+  ["/compare/claude-vs-gemini", { title: "Claude vs Gemini — AION AI NEWS OS", description: "A source-led comparison of Claude and Gemini for real-world use.", robots: DEFAULT_METADATA.robots }],
+]);
+const THIN_HUBS = new Set(["openai", "anthropic", "google-ai", "models", "ai-agents", "ai-infrastructure", "robotics", "business", "policy", "research"]);
+
+function escapeAttribute(value) {
+  return String(value).replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+}
+
+function routeMetadata(pathname, statusCode) {
+  const path = pathname !== "/" ? pathname.replace(/\/$/, "") : "/";
+  if (ROUTE_METADATA.has(path)) return { path, ...ROUTE_METADATA.get(path) };
+  const hub = path.slice(1);
+  if (THIN_HUBS.has(hub)) {
+    const label = hub.split("-").map((part) => part[0].toUpperCase() + part.slice(1)).join(" ");
+    return { path, title: `${label} — AION AI NEWS OS`, description: `AION coverage of ${label}, with source-led reporting and analysis.`, robots: "noindex, follow" };
+  }
+  return {
+    path,
+    title: statusCode === 404 ? "Page not found — AION AI NEWS OS" : DEFAULT_METADATA.title,
+    description: statusCode === 404 ? "The requested page could not be found." : DEFAULT_METADATA.description,
+    robots: statusCode === 404 ? "noindex, follow" : DEFAULT_METADATA.robots,
+  };
+}
+
+function replaceTag(html, pattern, replacement) {
+  return pattern.test(html) ? html.replace(pattern, replacement) : html.replace("</head>", `${replacement}\n</head>`);
+}
+
+export function renderSpaHtml(source, pathname, statusCode = 200) {
+  const metadata = routeMetadata(pathname, statusCode);
+  const canonical = `${SITE}${metadata.path === "/" ? "/" : metadata.path}`;
+  const title = escapeAttribute(metadata.title);
+  const description = escapeAttribute(metadata.description);
+  const robots = escapeAttribute(metadata.robots);
+  const url = escapeAttribute(canonical);
+  let html = replaceTag(source, /<title>[^<]*<\/title>/i, `<title>${title}</title>`);
+  html = replaceTag(html, /<meta\s+name=["']description["'][^>]*>/i, `<meta name="description" content="${description}" />`);
+  html = replaceTag(html, /<meta\s+name=["']robots["'][^>]*>/i, `<meta name="robots" content="${robots}" />`);
+  html = replaceTag(html, /<link\s+rel=["']canonical["'][^>]*>/i, `<link rel="canonical" href="${url}" />`);
+  html = replaceTag(html, /<meta\s+property=["']og:title["'][^>]*>/i, `<meta property="og:title" content="${title}" />`);
+  html = replaceTag(html, /<meta\s+property=["']og:description["'][^>]*>/i, `<meta property="og:description" content="${description}" />`);
+  html = replaceTag(html, /<meta\s+property=["']og:url["'][^>]*>/i, `<meta property="og:url" content="${url}" />`);
+  html = replaceTag(html, /<meta\s+name=["']twitter:title["'][^>]*>/i, `<meta name="twitter:title" content="${title}" />`);
+  html = replaceTag(html, /<meta\s+name=["']twitter:description["'][^>]*>/i, `<meta name="twitter:description" content="${description}" />`);
+  html = html.replace(/<link\s+rel=["']alternate["']\s+hreflang=["'](?:en-US|x-default)["'][^>]*>/gi, (tag) => tag.replace(/href=["'][^"']*["']/i, `href="${url}"`));
+  return html;
+}
 
 function securityHeaders(response, backendOrigin) {
   response.setHeader("X-Content-Type-Options", "nosniff");
@@ -147,6 +215,22 @@ async function sendFile(response, filePath, statusCode = 200) {
   }
 }
 
+async function sendSpa(response, filePath, pathname, statusCode) {
+  try {
+    const html = renderSpaHtml(await readFile(filePath, "utf8"), pathname, statusCode);
+    const body = Buffer.from(html);
+    response.statusCode = statusCode;
+    response.setHeader("Content-Type", "text/html; charset=utf-8");
+    response.setHeader("Content-Length", body.length);
+    response.setHeader("Cache-Control", "no-cache");
+    if (response.req.method === "HEAD") return response.end();
+    response.end(body);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function createAppServer({
   backendUrl = process.env.AION_BACKEND_URL || DEFAULT_BACKEND,
   distDir = process.env.AION_DIST_DIR || DEFAULT_DIST,
@@ -204,7 +288,7 @@ export function createAppServer({
     }
 
     const knownRoute = SPA_PATHS.some((pattern) => pattern.test(pathname));
-    if (!extname(pathname) && await sendFile(response, join(root, "index.html"), knownRoute ? 200 : 404)) return;
+    if (!extname(pathname) && await sendSpa(response, join(root, "index.html"), pathname, knownRoute ? 200 : 404)) return;
     response.statusCode = 404;
     response.setHeader("Content-Type", "text/plain; charset=utf-8");
     response.setHeader("Cache-Control", "no-store");

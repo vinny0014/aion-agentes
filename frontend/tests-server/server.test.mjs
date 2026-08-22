@@ -14,7 +14,7 @@ test("Hostinger server serves the SPA and proxies API/SEO/article routes", async
   const previousMeasurementId = process.env.VITE_GA_MEASUREMENT_ID;
   process.env.VITE_GA_MEASUREMENT_ID = "G-DVT2E73K18";
   const distDir = await mkdtemp(join(tmpdir(), "aion-hostinger-"));
-  await writeFile(join(distDir, "index.html"), "<!doctype html><h1>AION SPA</h1>");
+  await writeFile(join(distDir, "index.html"), '<!doctype html><html><head><title>AION</title><meta name="description" content="home"><meta name="robots" content="index, follow"><link rel="canonical" href="https://aionnews.cloud/"><meta property="og:title" content="AION"><meta property="og:description" content="home"><meta property="og:url" content="https://aionnews.cloud/"><meta name="twitter:title" content="AION"><meta name="twitter:description" content="home"><link rel="alternate" hreflang="en-US" href="https://aionnews.cloud/"><link rel="alternate" hreflang="x-default" href="https://aionnews.cloud/"></head><body><h1>AION SPA</h1></body></html>');
   await writeFile(join(distDir, "logo.png"), "logo");
 
   const backend = createServer((request, response) => {
@@ -48,17 +48,33 @@ test("Hostinger server serves the SPA and proxies API/SEO/article routes", async
 
   const articles = await fetch(`${base}/articles?q=ai`);
   assert.equal(articles.status, 200);
-  assert.match(await articles.text(), /AION SPA/);
+  const articlesHtml = await articles.text();
+  assert.match(articlesHtml, /AION SPA/);
+  assert.match(articlesHtml, /rel="canonical" href="https:\/\/aionnews\.cloud\/articles"/);
+  assert.doesNotMatch(articlesHtml, /rel="canonical" href="https:\/\/aionnews\.cloud\/"\s*\/>/);
+
+  const news = await fetch(`${base}/news?from=wire`);
+  assert.match(await news.text(), /rel="canonical" href="https:\/\/aionnews\.cloud\/news"/);
+
+  const search = await fetch(`${base}/search?q=agents`);
+  const searchHtml = await search.text();
+  assert.match(searchHtml, /rel="canonical" href="https:\/\/aionnews\.cloud\/search"/);
+  assert.match(searchHtml, /name="robots" content="noindex, follow"/);
 
   for (const route of ["/openai", "/analysis", "/ai-arena", "/ai/chatgpt", "/compare/chatgpt-vs-claude"]) {
     const response = await fetch(`${base}${route}`);
     assert.equal(response.status, 200);
-    assert.match(await response.text(), /AION SPA/);
+    const html = await response.text();
+    assert.match(html, /AION SPA/);
+    assert.match(html, new RegExp(`rel="canonical" href="https:\\/\\/aionnews\\.cloud${route.replaceAll("/", "\\/")}"`));
+    if (route === "/openai") assert.match(html, /name="robots" content="noindex, follow"/);
   }
 
   const missing = await fetch(`${base}/does-not-exist`);
   assert.equal(missing.status, 404);
-  assert.match(await missing.text(), /AION SPA/);
+  const missingHtml = await missing.text();
+  assert.match(missingHtml, /AION SPA/);
+  assert.match(missingHtml, /name="robots" content="noindex, follow"/);
 
   const api = await fetch(`${base}/api/public/articles?per_page=1`);
   assert.equal(api.status, 200);
