@@ -6,5 +6,6 @@
 4. O `frontend/vercel.json` encaminha `/api/*`, `/article/*`, robots, RSS, sitemaps, favicon e ícones ao Render. Logo e capa Open Graph ficam como PNGs raster estáticos na Vercel. `VITE_API_URL` deve ficar vazio; assim o navegador usa o domínio oficial como origem única.
 5. `CORS_ORIGINS`, `SITE_URL` e `PUBLIC_API_URL` já estão fixados nos serviços oficiais pelo Blueprint.
 6. Guarde fora do Git os valores gerados de `SECRET_KEY` e `ADMIN_SETUP_TOKEN`. O token de setup é necessário somente para criar o primeiro administrador.
+7. Para ativar a ponte operacional com o projeto AION NEWS do Manus, siga `docs/MANUS_BRIDGE.md`. Cadastre `MANUS_API_KEY`, `MANUS_WEBHOOK_PUBLIC_KEY`, `MANUS_PROJECT_ID` e `AION_BRIDGE_TOKEN` somente como variáveis secretas no Render. Nunca copie os valores para commits, logs, PRs ou conversas.
 
-Variáveis opcionais: chaves OpenAI/Anthropic/OpenRouter/Gemini no Render; GA4, AdSense, Cloudflare Analytics e Clarity na Vercel.
+Variáveis opcionais: chaves OpenAI/Anthropic/OpenRouter/Gemini no Render; ponte Manus no Render; GA4, AdSense, Cloudflare Analytics e Clarity na Vercel.

@@ -22,11 +22,17 @@ def _hash(texto: str) -> int:
 
 
 def photo_prompt(titulo: str, tags: str = "") -> str:
-    """Create an editorial photo prompt without text, logos or watermarks."""
+    """Create a restrained editorial prompt when no source-owned image exists."""
     tema = ", ".join([t.strip() for t in (tags or "").split(",") if t.strip()][:3]) or "artificial intelligence technology"
-    return (f"professional editorial photograph for a news article about {titulo[:90]}, "
-            f"{tema}, photojournalism style, natural lighting, shallow depth of field, "
-            f"realistic, high detail, 4k, no text, no words, no logo, no watermark")
+    return (
+        f"Editorial technology photograph illustrating this exact news subject: {titulo[:120]}. "
+        f"Context: {tema}. Use one believable real-world scene or object directly connected "
+        "to the subject, documentary composition, natural available light, realistic materials, "
+        "subtle color, 35mm newsroom photography, landscape 16:9. Avoid generic robots, glowing "
+        "brains, holographic faces, floating UI, fantasy circuitry, staged stock-photo gestures, "
+        "distorted hands, invented product designs, fake interfaces and recognizable people unless "
+        "the subject explicitly requires a public figure. No text, letters, logos or watermark."
+    )
 
 
 def provider_photo_url(titulo: str, tags: str = "") -> tuple[str, str] | None:
@@ -42,8 +48,8 @@ def provider_photo_url(titulo: str, tags: str = "") -> tuple[str, str] | None:
     if provider == "pollinations":
         prompt = urllib.parse.quote(photo_prompt(titulo, tags))
         url = (f"https://image.pollinations.ai/prompt/{prompt}"
-               f"?width=1200&height=630&nologo=true&seed={_hash(titulo) % 99999}")
-        return url, "Editorial photo via Pollinations.ai"
+               f"?width=1200&height=630&model=flux&nologo=true&seed={_hash(titulo) % 99999}")
+        return url, "AION Visual Desk · generated with FLUX via Pollinations.ai"
     if provider == "gemini":
         if not settings.GEMINI_API_KEY:
             return None
@@ -119,7 +125,7 @@ def _download_raster(url: str) -> tuple[bytes, Image.Image] | None:
                     image = Image.open(io.BytesIO(raw))
                     image.verify()
                     image = Image.open(io.BytesIO(raw))
-                    if image.width < 600 or image.height < 315:
+                    if image.width < 1200 or image.height < 630:
                         return None
                     return raw, image
             else:
@@ -148,10 +154,33 @@ def managed_image_path(url: str) -> Path | None:
     if not (url or "").startswith(prefix):
         return None
     filename = (url or "")[len(prefix):]
-    if not re.fullmatch(r"[a-z0-9-]+\.(?:webp|png|jpe?g)", filename):
+    if not re.fullmatch(r"[a-z0-9-]+\.(?:avif|webp|png|jpe?g)", filename):
         return None
     path = _upload_dir() / filename
     return path if path.is_file() else None
+
+
+def ensure_responsive_variants(path: Path) -> dict:
+    """Create card-sized WebP sources and AVIF when the Pillow build supports it."""
+    if not path.is_file() or path.suffix.lower() != ".webp":
+        return {"webp": [], "avif": None}
+    normalized = Image.open(path).convert("RGB")
+    webp = []
+    for width in (640, 960):
+        target = path.with_name(f"{path.stem}-{width}.webp")
+        if not target.exists():
+            height = round(width * 630 / 1200)
+            normalized.resize((width, height), Image.Resampling.LANCZOS).save(
+                target, format="WEBP", quality=82, method=6, optimize=True
+            )
+        webp.append(target.name)
+    avif = path.with_suffix(".avif")
+    if not avif.exists():
+        try:
+            normalized.save(avif, format="AVIF", quality=58)
+        except (KeyError, OSError, ValueError):
+            avif = None
+    return {"webp": webp, "avif": avif.name if avif else None}
 
 
 def _store_raster(image: Image.Image, identity: bytes, title: str) -> dict:
@@ -161,9 +190,13 @@ def _store_raster(image: Image.Image, identity: bytes, title: str) -> dict:
     if not destination.exists():
         normalized = ImageOps.exif_transpose(image).convert("RGB")
         normalized = ImageOps.fit(normalized, (1200, 630), method=Image.Resampling.LANCZOS)
-        normalized.save(destination, format="WEBP", quality=84, method=6, optimize=True)
+        for quality in (84, 78, 72, 66):
+            normalized.save(destination, format="WEBP", quality=quality, method=6, optimize=True)
+            if destination.stat().st_size <= 250_000:
+                break
+    variants = ensure_responsive_variants(destination)
     return {"image_url": public_image_url(filename), "width": 1200, "height": 630,
-            "filename": filename}
+            "filename": filename, "variants": variants}
 
 
 def materialize_remote_image(url: str, title: str) -> dict | None:
@@ -184,7 +217,7 @@ def materialize_uploaded_image(raw: bytes, title: str) -> dict | None:
         return None
     try:
         image = Image.open(io.BytesIO(raw))
-        if (image.format or "").upper() == "SVG" or image.width < 600 or image.height < 315:
+        if (image.format or "").upper() == "SVG" or image.width < 1200 or image.height < 630:
             return None
         image.verify()
         image = Image.open(io.BytesIO(raw))

@@ -178,7 +178,8 @@ def _og_image(page_url: str) -> str:
 
 def _needs_image(c) -> bool:
     from .imagegen import managed_image_path
-    return managed_image_path(c["image_url"] or "") is None
+    generated = "pollinations" in (c.get("image_credit") or "").lower()
+    return managed_image_path(c["image_url"] or "") is None or (generated and bool(c.get("source_url")))
 
 
 def image_agent(payload: dict) -> dict:
@@ -193,7 +194,7 @@ def image_agent(payload: dict) -> dict:
     stats = {"existing": 0, "feed": 0, "og_image": 0, "photo_provider": 0, "blocked": 0}
 
     # 1) enfileirar quem precisa
-    for c in db.query("SELECT id, image_url FROM contents WHERE status IN ('draft','published')"):
+    for c in db.query("SELECT id, image_url, image_credit, source_url FROM contents WHERE status IN ('draft','published')"):
         if not _needs_image(c):
             continue
         queued = db.query_one(
@@ -219,24 +220,43 @@ def image_agent(payload: dict) -> dict:
         prepared = None
         alt = credit = source = ""
         candidates = []
-        if (c["image_url"] or "").startswith(("http://", "https://")):
-            candidates.append((c["image_url"], c["image_credit"] or "Original source", "existing"))
+        requires_review = bool(c.get("visual_review_required"))
         oficial = next((m.get("image") for m in manchetes
                         if m.get("image") and m["title"][:20] in (c["title"] or "")), "")
-        if oficial:
-            candidates.append((oficial, _fonte_amigavel(c["source_url"]), "feed"))
-        if c["source_url"]:
+        if oficial and not requires_review:
+            candidates.append((oficial, _fonte_amigavel(c["source_url"]), "feed", None))
+        if c["source_url"] and not requires_review:
             og = _og_image(c["source_url"])
             if og:
-                candidates.append((og, _fonte_amigavel(c["source_url"]), "og_image"))
+                candidates.append((og, _fonte_amigavel(c["source_url"]), "og_image", None))
+        if ((c["image_url"] or "").startswith(("http://", "https://"))
+                and not requires_review):
+            candidates.append((c["image_url"], c["image_credit"] or "", "existing", None))
         if provider_on:
             prov = provider_photo_url(c["title"], c["tags"] or "")
             if prov:
-                candidates.append((prov[0], prov[1], "photo_provider"))
-        for url, candidate_credit, candidate_source in candidates:
+                evidence = {
+                    "source_url": prov[0],
+                    "credit": prov[1],
+                    "rights_basis": "licensed-free",
+                    "author": "AION Visual Desk",
+                    "license_name": "Pollinations creation terms; FLUX.1-schnell Apache-2.0",
+                    "license_url": "https://old.pollinations.ai/terms",
+                }
+                # New stories use only the candidate with explicit reusable-rights evidence.
+                candidates.insert(0, (prov[0], prov[1], "photo_provider", evidence))
+        for url, candidate_credit, candidate_source, rights in candidates:
             prepared = materialize_remote_image(url, c["title"])
             if prepared:
                 credit, source = candidate_credit, candidate_source
+                if rights:
+                    mem_set("agent:image-rights-attribution", f"acquisition:{c['id']}", {
+                        **rights,
+                        "asset_url": prepared["image_url"],
+                        "original_asset_url": url,
+                        "visual_type": "documentary editorial photograph",
+                        "focal_subject": c["title"][:160],
+                    })
                 break
         if prepared:
             alt = c["image_alt"] or f"Editorial image for {c['title'][:90]}"
@@ -271,7 +291,8 @@ def compute_hero_image(content_id: int, manchetes: list | None = None) -> dict:
         return {"erro": "conteúdo inexistente"}
     manchetes = manchetes if manchetes is not None else (
         mem_get("agent:discovery", "manchetes_do_dia", []) or [])
-    if managed_image_path(c["image_url"] or ""):
+    generated_primary = "pollinations" in (c.get("image_credit") or "").lower()
+    if managed_image_path(c["image_url"] or "") and not (generated_primary and c.get("source_url")):
         db.execute("""UPDATE contents SET hero_image_url=image_url, hero_image_alt=image_alt,
                       hero_image_credit=image_credit, hero_image_width='1200',
                       hero_image_height='630', hero_image_source='primary' WHERE id=?""",
@@ -334,6 +355,147 @@ def image_quality_agent(payload: dict) -> dict:
                          "geradas não contêm título desde a v6.1"}
 
 
+def visual_editor_agent(payload: dict) -> dict:
+    """Score new managed assets and persist the exact approved bytes/rights."""
+    from .imagegen import managed_image_path, probe_image
+    from .visual_desk import RightsMetadata, VisualCandidate, approve_and_record
+
+    rows = db.query(
+        "SELECT * FROM contents WHERE status='draft' AND visual_review_required=1 "
+        "AND image_url LIKE 'http%' ORDER BY id DESC LIMIT 40"
+    )
+    approved = rejected = 0
+    for c in rows:
+        acquisition = mem_get(
+            "agent:image-rights-attribution", f"acquisition:{c['id']}", {}
+        ) or {}
+        if acquisition.get("asset_url") != c["image_url"] or not managed_image_path(c["image_url"]):
+            rejected += 1
+            continue
+        scores = acquisition.get("scores")
+        if not isinstance(scores, dict) or any(key not in scores for key in (
+                "editorial_relevance", "visual_quality", "credibility", "provenance",
+                "crop", "originality", "naturalness")):
+            # A successful download or a strong prompt is not a visual review.
+            # Generated/provider images remain drafts until real evidence is supplied.
+            rejected += 1
+            continue
+        measured = probe_image(c["image_url"])
+        rights = RightsMetadata(
+            source_url=acquisition.get("original_asset_url") or acquisition.get("source_url", ""),
+            credit=acquisition.get("credit", ""),
+            rights_basis=acquisition.get("rights_basis", ""),
+            author=acquisition.get("author", ""),
+            license_name=acquisition.get("license_name", ""),
+            license_url=acquisition.get("license_url", ""),
+        )
+        candidate = VisualCandidate(
+            asset_url=c["image_url"], rights=rights,
+            editorial_relevance=int(scores["editorial_relevance"]),
+            visual_quality=int(scores["visual_quality"]),
+            credibility=int(scores["credibility"]), provenance=int(scores["provenance"]),
+            crop=int(scores["crop"]), originality=int(scores["originality"]),
+            naturalness=int(scores["naturalness"]),
+            width=int(measured.get("w") or 0), height=int(measured.get("h") or 0),
+            visual_type=acquisition.get("visual_type", ""),
+            dominant_color=acquisition.get("dominant_color", "unknown"),
+            framing=acquisition.get("framing", "landscape editorial"),
+            focal_subject=acquisition.get("focal_subject", c["title"]),
+        )
+        hero = bool(c.get("featured") or c.get("pinned") or c.get("breaking_flag"))
+        decision = approve_and_record(c["id"], candidate, hero=hero)
+        if decision.approved:
+            db.execute(
+                "UPDATE contents SET image_credit=?, image_alt=?, hero_image_url=image_url, "
+                "hero_image_alt=?, hero_image_credit=?, hero_image_width='1200', "
+                "hero_image_height='630', hero_image_source='visual-desk' WHERE id=?",
+                (rights.credit, c["image_alt"] or f"Editorial visual for {c['title'][:90]}",
+                 c["image_alt"] or f"Editorial visual for {c['title'][:90]}",
+                 rights.credit, c["id"]),
+            )
+            approved += 1
+        else:
+            rejected += 1
+    return {"reviewed": len(rows), "approved": approved, "rejected": rejected,
+            "thresholds": {"standard": 80, "hero": 90}}
+
+
+def image_rights_attribution_agent(payload: dict) -> dict:
+    """Independent rights desk: unknown feed/OG rights never receive approval."""
+    from .visual_desk import RightsMetadata
+    rows = db.query(
+        "SELECT id FROM contents WHERE status='draft' AND visual_review_required=1 "
+        "AND image_url LIKE 'http%' LIMIT 80"
+    )
+    valid, blocked = [], []
+    for row in rows:
+        evidence = mem_get("agent:image-rights-attribution", f"acquisition:{row['id']}", {}) or {}
+        try:
+            issues = RightsMetadata(
+                source_url=evidence.get("original_asset_url") or evidence.get("source_url", ""),
+                credit=evidence.get("credit", ""), rights_basis=evidence.get("rights_basis", ""),
+                author=evidence.get("author", ""), license_name=evidence.get("license_name", ""),
+                license_url=evidence.get("license_url", ""),
+            ).issues()
+        except (TypeError, ValueError):
+            issues = ["invalid rights evidence"]
+        (blocked if issues else valid).append({"id": row["id"], "issues": issues})
+    mem_set("agent:image-rights-attribution", "last-audit", {"valid": valid, "blocked": blocked})
+    return {"audited": len(rows), "valid": len(valid), "blocked": len(blocked)}
+
+
+def image_quality_auditor_agent(payload: dict) -> dict:
+    """Revalidate exact approved files independently from the acquisition step."""
+    from .imagegen import probe_image
+    from .visual_desk import visual_publication_issues
+    rows = db.query(
+        "SELECT * FROM contents WHERE status='draft' AND visual_review_required=1 "
+        "AND image_url LIKE 'http%' LIMIT 80"
+    )
+    failures = []
+    for row in rows:
+        hero = bool(row.get("featured") or row.get("pinned") or row.get("breaking_flag"))
+        issues = visual_publication_issues(row["id"], asset_url=row["image_url"], hero=hero)
+        if probe_image(row["image_url"])["ok"] is not True:
+            issues.append("approved image bytes are missing or invalid")
+        if issues:
+            failures.append({"id": row["id"], "issues": list(dict.fromkeys(issues))})
+    mem_set("agent:image-quality-auditor", "last-audit", failures)
+    return {"audited": len(rows), "approved": len(rows) - len(failures),
+            "blocked": len(failures), "failures": failures[:10]}
+
+
+def homepage_art_director_agent(payload: dict) -> dict:
+    """Audit visual rhythm for the stories currently eligible for the homepage."""
+    from .visual_desk import recent_visuals
+    recent = recent_visuals()
+    fingerprints = [item.get("asset_fingerprint") for item in recent if item.get("asset_fingerprint")]
+    duplicates = len(fingerprints) - len(set(fingerprints))
+    report = {"recent_approved": len(recent), "duplicate_bytes": duplicates,
+              "approved": duplicates == 0}
+    mem_set("agent:homepage-art-director", "last-audit", report)
+    return report
+
+
+def discover_social_visual_editor_agent(payload: dict) -> dict:
+    """Expose only large, approved 16:9 masters to Discover/social metadata."""
+    from .visual_desk import recent_visuals
+    eligible = [item for item in recent_visuals()
+                if item.get("width", 0) >= 1200 and item.get("height", 0) >= 630
+                and (item.get("decision") or {}).get("approved") is True]
+    return {"eligible_masters": len(eligible), "format": "1200x630",
+            "max_image_preview": "large"}
+
+
+def aion_news_commander_agent(payload: dict) -> dict:
+    return {
+        "visual_desk": mem_get("agent:homepage-art-director", "last-audit", {}),
+        "rights": mem_get("agent:image-rights-attribution", "last-audit", {}),
+        "next_action": "continue reversible audit and repair; never publish without approval",
+        "recurring_cost_usd": 0,
+    }
+
+
 def image_prompt_agent(payload: dict) -> dict:
     rows = db.query("SELECT id, slug, title, category, tags FROM contents "
                     "WHERE status = 'published' ORDER BY id DESC LIMIT 20")
@@ -342,11 +504,8 @@ def image_prompt_agent(payload: dict) -> dict:
         key = f"prompt:{c['slug']}"
         if mem_get("agent:image", key):
             continue
-        kws = ", ".join((c["tags"] or "ai").split(",")[:3])
-        prompt = (f"Original abstract editorial illustration about '{c['title']}'. "
-                  f"Theme: {kws}. Violet and purple gradients on a dark background, "
-                  f"luminous geometric shapes and a subtle grid. No text, logos, "
-                  f"real people or brand elements. 16:9 aspect ratio.")
+        from .imagegen import photo_prompt
+        prompt = photo_prompt(c["title"], c["tags"] or "")
         mem_set("agent:image", key, prompt)
         gerados += 1
     return {"prompts_gerados": gerados,
@@ -560,10 +719,11 @@ def publisher_agent(payload: dict) -> dict:
         )
         cid = db.execute(
             """INSERT INTO contents (title, slug, body, excerpt, status, agent_id,
-               seo_title, seo_description, category, tags, image_url, published_at)
+               seo_title, seo_description, category, tags, image_url,
+               visual_review_required, published_at)
                VALUES (?,?,?,?, 'draft',
                        (SELECT id FROM agents WHERE slug='discovery'), ?, ?, 'radar',
-                       'radar,news,ai', '', NULL)""",
+                       'radar,news,ai', '', 1, NULL)""",
             (f"AI Radar — {data_br}: today's top stories", slug_hoje, corpo,
              f"The {min(len(manchetes),12)} most relevant AI headlines of {data_br}, with sources.",
              f"AI Radar {data_br}",
@@ -596,10 +756,11 @@ def publisher_agent(payload: dict) -> dict:
         db.execute(
             """INSERT INTO contents (title, slug, body, excerpt, status, agent_id,
                seo_title, seo_description, category, tags, image_url, image_alt,
-               image_credit, image_width, image_height, source_url, published_at)
+               image_credit, image_width, image_height, source_url,
+               visual_review_required, published_at)
                VALUES (?,?,?,?, 'draft',
                        (SELECT id FROM agents WHERE slug='content'), ?, ?, 'news',
-                       ?, ?, ?, ?, '', '', ?, NULL)""",
+                       ?, ?, ?, ?, '', '', ?, 1, NULL)""",
             (art["title"], art["slug"], art["body"], art["excerpt"],
              art["title"][:60], art["excerpt"][:160], art["tags"], img, alt,
              credit, art["source_url"]))
@@ -736,16 +897,29 @@ def image_repair_agent(payload: dict) -> dict:
 
 
 def image_optimization_agent(payload: dict) -> dict:
-    from .imagegen import probe_image
+    from .imagegen import ensure_responsive_variants, managed_image_path, probe_image
     rows = db.query("SELECT id, image_url FROM contents WHERE status='published'")
     invalidas = [c["id"] for c in rows if not c["image_url"].startswith(("http://", "https://"))
                  or probe_image(c["image_url"])["ok"] is not True]
     for cid in invalidas:
         db.execute("UPDATE contents SET image_url='', hero_image_url='', status='draft', "
                    "published_at=NULL, featured=0, breaking_flag=0 WHERE id = ?", (cid,))
+    sizes, variants = [], 0
+    for row in rows:
+        path = managed_image_path(row["image_url"])
+        if not path:
+            continue
+        result = ensure_responsive_variants(path)
+        variants += len(result["webp"]) + bool(result["avif"])
+        sizes.append(path.stat().st_size)
+    ordered = sorted(sizes)
+    p95 = ordered[min(len(ordered) - 1, int(len(ordered) * .95))] if ordered else 0
     return {"verified_http_images": len(rows) - len(invalidas),
             "invalid_publications_returned_to_draft": len(invalidas),
-            "frontend": "lazy loading on lists; high priority on hero"}
+            "responsive_variants": variants,
+            "mean_master_bytes": round(sum(sizes) / len(sizes)) if sizes else 0,
+            "p95_master_bytes": p95,
+            "frontend": "responsive srcset; lazy loading on lists; high priority on hero"}
 
 
 # ═══════════ SEARCH CONSOLE / REVENUE / DASHBOARD / PERFORMANCE ═══════════

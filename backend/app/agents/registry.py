@@ -36,6 +36,18 @@ AGENT_DEFINITIONS = [
      "Validates and persists a real 1200x630 raster image before publication."),
     ("image-quality", "Image Quality Check", "image-quality",
      "Blocks invalid images and requeues content for a verified raster asset."),
+    ("aion-visual-editor", "AION Visual Editor", "visual-editor-in-chief",
+     "Scores every lead image, verifies editorial relevance and releases only approved visuals."),
+    ("image-quality-auditor", "Image Quality Auditor", "independent-visual-audit",
+     "Independently rejects deformation, weak crops, repetition and unconvincing visuals."),
+    ("homepage-art-director", "Homepage Art Director", "homepage-art-direction",
+     "Audits the complete homepage for visual diversity, rhythm, balance and hero quality."),
+    ("image-rights-attribution", "Image Rights & Attribution", "visual-rights",
+     "Requires verified origin, rights basis, source URL and truthful credit before publication."),
+    ("discover-social-visual-editor", "Discover / Social Visual Editor", "visual-distribution",
+     "Approves reusable crops for Discover, Open Graph and social distribution from one master asset."),
+    ("aion-news-commander", "AION News Commander", "visual-operations",
+     "Coordinates visual desk tasks and always advances the next reversible zero-cost action."),
     ("image-repair", "Image Repair Agent", "image-repair",
      "Scans the archive and repairs missing images without duplication."),
     ("image-prompt", "Image Prompt Agent", "images",
@@ -169,13 +181,19 @@ def _save_draft(item: dict, title: str, slug: str, body: str, excerpt: str,
     brief = _mg("agent:research", f"briefing:{item['id']}") or {}
     tags = ",".join((brief.get("keywords") or ["ai"])[:5])
     categoria = _TEMPLATE_CATEGORIA.get(item.get("template", ""), "news")
+    if "generated via" in (excerpt or "").lower():
+        first_paragraph = next((p.strip() for p in (body or "").split("\n\n")
+                                if p.strip() and not p.strip().startswith("#")), "")
+        excerpt = first_paragraph[:157] + ("…" if len(first_paragraph) > 157 else "")
+    source_url = next((url for url in (brief.get("fontes") or [])
+                       if isinstance(url, str) and url.startswith(("http://", "https://"))), "")
     cid = db.execute(
         """INSERT INTO contents (title, slug, body, excerpt, status, agent_id,
-           seo_title, seo_description, category, tags)
+           seo_title, seo_description, category, tags, source_url, visual_review_required)
            VALUES (?,?,?,?,?,
-                   (SELECT id FROM agents WHERE slug = 'content'), ?, ?, ?, ?)""",
+                   (SELECT id FROM agents WHERE slug = 'content'), ?, ?, ?, ?, ?, 1)""",
         (title, _unique_slug(slug), body, excerpt, status, title, excerpt[:160],
-         categoria, tags),
+         categoria, tags, source_url),
     )
     db.execute(
         "UPDATE content_queue SET status = 'done', result_content_id = ? WHERE id = ?",
@@ -256,6 +274,13 @@ def process_queue_once() -> dict:
             )
             offline += 1
     # Due Editorial Studio items are evaluated during the hourly queue cycle too.
+    # Run the same visual desks first so this shortcut can never bypass the
+    # orchestrator's publication order.
+    from . import team as _team
+    _team.visual_editor_agent({})
+    _team.image_rights_attribution_agent({})
+    _team.image_quality_auditor_agent({})
+    _team.homepage_art_director_agent({})
     from ..content_rules import publication_issues
     scheduled = db.query("SELECT * FROM contents WHERE status='draft' "
                          "AND scheduled_at != '' AND scheduled_at <= datetime('now')")

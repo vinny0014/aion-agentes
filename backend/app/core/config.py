@@ -4,7 +4,7 @@ from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-SITE_URL_DEFAULT = "https://aion-news-os.vercel.app"
+SITE_URL_DEFAULT = "https://aionnews.cloud"
 
 
 class Settings(BaseSettings):
@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     PUBLIC_API_URL: str = "https://aion-news-api.onrender.com"
     UPLOAD_DIR: str = "./uploads"
     IMAGE_PROVIDER: str = "pollinations"
+    # Manus coordination bridge. Keep every value empty until configured in
+    # Render; secrets are never exposed through public health endpoints.
+    MANUS_API_KEY: str = ""
+    MANUS_WEBHOOK_PUBLIC_KEY: str = ""
+    MANUS_PROJECT_ID: str = ""
+    AION_BRIDGE_TOKEN: str = ""
+    MANUS_API_BASE_URL: str = "https://api.manus.ai/v2"
 
     @model_validator(mode="after")
     def validate_production_secrets(self):
