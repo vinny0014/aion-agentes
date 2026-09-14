@@ -37,8 +37,13 @@ def validate_shopee_url_structure(url: str) -> AffiliateLinkCheck:
     if not url or not isinstance(url, str):
         return AffiliateLinkCheck(LinkStatus.INVALID, False, "empty_url")
 
+    if url != url.strip() or any(ord(char) < 33 for char in url) or "\\" in url:
+        return AffiliateLinkCheck(LinkStatus.INVALID, False, "ambiguous_url")
+
     try:
-        parsed = urlparse(url.strip())
+        parsed = urlparse(url)
+        if parsed.username or parsed.password or parsed.port not in (None, 443):
+            return AffiliateLinkCheck(LinkStatus.INVALID, False, "unsafe_authority")
     except ValueError:
         return AffiliateLinkCheck(LinkStatus.INVALID, False, "malformed_url")
 

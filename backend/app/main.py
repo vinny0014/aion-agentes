@@ -35,6 +35,18 @@ scheduler = BackgroundScheduler()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.init_db()
+    if settings.COMPRAPULSE_ENABLED:
+        from .commerce.store import CommerceStore
+        from .commerce.jobs import schedule, run_once
+        commerce = CommerceStore(db.DB_PATH)
+        commerce.initialize()
+        def commerce_tick():
+            schedule(commerce)
+            for _ in range(10):
+                if run_once(commerce) is None:
+                    break
+        scheduler.add_job(commerce_tick, "interval", hours=1, id="comprapulse-hourly",
+                          max_instances=1, coalesce=True)
     seed_agents()
     # A fresh installation starts with image-gated editorial drafts.
     if not db.query_one("SELECT id FROM contents LIMIT 1"):
@@ -81,6 +93,7 @@ app.add_middleware(
 # ---------------- Middlewares de segurança ----------------
 _BUCKETS: dict[str, list[float]] = defaultdict(list)
 _RATE_LIMITS = {"/api/auth/login": (10, 60), "/api/auth/register": (5, 60),
+                "/api/commerce/events": (60, 60), "/api/commerce/admin/import": (30, 60),
                 "/api/public/contact": (5, 60), "/api/public/newsletter": (5, 60)}  # (req, janela s)
 
 
@@ -358,3 +371,7 @@ def root_brand_asset(asset: str):
 def run_pipeline_now(user: dict = Depends(require_admin)):
     """Run one content pipeline cycle on demand."""
     return process_queue_once()
+
+# Kept separate from the legacy routes and disabled unless explicitly configured.
+from .commerce.router import router as commerce_router
+app.include_router(commerce_router)
