@@ -116,3 +116,35 @@ HUMAN BLOCKERS: sessão autenticada/API/export oficial Shopee ainda não dispon�
 nesta execução. Não solicitar ou armazenar senha; manter jobs externos BLOCKED.
 
 Custo fixo novo contratado: R$ 0,00. Produção não alterada.
+
+## Retomada automática — 2026-09-14T17:24:00Z
+
+DATE/TIME: 2026-09-14T17:24:00Z
+BRANCH: codex/comprapulse-mvp
+PR: #22 (draft; main/produção preservados)
+COMPLETED:
+- Confirmado que o head anterior bc3b6f91e4a37b7f9bae3a8db713cd86950ce543 tinha CI run 90 PASS.
+- Preservado preview seguro de importação oficial já existente: lotes limitados,
+  sem persistência/publicação e sem eco de URLs/segredos em resposta administrativa.
+- Adicionado contrato explícito OfficialOfferAdapter para futura fonte autorizada
+  Shopee, sem rede, sem credenciais e sem assumir API inexistente.
+- Adicionado DisabledShopeeAdapter fail-closed: até haver acesso oficial autorizado,
+  qualquer tentativa retorna official_shopee_adapter_not_configured.
+- Adicionado bounded_batch com teto rígido, verificação de identidade da fonte e
+  rejeição de adapters que excedam o limite solicitado.
+- Adicionados testes unitários cobrindo fail-closed, limites, mismatch e lote acima
+  do teto. Commits: 49809ac3351b5f01e568337818045ce0dbe6a396 e
+  fb7b1d7f74ef522aef287ee644f543235e26cffb.
+CURRENT STATE: nenhuma integração externa foi ativada; nenhuma oferta real foi
+publicada; nenhum custo novo; secrets continuam fora do código.
+TEST STATUS: o head anterior estava verde. O workflow dos dois novos commits ainda
+não apareceu na consulta imediatamente após o push; verificar o CI do novo head na
+próxima retomada e corrigir qualquer falha antes de avançar.
+KNOWN ISSUES: sessão/API/export oficial Shopee ainda indisponível para esta execução;
+E2E real, imagem real e atribuição real não podem ser validados sem fonte autorizada.
+NEXT TASK: verificar CI do novo head; depois conectar uma implementação concreta do
+OfficialOfferAdapter somente quando houver acesso autorizado, mantendo preview antes
+de persistência e publicação.
+HUMAN BLOCKERS: autenticação/permissão Shopee oficial. Não solicitar nem armazenar senha.
+
+Custo fixo novo contratado: R$ 0,00. Produção e main não alteradas.
