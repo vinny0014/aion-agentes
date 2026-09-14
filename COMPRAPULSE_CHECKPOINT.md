@@ -148,3 +148,24 @@ de persistência e publicação.
 HUMAN BLOCKERS: autenticação/permissão Shopee oficial. Não solicitar nem armazenar senha.
 
 Custo fixo novo contratado: R$ 0,00. Produção e main não alteradas.
+
+## Retomada automática — 2026-09-14T22:28:00Z
+
+DATE/TIME: 2026-09-14T22:28:00Z
+BRANCH: codex/comprapulse-mvp
+PR: #22 (draft; mergeable; main/produção preservados)
+COMPLETED:
+- Confirmado que o head 7946029bc4c60462c7d79bc9db3acdeadb1b324a concluiu CI run 93 com sucesso.
+- Conectado o contrato OfficialOfferAdapter ao preview seguro por meio de preview_adapter_records.
+- O preview agora aceita somente fontes Shopee oficiais reconhecidas: shopee_official_export ou shopee_official_api.
+- O lote inteiro falha fechado se a identidade declarada pelo adapter e a origem declarada em qualquer registro divergirem.
+- Mantidos teto de 500 registros, ausência de persistência/publicação e não exposição de URLs afiliadas no retorno.
+- Adicionados testes para origem oficial válida, origem desconhecida e lote com proveniência misturada.
+- Commits deste bloco: ba96dafcde174ba8b8564112a6e1cb18a2cc12eb e 43130bb3f4353d73d9bb1f089b537f659e3b82ab.
+CURRENT STATE: nenhuma integração externa ativada, nenhuma oferta real publicada e nenhum custo novo.
+TEST STATUS: CI run 95 do head 43130bb3f4353d73d9bb1f089b537f659e3b82ab estava PENDING na última consulta; conferir antes de qualquer próximo avanço dependente deste bloco.
+KNOWN ISSUES: sessão/API/export oficial Shopee continua indisponível nesta execução; E2E real, imagem real, destino real e atribuição real continuam bloqueados sem fonte autorizada.
+NEXT TASK: confirmar CI do novo head; se verde, manter integração real bloqueada até existir acesso autorizado e então implementar adapter concreto sem registrar senha ou secrets.
+HUMAN BLOCKERS: autenticação/permissão Shopee oficial ou export oficial autorizado. Não solicitar nem armazenar senha.
+
+Custo fixo novo contratado: R$ 0,00. Produção e main não alteradas.
