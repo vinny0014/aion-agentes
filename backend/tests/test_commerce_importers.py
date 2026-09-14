@@ -1,4 +1,11 @@
-from app.commerce.importers import MAX_PREVIEW_RECORDS, preview_official_records
+import pytest
+
+from app.commerce.adapters import AdapterBatch
+from app.commerce.importers import (
+    MAX_PREVIEW_RECORDS,
+    preview_adapter_records,
+    preview_official_records,
+)
 
 NOW = 1800000000
 
@@ -10,6 +17,20 @@ def offer():
         source_url='https://shopee.com.br/product/1/2',
         image_url='https://down-br.img.susercontent.com/file/fixture',
         image_source='shopee',source='shopee_official_export')
+
+
+class OfficialFixtureAdapter:
+    source_name = 'shopee_official_export'
+
+    def __init__(self, records):
+        self.records = tuple(records)
+
+    def fetch_offers(self, *, limit):
+        return AdapterBatch(self.source_name, self.records)
+
+
+class UnknownSourceAdapter(OfficialFixtureAdapter):
+    source_name = 'fixture_untrusted_source'
 
 
 def test_preview_is_side_effect_free_and_does_not_echo_urls():
@@ -43,3 +64,20 @@ def test_preview_rejects_unknown_fields_without_leaking_values():
     assert result['accepted_count']==0
     assert result['rejected'][0]['error_code']=='invalid_offer_fields'
     assert 'do-not-echo-me' not in str(result)
+
+
+def test_adapter_preview_binds_batch_and_record_to_same_official_source():
+    result=preview_adapter_records(OfficialFixtureAdapter([offer()]),limit=1,now=NOW)
+    assert result['accepted_count']==1
+    assert result['source']=='shopee_official_export'
+    assert result['persisted'] is False and result['published'] is False
+    assert 'shope.ee' not in str(result)
+
+
+def test_adapter_preview_rejects_unknown_or_mixed_provenance_fail_closed():
+    with pytest.raises(ValueError,match='unsupported_official_source'):
+        preview_adapter_records(UnknownSourceAdapter([offer()]),limit=1,now=NOW)
+
+    mismatched=offer(); mismatched['source']='shopee_official_api'
+    with pytest.raises(ValueError,match='adapter_record_source_mismatch'):
+        preview_adapter_records(OfficialFixtureAdapter([mismatched]),limit=1,now=NOW)
