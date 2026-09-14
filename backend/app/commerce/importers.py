@@ -6,11 +6,13 @@ so an authorized official export can be mapped and validated before ingestion.
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, Mapping
 
+from .adapters import OfficialOfferAdapter, bounded_batch
 from .store import normalized_offer
 
 MAX_PREVIEW_RECORDS = 500
+ALLOWED_SHOPEE_SOURCES = frozenset(("shopee_official_export", "shopee_official_api"))
 
 
 def preview_official_records(records: Any, *, now: int | None = None) -> dict:
@@ -47,3 +49,27 @@ def preview_official_records(records: Any, *, now: int | None = None) -> dict:
         'persisted': False,
         'published': False,
     }
+
+
+def preview_adapter_records(
+    adapter: OfficialOfferAdapter, *, limit: int = 100, now: int | None = None
+) -> dict:
+    """Preview one bounded authorized Shopee adapter batch, fail-closed.
+
+    The adapter identity and every record's declared source must agree. Mixed or
+    unknown provenance rejects the whole batch before record validation so an
+    untrusted payload cannot self-label itself as an official Shopee source.
+    Exact URLs remain internal and are never returned by this function.
+    """
+    batch = bounded_batch(adapter, limit=limit, hard_cap=MAX_PREVIEW_RECORDS)
+    if batch.source not in ALLOWED_SHOPEE_SOURCES:
+        raise ValueError('unsupported_official_source')
+
+    records = list(batch.records)
+    for record in records:
+        if not isinstance(record, Mapping) or record.get('source') != batch.source:
+            raise ValueError('adapter_record_source_mismatch')
+
+    result = preview_official_records(records, now=now)
+    result['source'] = batch.source
+    return result
