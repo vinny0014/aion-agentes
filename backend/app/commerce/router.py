@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ..core import database as db
 from ..core.config import settings
 from ..core.security import require_admin
+from .importers import preview_official_records
 from .store import CommerceStore
 
 
@@ -54,6 +55,14 @@ def admin(store=Depends(get_store)):
         jobs=[dict(r) for r in c.execute('''SELECT id,job_type,status,attempt,available_at,error_code
             FROM cp_jobs ORDER BY id DESC LIMIT 100''')]
     return {'metrics':store.metrics(),'offers':offers,'jobs':jobs,'official_adapter_connected':False}
+
+
+@router.post('/admin/import/preview',dependencies=[Depends(require_admin)])
+def preview_import(payload: dict):
+    try:
+        return preview_official_records(payload.get('records'))
+    except (ValueError,TypeError):
+        raise HTTPException(422,'Invalid official offer preview batch')
 
 
 @router.post('/admin/import',dependencies=[Depends(require_admin)],status_code=201)
