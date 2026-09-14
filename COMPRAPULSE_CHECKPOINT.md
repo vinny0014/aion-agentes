@@ -65,3 +65,27 @@ prova acesso autenticado nem indisponibilidade da Shopee.
 
 Não usar o MVP Sites como se já estivesse migrado; não alterar main ou produção
 até concluir backup e validação. Custo fixo novo contratado: R$ 0,00.
+
+## Checkpoint de entrega — 2026-09-14T02:46:27.173963+00:00
+
+DATE/TIME: 2026-09-14T02:46:27.173974+00:00
+BRANCH: codex/comprapulse-mvp
+LAST COMMIT: 40aff2a8dedc4048382b5db2150ef4632d1398f6 (código validado)
+PR: #22 (draft, atualizado e persistido no GitHub)
+COMPLETED: bloco técnico acima salvo; árvore remota idêntica à árvore local
+validada: 070d5144c71e933e15c8de02cdab19c818f9ad80.
+CURRENT STATE: retomada aguardando autenticação Shopee; produção preservada.
+TEST STATUS: CI 34800200903 / run 83 — backend PASS, frontend PASS,
+deployment-config PASS, E2E legado PASS. 65 testes locais PASS.
+KNOWN ISSUES: E2E Shopee real e QA visual CompraPulse ainda pendentes;
+as demais lacunas do bloco anterior continuam válidas.
+NEXT TASK: autenticação segura no painel afiliado; inspecionar documentação
+oficial e permissões API/export antes de implementar o adapter real.
+HUMAN BLOCKERS: login Shopee confirmado: portal /offer/product_offer
+redirecionou para /buyer/login. A falha temporária do navegador foi resolvida
+na retomada. Não é mais bloqueio de uso. Entrada segura será solicitada;
+se não concluída, manter imports em DRAFT e jobs sem adapter BLOCKED.
+
+Não confundir CI verde/preview Vercel com migração concluída: Hostinger/Render
+não receberam este módulo, nenhuma oferta real foi publicada e o cron não foi
+habilitado. Retomar daqui, sem recriar a baseline ou substituir main.
