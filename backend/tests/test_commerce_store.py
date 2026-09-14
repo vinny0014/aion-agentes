@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 from app.commerce.store import CommerceStore
 from app.commerce.guardrails import validate_shopee_url_structure, LinkStatus
-from app.commerce.jobs import schedule, run_once
+from app.commerce.jobs import schedule, run_once, enqueue_publish_candidates
 from app.commerce.scoring import pulse_score
 NOW=1800000000
 
@@ -90,6 +90,21 @@ def test_missing_adapter_is_blocked_not_success(store):
     schedule(store,NOW); schedule(store,NOW)
     assert run_once(store,now=NOW)=='blocked'
     assert run_once(store,now=NOW) is None
+
+def test_hourly_publication_budget_is_atomic_and_fail_closed(store):
+    ids=[]
+    for i in range(12):
+        p=offer(); p['product_id']=f'1:{i+10}'; p['source_url']=f'https://shopee.com.br/product/1/{i+10}'
+        oid=store.ingest(p,NOW)['offer_id']; verify(store,oid); ids.append(oid)
+    first=enqueue_publish_candidates(store,ids,now=NOW)
+    second=enqueue_publish_candidates(store,list(reversed(ids)),now=NOW)
+    assert len(first)==10 and second==[]
+    assert [run_once(store,now=NOW) for _ in range(10)]==['done']*10
+    assert run_once(store,now=NOW) is None
+    assert len(store.catalog(NOW))==10
+    with store.transaction() as c:
+        assert c.execute("SELECT COUNT(*) FROM cp_jobs WHERE job_type='publish_offer' AND cycle=?",(NOW//3600,)).fetchone()[0]==10
+        assert c.execute("SELECT COUNT(*) FROM cp_offers WHERE status='active'").fetchone()[0]==10
 
 def test_click_is_not_commission(store):
     oid=store.ingest(offer(),NOW)['offer_id']; verify(store,oid); store.publish(oid,now=NOW)
