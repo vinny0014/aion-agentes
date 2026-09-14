@@ -89,3 +89,30 @@ se não concluída, manter imports em DRAFT e jobs sem adapter BLOCKED.
 Não confundir CI verde/preview Vercel com migração concluída: Hostinger/Render
 não receberam este módulo, nenhuma oferta real foi publicada e o cron não foi
 habilitado. Retomar daqui, sem recriar a baseline ou substituir main.
+
+## Retomada automática — 2026-09-14T07:36:00Z
+
+DATE/TIME: 2026-09-14T07:36:00Z
+BRANCH: codex/comprapulse-mvp
+LAST COMMIT: 684e1a40f7fa1076709e57dcc437a78e11380309
+PR: #22 (draft)
+COMPLETED:
+- Implementado orçamento transacional de publicação automática: no máximo 10
+  jobs publish_offer por hora UTC, compartilhado por retries/workers concorrentes.
+- Reexecuções no mesmo ciclo não conseguem enfileirar um segundo lote acima do teto.
+- publish_offer agora é executado localmente pelo worker e continua fail-closed:
+  o store revalida evidência oficial, produto exato, imagem, estoque, tracking,
+  validade e PulseScore antes de ativar a oferta.
+- Adicionado teste com 12 ofertas de fixture provando teto de 10, idempotência e
+  que somente as 10 enfileiradas podem ficar ativas.
+CURRENT STATE: produção/main continuam intocados; nenhuma oferta real publicada.
+TEST STATUS: CI run 85 (34818442514) PASS — backend, frontend,
+deployment-config e E2E legado todos verdes.
+KNOWN ISSUES: integração oficial Shopee/autenticação ainda é o bloqueio principal;
+QA visual CompraPulse e E2E real com oferta Shopee permanecem pendentes.
+NEXT TASK: com acesso autorizado, implementar adapter oficial e testes de contrato
+para validar destino, imagem real, estoque/proveniência e tracking antes de publicar.
+HUMAN BLOCKERS: sessão autenticada/API/export oficial Shopee ainda não disponível
+nesta execução. Não solicitar ou armazenar senha; manter jobs externos BLOCKED.
+
+Custo fixo novo contratado: R$ 0,00. Produção não alterada.
