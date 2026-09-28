@@ -62,3 +62,10 @@ Custo fixo novo contratado: R$ 0,00. Produção e main não alteradas.
 - Fonte Shopee aberta no navegador redireciona para login. Zero ofertas reais lidas/importadas/publicadas; tracking não verificado.
 - NEXT: autenticação segura Shopee; implementar adapter a partir da estrutura observada; completar gaps da auditoria; QA e E2E antes de produção.
 - main/produção preservadas, custo novo R$0. NOT READY.
+
+### Verificação final deste bloco
+
+- Código entregue: c628801ef2f4f8d7c1af1ba53b38acfdff115d85 no PR22.
+- CI98 / run36457630998 SUCCESS: backend, frontend, deployment-config e e2e. Os testes UI novos passaram no CI; isso não comprova integração real Shopee.
+- Solicitação segura de login interrompida; autenticação não confirmada. Nenhuma nova tentativa automática de login.
+- Próxima ação humana continua sendo autenticar a sessão Shopee; adapter real, piloto e tracking pendentes.

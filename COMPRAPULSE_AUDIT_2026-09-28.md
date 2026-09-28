@@ -53,3 +53,8 @@ EXACT NEXT STEP: concluir autenticação pelo fluxo seguro; depois inspecionar o
 Novo custo recorrente contratado: R$ 0,00.
 NOT READY — SPECIFIC BLOCKERS REMAIN.
 Login é o próximo bloqueio humano; ainda existe trabalho técnico pendente depois dele. Nenhuma alegação de operação 24h, tracking validado ou prontidão comercial.
+
+## Resultado posterior do CI
+
+Commit c628801ef2f4f8d7c1af1ba53b38acfdff115d85 entregue ao PR22. Run98 / 36457630998 SUCCESS, incluindo backend, frontend, deployment-config e e2e (Run browser journeys SUCCESS). Testes UI novos aprovados no CI. O download Chromium local falhou, mas Chromium e testes executaram no GitHub Actions. Não confundir este resultado com E2E real Shopee.
+Solicitação segura de autenticação interrompida; acesso autenticado não confirmado.
