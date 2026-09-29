@@ -84,3 +84,9 @@ Custo fixo novo contratado: R$ 0,00. Produção e main não alteradas.
 - NEXT: conectar o adapter a um comando/admin de preview por arquivo com recibo e seleção explícita de piloto; persistir somente rascunho escolhido; depois validar destino HTTP, imagem decodificada, estoque e tracking antes de qualquer publicação.
 - HUMAN BLOCKER: CAPTCHA apenas para nova navegação/download do Feed de produto. O CSV existente permite continuar o parser e o preview sem contornar o desafio.
 - Estado comercial: 0 ofertas persistidas/publicadas nesta retomada; tracking, clique atribuído, pedido e comissão continuam não comprovados. R$0 de custo recorrente novo. NOT READY.
+
+### Verificação final do adapter CSV
+
+- Código entregue no PR #22: `952bae9eb3b8b16d8eedfa487bdb05c4e02961cf`.
+- CI100 / run `36608719818` COMPLETED/SUCCESS no commit entregue.
+- Branch remota e cópia local reconciliadas; árvore remota idêntica ao bloco testado.
