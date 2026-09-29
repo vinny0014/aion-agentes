@@ -178,6 +178,26 @@ Rotas de preparação: /comprapulse, /comprapulse/produto/:id,
 e /produto/:slug: backup real, adapter, QA browser, metadata SSR da Hostinger,
 URLs estáveis por produto (não por snapshot), conexão do backend e deploy.
 
-Amostra oficial CSV/XLSX e documentação autenticada ainda são necessárias para
-mapear campos reais, não inferir preço/estoque/variação/comissão. Sem isso não
-implementar suposições como se fossem uma integração validada.
+Até 2026-09-28, a amostra oficial ainda não estava disponível. Campos não
+observados no export continuam proibidos de serem inferidos, principalmente
+estoque, variação, atribuição e comissão.
+
+## Export oficial observado em 2026-09-29
+
+O feed de produto autenticado foi obtido em CSV UTF-8 com BOM. O cabeçalho real
+observado contém `itemid`, `sale_price`, `title`, `global_category1/2/3`,
+`image_link`, `product_link` e `product_short link`, além de metadados de loja,
+avaliação, descrição, modelos e preço original.
+
+`ShopeeOfficialCsvAdapter` faz leitura em fluxo e aceita apenas esse contrato
+mínimo observado. Ele deriva `product_id` exclusivamente do par
+`/product/{shop_id}/{item_id}`, exige que `itemid` coincida com a URL, converte
+o preço com `Decimal`, exige imagem HTTPS e confirma que o único `origin_link`
+do redirecionador oficial corresponde exatamente a `product_link`. A data de
+observação é fornecida explicitamente pelo chamador; não é inferida do nome do
+arquivo.
+
+O adapter não persiste nem publica. O `product_short link` presente no feed é
+preservado sem reescrita, mas não prova atribuição ou comissão. A oferta continua
+em DRAFT até passar pelas evidências independentes de destino, imagem, estoque,
+tracking e score já exigidas pelo kill switch.

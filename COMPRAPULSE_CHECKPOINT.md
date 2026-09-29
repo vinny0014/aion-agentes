@@ -69,3 +69,18 @@ Custo fixo novo contratado: R$ 0,00. Produção e main não alteradas.
 - CI98 / run36457630998 SUCCESS: backend, frontend, deployment-config e e2e. Os testes UI novos passaram no CI; isso não comprova integração real Shopee.
 - Solicitação segura de login interrompida; autenticação não confirmada. Nenhuma nova tentativa automática de login.
 - Próxima ação humana continua sendo autenticar a sessão Shopee; adapter real, piloto e tracking pendentes.
+
+## Retomada 2026-09-29 — feed oficial e adapter CSV
+
+- Base remota confirmada no head `ccdcd6c85aaa652ba3a5ecf6f26158f98aad21fa`; PR #22 draft/open e sem execução concorrente observada.
+- CI99 / run `36460940223` confirmado SUCCESS no mesmo head: backend, frontend, deployment-config e e2e; Playwright registrou 7 testes aprovados.
+- Sessão Shopee Afiliados autenticada confirmada na conta do usuário. A rota Oferta Shopee carregou, mas estava sem dados naquele filtro.
+- A rota Feed de produto exigiu CAPTCHA. Nenhuma tentativa automática de resolver o desafio foi feita.
+- CSV oficial autenticado já baixado foi localizado: UTF-8 com BOM, 199.061.991 bytes e cabeçalho real com `itemid`, preço, título, categorias, imagem, `product_link` e `product_short link`.
+- Implementado `ShopeeOfficialCsvAdapter`: leitura em fluxo, limite de lote, schema mínimo real, preço decimal em centavos, identidade `shop_id:item_id`, imagem HTTPS e correspondência exata entre `origin_link` e `product_link`.
+- O adapter preserva o link do export, mas não declara atribuição/tracking. Não houve persistência nem publicação.
+- Validação real side-effect-free: 100 registros iniciais do CSV aceitos, 0 rejeitados, `persisted=false`, `published=false`.
+- Testes locais: 83 backend PASS; `git diff --check` PASS.
+- NEXT: conectar o adapter a um comando/admin de preview por arquivo com recibo e seleção explícita de piloto; persistir somente rascunho escolhido; depois validar destino HTTP, imagem decodificada, estoque e tracking antes de qualquer publicação.
+- HUMAN BLOCKER: CAPTCHA apenas para nova navegação/download do Feed de produto. O CSV existente permite continuar o parser e o preview sem contornar o desafio.
+- Estado comercial: 0 ofertas persistidas/publicadas nesta retomada; tracking, clique atribuído, pedido e comissão continuam não comprovados. R$0 de custo recorrente novo. NOT READY.
