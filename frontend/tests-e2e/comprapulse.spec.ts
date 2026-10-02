@@ -10,7 +10,8 @@ test('admin must preview before saving and edits invalidate approval', async ({ 
   } }));
   await page.route('**/api/commerce/admin/import/preview', async route => {
     previewed = route.request().postDataJSON().records[0];
-    await route.fulfill({json: {accepted_count: 1, rejected_count: 0, rejected: []}});
+    await route.fulfill({json: {accepted_count: 1, rejected_count: 0, rejected: [],
+      preview_receipts: [{index: 0, receipt: 'test-preview-receipt'}]}});
   });
   await page.route('**/api/commerce/admin/import', async route => {
     saves++; saved = route.request().postDataJSON();
@@ -33,7 +34,7 @@ test('admin must preview before saving and edits invalidate approval', async ({ 
   await save.click();
   await expect(page.getByText('Rascunho salvo.', {exact: false})).toBeVisible();
   expect(saves).toBe(1);
-  expect(saved).toEqual(previewed);
+  expect(saved).toEqual({record: previewed, preview_receipt: 'test-preview-receipt'});
 });
 
 test('rejected preview cannot save a draft', async ({page}) => {

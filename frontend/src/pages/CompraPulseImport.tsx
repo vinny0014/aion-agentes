@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { api } from '../lib/api';
 
-type Preview = { record: Record<string, any>; accepted: boolean; errors: string[] };
+type Preview = { record: Record<string, any>; accepted: boolean; errors: string[]; receipt: string };
 
 export function ImportPreview({ onSaved }: { onSaved: () => Promise<unknown> }) {
   const [input, setInput] = useState('');
@@ -17,8 +17,10 @@ export function ImportPreview({ onSaved }: { onSaved: () => Promise<unknown> }) 
       const result = await api('/api/commerce/admin/import/preview', {
         method: 'POST', body: JSON.stringify({ records: [record] }),
       });
-      setPreview({ record, accepted: result.accepted_count === 1 && result.rejected_count === 0,
-        errors: result.rejected.map((r: {error_code: string}) => r.error_code) });
+      const receipt = result.preview_receipts?.find((r: {index: number}) => r.index === 0)?.receipt ?? '';
+      setPreview({ record,
+        accepted: result.accepted_count === 1 && result.rejected_count === 0 && Boolean(receipt),
+        errors: result.rejected.map((r: {error_code: string}) => r.error_code), receipt });
     } catch {
       setMessage('Não foi possível validar o registro. Confira o JSON e a origem oficial.');
     } finally { setBusy(false); }
@@ -28,7 +30,9 @@ export function ImportPreview({ onSaved }: { onSaved: () => Promise<unknown> }) 
     if (!preview?.accepted || busy) return;
     setBusy(true); setMessage('');
     try {
-      await api('/api/commerce/admin/import', { method: 'POST', body: JSON.stringify(preview.record) });
+      await api('/api/commerce/admin/import', { method: 'POST', body: JSON.stringify({
+        record: preview.record, preview_receipt: preview.receipt,
+      }) });
       setPreview(null); setInput('');
       setMessage('Rascunho salvo. A oferta continua sem aprovação para publicação.');
       await onSaved();

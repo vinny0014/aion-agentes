@@ -90,3 +90,24 @@ Custo fixo novo contratado: R$ 0,00. Produção e main não alteradas.
 - Código entregue no PR #22: `952bae9eb3b8b16d8eedfa487bdb05c4e02961cf`.
 - CI100 / run `36608719818` COMPLETED/SUCCESS no commit entregue.
 - Branch remota e cópia local reconciliadas; árvore remota idêntica ao bloco testado.
+
+## Retomada 2026-10-02 — recibo obrigatório entre preview e rascunho
+
+- Base remota confirmada no head `57a75dc5bbcdf5aa1db18c1c6421085b31e6d8a5`; PR #22 continua draft/open/mergeable e sem avanço concorrente observado.
+- CI101 / run `36609033636` confirmado COMPLETED/SUCCESS no mesmo head.
+- A ingestão admin direta agora exige um recibo HMAC de curta duração emitido somente para um registro aceito pelo preview. O recibo expira em 5 minutos, é vinculado ao conteúdo normalizado exato e não contém URLs ou campos comerciais.
+- Registro ausente, alterado, expirado ou com assinatura inválida é rejeitado antes da persistência. A UI conserva o recibo apenas no estado do preview e o envia junto ao registro confirmado.
+- Testes novos cobrem vínculo exato, expiração, adulteração, rejeição do formato legado e o fluxo API preview → rascunho. Testes locais: 85 backend PASS; build frontend PASS; `git diff --check` PASS.
+- E2E local iniciou backend/frontend, mas não executou por ausência do binário Chromium neste ambiente. O teste atualizado será executado pelo CI do commit; isso não é evidência de E2E real Shopee.
+- Sessão Shopee revalidada em 2026-10-02: a rota oficial de ofertas redireciona imediatamente para um CAPTCHA deslizante (`Verifique para continuar`). O desafio não foi tocado nem contornado; portanto autenticação, ofertas ao vivo e tracking não puderam ser reconfirmados.
+- Estado comercial permanece fail-closed: 0 ofertas publicadas; nenhuma atribuição, pedido ou comissão alegados; R$0 de custo recorrente novo; main/produção preservadas. NOT READY.
+
+### HUMAN ACTION REQUIRED
+
+WHAT: concluir manualmente o CAPTCHA deslizante exibido pela Shopee.
+WHERE: navegador seguro desta conversa, na rota de Ofertas Shopee Afiliados.
+WHY: o CAPTCHA bloqueia a confirmação da sessão atual e qualquer validação ao vivo de produto, destino e tracking.
+WHAT IS ALREADY COMPLETE: adapter do CSV oficial, preview sem efeitos colaterais, recibo obrigatório antes do rascunho, testes backend e build frontend.
+EXACT NEXT STEP: arrastar a peça do desafio uma única vez e aguardar o redirecionamento para a página de ofertas; não enviar senha, código ou segredo no chat. Depois, revalidar sessão e selecionar um piloto real sem publicar até destino, imagem, preço e tracking passarem.
+
+NEXT: aguardar CI do recibo; então ligar seleção explícita de um item do CSV ao fluxo de preview/rascunho e implementar evidência técnica de imagem/destino, mantendo publicação bloqueada até tracking comprovado.

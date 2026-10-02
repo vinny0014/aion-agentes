@@ -8,7 +8,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from ..core import database as db
 from ..core.config import settings
 from ..core.security import require_admin
-from .importers import preview_official_records
+from .importers import (
+    issue_preview_receipt,
+    preview_official_records,
+    verify_preview_receipt,
+)
 from .store import CommerceStore
 
 
@@ -28,6 +32,17 @@ class Event(BaseModel):
     offer_id: int | None=Field(default=None,ge=1)
     placement: Literal['catalog','product','category']='catalog'
     consent: Literal[True]
+
+
+class PreviewImport(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    records: list[dict]
+
+
+class DraftImport(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    record: dict
+    preview_receipt: str=Field(min_length=1,max_length=256)
 
 
 @router.get('/catalog')
@@ -58,16 +73,24 @@ def admin(store=Depends(get_store)):
 
 
 @router.post('/admin/import/preview',dependencies=[Depends(require_admin)])
-def preview_import(payload: dict):
+def preview_import(payload: PreviewImport):
     try:
-        return preview_official_records(payload.get('records'))
+        result=preview_official_records(payload.records)
+        result['preview_receipts']=[
+            {'index':index,'receipt':issue_preview_receipt(
+                payload.records[index],secret=settings.SECRET_KEY)}
+            for index in result['accepted_indexes']
+        ]
+        return result
     except (ValueError,TypeError):
         raise HTTPException(422,'Invalid official offer preview batch')
 
 
 @router.post('/admin/import',dependencies=[Depends(require_admin)],status_code=201)
-def import_draft(payload: dict,store=Depends(get_store)):
+def import_draft(payload: DraftImport,store=Depends(get_store)):
     try:
-        return store.ingest(payload)
+        verify_preview_receipt(
+            payload.record,payload.preview_receipt,secret=settings.SECRET_KEY)
+        return store.ingest(payload.record)
     except (ValueError,TypeError):
-        raise HTTPException(422,'Invalid official offer record; see COMPRAPULSE_DATA_MODEL.md')
+        raise HTTPException(422,'Invalid or expired official offer preview')

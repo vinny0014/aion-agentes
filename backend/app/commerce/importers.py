@@ -5,6 +5,9 @@ so an authorized official export can be mapped and validated before ingestion.
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 import time
 from typing import Any, Mapping
 
@@ -12,7 +15,64 @@ from .adapters import OfficialOfferAdapter, bounded_batch
 from .store import normalized_offer
 
 MAX_PREVIEW_RECORDS = 500
+PREVIEW_RECEIPT_TTL_SECONDS = 300
 ALLOWED_SHOPEE_SOURCES = frozenset(("shopee_official_export", "shopee_official_api"))
+
+
+def _offer_digest(record: Mapping[str, Any], *, now: int) -> str:
+    normalized = normalized_offer(dict(record), now)
+    encoded = json.dumps(
+        normalized, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def issue_preview_receipt(
+    record: Mapping[str, Any], *, secret: str, now: int | None = None
+) -> str:
+    """Bind one accepted preview to the exact record for five minutes.
+
+    The receipt contains only a version, expiry and SHA-256 digest. Commercial
+    URLs and imported fields are never embedded in the token or server logs.
+    """
+    if not isinstance(secret, str) or not secret:
+        raise ValueError("preview_receipt_secret_required")
+    current = int(time.time()) if now is None else now
+    digest = _offer_digest(record, now=current)
+    expires = current + PREVIEW_RECEIPT_TTL_SECONDS
+    message = f"v1.{expires}.{digest}"
+    signature = hmac.new(secret.encode("utf-8"), message.encode("ascii"), hashlib.sha256).hexdigest()
+    return f"{message}.{signature}"
+
+
+def verify_preview_receipt(
+    record: Mapping[str, Any], receipt: str, *, secret: str, now: int | None = None
+) -> None:
+    """Reject missing, expired, forged or record-mismatched preview receipts."""
+    if not isinstance(secret, str) or not secret:
+        raise ValueError("preview_receipt_secret_required")
+    if not isinstance(receipt, str) or len(receipt) > 256:
+        raise ValueError("invalid_preview_receipt")
+    parts = receipt.split(".")
+    if len(parts) != 4 or parts[0] != "v1" or not parts[1].isdigit():
+        raise ValueError("invalid_preview_receipt")
+    _, expires_text, claimed_digest, claimed_signature = parts
+    if len(claimed_digest) != 64 or len(claimed_signature) != 64:
+        raise ValueError("invalid_preview_receipt")
+
+    current = int(time.time()) if now is None else now
+    expires = int(expires_text)
+    if current >= expires or expires > current + PREVIEW_RECEIPT_TTL_SECONDS:
+        raise ValueError("expired_preview_receipt")
+    digest = _offer_digest(record, now=current)
+    if not hmac.compare_digest(claimed_digest, digest):
+        raise ValueError("preview_receipt_record_mismatch")
+    message = f"v1.{expires}.{claimed_digest}"
+    expected = hmac.new(
+        secret.encode("utf-8"), message.encode("ascii"), hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(claimed_signature, expected):
+        raise ValueError("invalid_preview_receipt")
 
 
 def preview_official_records(records: Any, *, now: int | None = None) -> dict:

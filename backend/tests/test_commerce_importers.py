@@ -3,8 +3,10 @@ import pytest
 from app.commerce.adapters import AdapterBatch
 from app.commerce.importers import (
     MAX_PREVIEW_RECORDS,
+    issue_preview_receipt,
     preview_adapter_records,
     preview_official_records,
+    verify_preview_receipt,
 )
 
 NOW = 1800000000
@@ -81,3 +83,19 @@ def test_adapter_preview_rejects_unknown_or_mixed_provenance_fail_closed():
     mismatched=offer(); mismatched['source']='shopee_official_api'
     with pytest.raises(ValueError,match='adapter_record_source_mismatch'):
         preview_adapter_records(OfficialFixtureAdapter([mismatched]),limit=1,now=NOW)
+
+
+def test_preview_receipt_binds_exact_record_and_expires():
+    receipt=issue_preview_receipt(offer(),secret='test-secret',now=NOW)
+    verify_preview_receipt(offer(),receipt,secret='test-secret',now=NOW+299)
+    assert 'shopee.com.br' not in receipt and 'shope.ee' not in receipt
+
+    changed=offer(); changed['price_cents']+=1
+    with pytest.raises(ValueError,match='preview_receipt_record_mismatch'):
+        verify_preview_receipt(changed,receipt,secret='test-secret',now=NOW+1)
+    with pytest.raises(ValueError,match='expired_preview_receipt'):
+        verify_preview_receipt(offer(),receipt,secret='test-secret',now=NOW+300)
+    changed_tail = '0' if receipt[-1] != '0' else '1'
+    with pytest.raises(ValueError,match='invalid_preview_receipt'):
+        verify_preview_receipt(offer(),receipt[:-1]+changed_tail,
+                               secret='test-secret',now=NOW+1)
