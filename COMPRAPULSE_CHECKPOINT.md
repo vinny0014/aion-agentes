@@ -117,3 +117,5 @@ NEXT: aguardar CI do recibo; então ligar seleção explícita de um item do CSV
 - CI102 / run `37071609479` falhou antes dos testes porque `pip-audit` passou a apontar 13 vulnerabilidades publicadas em `PyJWT 2.13.0`; frontend e deployment-config permaneceram verdes.
 - O pin foi atualizado para `PyJWT 2.15.1`, patch mais recente da linha corrigida publicada pelo projeto oficial. Nenhuma exceção ou supressão foi adicionada ao auditor.
 - Validação local após a atualização: `pip-audit` sem achados, `pip check` PASS, 85 testes backend PASS e build frontend PASS.
+- Código entregue nos commits remotos `5e503b13f7e5ca66b111a5c7b1fbdd67ac3aa805` (recibo) e `4bea0279de892e16d0fcfd3893dc4638dd765cec` (PyJWT corrigido).
+- CI103 / run `37071878197` COMPLETED/SUCCESS: dependências, backend, frontend, deployment-config e E2E, incluindo as 7 jornadas Playwright.
