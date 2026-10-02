@@ -111,3 +111,9 @@ WHAT IS ALREADY COMPLETE: adapter do CSV oficial, preview sem efeitos colaterais
 EXACT NEXT STEP: arrastar a peça do desafio uma única vez e aguardar o redirecionamento para a página de ofertas; não enviar senha, código ou segredo no chat. Depois, revalidar sessão e selecionar um piloto real sem publicar até destino, imagem, preço e tracking passarem.
 
 NEXT: aguardar CI do recibo; então ligar seleção explícita de um item do CSV ao fluxo de preview/rascunho e implementar evidência técnica de imagem/destino, mantendo publicação bloqueada até tracking comprovado.
+
+### Correção do gate de dependências
+
+- CI102 / run `37071609479` falhou antes dos testes porque `pip-audit` passou a apontar 13 vulnerabilidades publicadas em `PyJWT 2.13.0`; frontend e deployment-config permaneceram verdes.
+- O pin foi atualizado para `PyJWT 2.15.1`, patch mais recente da linha corrigida publicada pelo projeto oficial. Nenhuma exceção ou supressão foi adicionada ao auditor.
+- Validação local após a atualização: `pip-audit` sem achados, `pip check` PASS, 85 testes backend PASS e build frontend PASS.
