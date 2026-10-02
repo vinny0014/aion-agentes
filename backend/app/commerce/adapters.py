@@ -62,6 +62,7 @@ class ShopeeOfficialCsvAdapter:
     """
 
     source_name = "shopee_official_export"
+    max_pilot_row_index = 499
     required_columns = frozenset(
         {
             "itemid",
@@ -207,6 +208,19 @@ class ShopeeOfficialCsvAdapter:
         except (OSError, UnicodeError, csv.Error) as exc:
             raise AdapterUnavailable("official_shopee_export_unavailable") from exc
         return AdapterBatch(self.source_name, tuple(records))
+
+    def fetch_offer_at(self, row_index: int) -> AdapterBatch:
+        """Return one explicitly selected row from the bounded pilot window."""
+        if (
+            type(row_index) is not int
+            or row_index < 0
+            or row_index > self.max_pilot_row_index
+        ):
+            raise ValueError("invalid_export_row_index")
+        batch = self.fetch_offers(limit=row_index + 1)
+        if len(batch.records) <= row_index:
+            raise ValueError("official_export_row_not_found")
+        return AdapterBatch(self.source_name, (batch.records[row_index],))
 
 
 def bounded_batch(adapter: OfficialOfferAdapter, *, limit: int, hard_cap: int = 500) -> AdapterBatch:

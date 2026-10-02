@@ -119,3 +119,28 @@ NEXT: aguardar CI do recibo; então ligar seleção explícita de um item do CSV
 - Validação local após a atualização: `pip-audit` sem achados, `pip check` PASS, 85 testes backend PASS e build frontend PASS.
 - Código entregue nos commits remotos `5e503b13f7e5ca66b111a5c7b1fbdd67ac3aa805` (recibo) e `4bea0279de892e16d0fcfd3893dc4638dd765cec` (PyJWT corrigido).
 - CI103 / run `37071878197` COMPLETED/SUCCESS: dependências, backend, frontend, deployment-config e E2E, incluindo as 7 jornadas Playwright.
+
+### Verificação final do recibo
+
+- O checkpoint foi entregue em `372edc3f8cbf83270c8e02ada18e2a9cc02689e5`.
+- CI104 / run `37072109423` COMPLETED/SUCCESS no mesmo head: backend, frontend, deployment-config e as 7 jornadas E2E.
+
+## Retomada 2026-10-02 — seleção explícita do piloto no CSV
+
+- Base remota confirmada em `372edc3f8cbf83270c8e02ada18e2a9cc02689e5`; PR #22 continua draft/open/mergeable, sem avanço concorrente observado. CI104 estava verde nessa base.
+- O export oficial de 2026-09-29 permanece disponível apenas como amostra de parser, mas já excedeu a janela de frescor de 24 horas. Nenhuma oferta foi criada a partir dele.
+- Adicionado fluxo opt-in por arquivo configurado no servidor: o admin escolhe explicitamente uma linha entre 0 e 499, recebe somente título, categoria, preço e timestamps sanitizados, e não recebe imagem nem URL comercial no preview.
+- O servidor relê a mesma linha no momento da confirmação e exige o recibo HMAC correspondente ao conteúdo exato. Alteração do arquivo, troca de linha, recibo inválido/expirado ou registro fora da janela fresca são rejeitados antes da persistência.
+- A única mutação permitida por esse fluxo é salvar o item selecionado como rascunho; publicação continua bloqueada pelos guardrails de imagem, destino, preço e tracking.
+- Cobertura adicionada para seleção limitada, arquivo ausente, export expirado, alteração após preview e jornada UI de preview → rascunho. Validação local: 88 testes backend PASS, build/type-check frontend PASS e `git diff --check` PASS.
+- A sessão Shopee foi revalidada novamente na rota oficial de ofertas e continua bloqueada pelo CAPTCHA deslizante. O desafio não foi tocado nem contornado; autenticação atual, preço ao vivo, destino e tracking não foram confirmados.
+- Estado comercial: 0 ofertas publicadas; nenhuma atribuição, pedido ou comissão alegados; R$0 de custo recorrente novo; main, DNS e produção preservados. NOT READY.
+
+### HUMAN ACTION REQUIRED
+
+WHAT: concluir manualmente o CAPTCHA deslizante exibido pela Shopee.
+WHERE: navegador seguro desta conversa, na rota de Ofertas Shopee Afiliados.
+WHY: obter um export novo e revalidar sessão, produto, preço, imagem, destino e tracking sem presumir autenticação.
+EXACT NEXT STEP: arrastar a peça do desafio uma única vez, aguardar a página de ofertas e gerar um novo export oficial; não enviar senha, código ou segredo no chat.
+
+NEXT: aguardar CI deste bloco; após um export fresco, selecionar um único piloto pelo novo fluxo e manter somente em rascunho até imagem correspondente, destino correto e tracking atribuído serem comprovados.

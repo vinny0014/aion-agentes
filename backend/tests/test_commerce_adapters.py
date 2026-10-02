@@ -108,6 +108,10 @@ def test_official_csv_adapter_streams_exact_observed_schema(tmp_path):
         "source": "shopee_official_export",
     }
 
+    selected = adapter.fetch_offer_at(1)
+    assert len(selected.records) == 1
+    assert selected.records[0]["product_id"] == "398944029:55557474043"
+
 
 @pytest.mark.parametrize(
     ("field", "value"),
@@ -141,3 +145,14 @@ def test_official_csv_adapter_rejects_unknown_schema_and_invalid_timestamps(tmp_
     for observed_at in (0, True, 1.5):
         with pytest.raises(ValueError, match="invalid_export_observed_at"):
             ShopeeOfficialCsvAdapter(path, observed_at=observed_at)
+
+
+def test_official_csv_adapter_rejects_unbounded_or_missing_pilot_rows(tmp_path):
+    adapter = ShopeeOfficialCsvAdapter(
+        write_export(tmp_path, [export_row()]), observed_at=1800000000
+    )
+    for row_index in (-1, 500, True, 1.5):
+        with pytest.raises(ValueError, match="invalid_export_row_index"):
+            adapter.fetch_offer_at(row_index)
+    with pytest.raises(ValueError, match="official_export_row_not_found"):
+        adapter.fetch_offer_at(1)

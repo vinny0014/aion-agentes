@@ -10,6 +10,8 @@ SITE_URL_DEFAULT = "https://aion-news-os.vercel.app"
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     COMPRAPULSE_ENABLED: bool = False
+    COMPRAPULSE_SHOPEE_CSV_PATH: str = ""
+    COMPRAPULSE_SHOPEE_CSV_OBSERVED_AT: int = 0
     APP_NAME: str = "AION AI NEWS OS"
     ENV: str = "development"
     DATABASE_URL: str = "sqlite:///./aion.db"  # trocar por PostgreSQL em produção

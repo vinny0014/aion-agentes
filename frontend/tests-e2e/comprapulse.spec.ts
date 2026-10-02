@@ -51,6 +51,31 @@ test('rejected preview cannot save a draft', async ({page}) => {
   await expect(page.getByRole('button', {name: 'Confirmar e salvar rascunho'})).toHaveCount(0);
 });
 
+test('admin selects one CSV pilot without receiving commercial URLs', async ({page}) => {
+  let saved: unknown;
+  await page.route('**/api/commerce/admin', route => route.fulfill({json: {
+    metrics: {events: {}, commission_feed_connected: false}, offers: [], jobs: [],
+    official_adapter_connected: true,
+  }}));
+  await page.route('**/api/commerce/admin/import/preview-csv', route => route.fulfill({json: {
+    row_index: 7, candidate: {product_id: '1:2', title: 'Piloto oficial',
+      category: 'Casa', price_cents: 1990, observed_at: 1800000000, expires_at: 1800003600},
+    image_present: true, preview_receipt: 'csv-preview-receipt', persisted: false, published: false,
+  }}));
+  await page.route('**/api/commerce/admin/import/csv', async route => {
+    saved = route.request().postDataJSON();
+    await route.fulfill({status: 201, json: {offer_id: 1, created: true}});
+  });
+  await page.goto('/comprapulse/admin');
+  await page.getByLabel('Linha do export').fill('7');
+  await page.getByRole('button', {name: 'Conferir piloto'}).click();
+  await expect(page.getByText('Piloto oficial')).toBeVisible();
+  await expect(page.getByText(/R\$\s*19,90/)).toBeVisible();
+  await page.getByRole('button', {name: 'Salvar piloto como rascunho'}).click();
+  await expect(page.getByText('Piloto salvo como rascunho.', {exact: false})).toBeVisible();
+  expect(saved).toEqual({row_index: 7, preview_receipt: 'csv-preview-receipt'});
+});
+
 for (const width of [360, 390, 430, 1440]) {
   test(`empty catalog fits viewport ${width}`, async ({page}) => {
     await page.setViewportSize({width, height: 900});
