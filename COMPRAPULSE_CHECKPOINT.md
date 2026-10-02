@@ -144,3 +144,10 @@ WHY: obter um export novo e revalidar sessão, produto, preço, imagem, destino 
 EXACT NEXT STEP: arrastar a peça do desafio uma única vez, aguardar a página de ofertas e gerar um novo export oficial; não enviar senha, código ou segredo no chat.
 
 NEXT: aguardar CI deste bloco; após um export fresco, selecionar um único piloto pelo novo fluxo e manter somente em rascunho até imagem correspondente, destino correto e tracking atribuído serem comprovados.
+
+### Verificação final da seleção CSV
+
+- Código entregue no PR #22 em `a6e1f4f9d6cc2550fdc8759c249a4c64cda253ea`.
+- CI105 / run `37078829145` COMPLETED/SUCCESS: dependências, 88 testes backend, build/type-check frontend, deployment-config e E2E, incluindo a nova jornada de seleção CSV → rascunho.
+- Branch local e remota reconciliadas; nenhuma oferta foi persistida ou publicada por esta execução.
+- NEXT: ação humana no CAPTCHA e novo export oficial fresco; depois validar um único piloto sem liberar publicação antes das evidências de imagem, destino, preço e tracking.
