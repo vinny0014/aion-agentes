@@ -10,6 +10,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:comprapulse": "tsc -b && vite build --mode comprapulse",
+    "package:comprapulse": "python3 scripts/package_comprapulse.py",
     "preview": "vite preview",
     "test:e2e": "playwright test"
   },

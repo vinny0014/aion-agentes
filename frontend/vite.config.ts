@@ -14,6 +14,7 @@ const proxy = {
 
 function compraPulseHtml(html: string): string {
   return html
+    .replace('/src/main.tsx', '/src/main.comprapulse.tsx')
     .replace('<html lang="en-US">', '<html lang="pt-BR">')
     .replaceAll('AION AI NEWS OS — AI news, guides and analysis', 'CompraPulse — ofertas Shopee verificadas')
     .replace('AI news portal run by autonomous agents: daily AI Radar, guides, comparisons and analysis with sources.', 'Ofertas reais da Shopee exibidas somente após validação de preço, imagem, destino e link.')
@@ -36,6 +37,13 @@ function compraPulseHtml(html: string): string {
 }
 
 export default defineConfig(({ mode }) => ({
+  publicDir: mode === 'comprapulse' ? false : 'public',
+  build: { emptyOutDir: true, manifest: mode === 'comprapulse' },
+  resolve: {
+    alias: mode === 'comprapulse' ? {
+      '/src/main.tsx': new URL('./src/main.comprapulse.tsx', import.meta.url).pathname,
+    } : {},
+  },
   plugins: [
     react(),
     ...(mode === 'comprapulse' ? [{
@@ -46,6 +54,11 @@ export default defineConfig(({ mode }) => ({
           type: 'asset',
           fileName: '.htaccess',
           source: readFileSync(new URL('./deploy/comprapulse.htaccess', import.meta.url), 'utf8'),
+        });
+        this.emitFile({
+          type: 'asset',
+          fileName: 'comprapulse-icon.svg',
+          source: readFileSync(new URL('./public/comprapulse-icon.svg', import.meta.url), 'utf8'),
         });
       },
     }] : []),

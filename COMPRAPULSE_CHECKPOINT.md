@@ -239,3 +239,16 @@ NEXT: somente com export fresco, validar um piloto real e manter `noindex` e pub
 - Estado comercial permanece fail-closed: nenhuma oferta publicada e nenhum preço fresco, estoque, destino atribuído ou tracking real alegado.
 
 NEXT: somente um export oficial fresco e evidências reais permitem validar um piloto; upload e deploy controlado continuam bloqueados até imagem, preço, destino, estoque e tracking estarem comprovados.
+
+## Retomada 2026-10-03 — artefato Hostinger isolado e reproduzível
+
+- Base remota confirmada em `b12e2a4b6bb65583628fc638a020b3b45b6aeae7`; árvore inicialmente limpa/sincronizada, PR #22 draft/open/mergeable e CI116 / run `37113277510` COMPLETED/SUCCESS.
+- A rota oficial Shopee foi revalidada, mas carregou uma superfície vazia sem lista de ofertas nem evidência de sessão autenticada. Nenhum CAPTCHA, login ou outro controle foi tocado; oferta fresca e tracking continuam não comprovados.
+- A inspeção do primeiro ZIP revelou resíduos editoriais do build anterior (`ads.txt`, verificação Google, manifesto e service worker). O empacotamento falhou fechado e esses arquivos não foram aceitos.
+- O modo standalone agora usa entrada React própria, login/404 próprios e `publicDir` isolado. O pacote não carrega rotas/chunks editoriais nem arquivos públicos do AION News.
+- Adicionado empacotador determinístico baseado no manifesto Vite. Ele aceita apenas `index.html`, `.htaccess`, ícone e assets declarados; rejeita caminhos inesperados, links simbólicos, source maps, chaves, arquivos de ambiente e padrões comuns de segredo.
+- `npm run package:comprapulse` gera `release/comprapulse-hostinger.zip` e checksum SHA-256 verificável. Duas execuções locais sobre o mesmo build produziram o mesmo hash; o ZIP final contém somente nove arquivos standalone.
+- Validação local: `npm audit --audit-level=high` sem vulnerabilidades, builds AION News/CompraPulse PASS, pacote/checksum/ZIP PASS, 91 testes backend PASS e `git diff --check` PASS. O Playwright local iniciou backend/preview, mas não executou por ausência do Chromium transitório; a suíte completa permanece obrigatória no CI.
+- Nenhum ZIP foi enviado, nenhum DNS/CORS/Render/Hostinger/produção foi alterado e nenhuma oferta foi publicada. NOT READY.
+
+NEXT: aguardar CI do isolamento e empacotamento; publicação continua bloqueada até export fresco e evidências reais de imagem, preço, destino, estoque e tracking.
