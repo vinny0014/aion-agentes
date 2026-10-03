@@ -188,4 +188,10 @@ NEXT: aguardar CI do verificador; após export oficial fresco, salvar um único 
 - Validação local após a correção: `npm audit --audit-level=high` sem vulnerabilidades, build/type-check frontend PASS, 91 testes backend PASS e `git diff --check` PASS.
 - Esta correção altera somente dependências e CSS do frontend; nenhuma oferta, integração, ambiente externo, DNS ou produção foi alterado.
 
-NEXT: aguardar CI da correção npm e da vitrine; após export fresco e piloto totalmente evidenciado, os mesmos cards receberão apenas os produtos reais que passarem todos os gates.
+### Verificação final da vitrine e do gate npm
+
+- Correção entregue no PR #22 em `18fcc1b6d90e583ec532741a1055f011b3817d29`.
+- CI110 / run `37093694578` COMPLETED/SUCCESS: gate de dependências, 91 testes backend, build/type-check e smoke test frontend, deployment-config e 9 jornadas Playwright, incluindo a vitrine com catálogo interceptado.
+- O CI comprova o contrato técnico com dados de teste controlados; não comprova oferta, preço, estoque, destino ou tracking real da Shopee. Publicação continua bloqueada até todas essas evidências reais existirem.
+
+NEXT: após export fresco e piloto totalmente evidenciado, os mesmos cards receberão apenas os produtos reais que passarem todos os gates.
