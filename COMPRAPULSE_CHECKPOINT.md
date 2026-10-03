@@ -252,3 +252,10 @@ NEXT: somente um export oficial fresco e evidências reais permitem validar um p
 - Nenhum ZIP foi enviado, nenhum DNS/CORS/Render/Hostinger/produção foi alterado e nenhuma oferta foi publicada. NOT READY.
 
 NEXT: aguardar CI do isolamento e empacotamento; publicação continua bloqueada até export fresco e evidências reais de imagem, preço, destino, estoque e tracking.
+
+### Correção do contrato visual standalone
+
+- O CI117 / run `37120970389` aprovou backend, deployment-config, build, isolamento do ZIP e 10 jornadas integradas, mas uma das nove jornadas standalone falhou porque a fixture ainda apontava para `og-cover.png`, corretamente removido junto com os assets editoriais.
+- A jornada agora serve sua própria imagem SVG controlada e continua exigindo card, título, preço e destino exatos. Nenhuma asserção ou gate foi removido; o teste não depende mais de um asset do AION News.
+
+NEXT: aguardar novo CI completo; somente depois registrar o artefato Hostinger como tecnicamente pronto para upload controlado.

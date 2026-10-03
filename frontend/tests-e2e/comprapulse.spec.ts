@@ -98,9 +98,13 @@ test('technical evidence keeps tracking and publication blocked', async ({page})
 });
 
 test('premium storefront renders only validated catalog data', async ({page}) => {
+  await page.route('**/fixture-product.svg', route => route.fulfill({
+    contentType: 'image/svg+xml',
+    body: '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400"><rect width="400" height="400" fill="#fed7aa"/></svg>',
+  }));
   await page.route('**/api/commerce/catalog', route => route.fulfill({json: {items: [{
     offer_id: 21, product_id: '1:2', title: 'Produto oficial de teste', category: 'Casa',
-    price_cents: 1990, image_url: '/og-cover.png',
+    price_cents: 1990, image_url: '/fixture-product.svg',
     affiliate_url: 'https://shope.ee/test-only', observed_at: 1800000000,
     expires_at: 4102444800,
   }]}}));
