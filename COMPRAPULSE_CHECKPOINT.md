@@ -164,3 +164,9 @@ NEXT: aguardar CI deste bloco; após um export fresco, selecionar um único pilo
 - Nenhum request real à Shopee foi disparado neste bloco, porque não existe rascunho fresco e a sessão continua atrás do mesmo CAPTCHA já registrado. Nenhuma oferta foi persistida/publicada; DNS, Render, main e produção preservados. NOT READY.
 
 NEXT: aguardar CI do verificador; após export oficial fresco, salvar um único rascunho, ativar o verificador técnico no ambiente autorizado e observar o destino real. Tracking, estoque e publicação continuam bloqueados até evidência oficial independente.
+
+### Verificação final da evidência técnica
+
+- Código entregue no PR #22 em `21e3c84edb23af0c4238347b91b782ff5c1e08c2`.
+- CI107 / run `37081900125` COMPLETED/SUCCESS: dependências, 91 testes backend, build/type-check frontend, deployment-config e E2E, incluindo a jornada de evidência técnica com publicação bloqueada.
+- Branch local/remota reconciliadas; nenhum ambiente externo foi alterado e nenhuma oferta foi publicada.
