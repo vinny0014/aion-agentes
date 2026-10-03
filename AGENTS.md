@@ -1,4 +1,26 @@
-# AGENTS.md — Os 35 agentes registrados do AION
+# CompraPulse — protocolo permanente de retomada
+
+Nesta migração, leia primeiro `COMPRAPULSE_CHECKPOINT.md`. Execute `git status`,
+`git branch -a`, `git log -8 --oneline` e confira o PR #22/CI antes de editar.
+Continue o trabalho existente na branch `codex/comprapulse-mvp`; preserve `main`,
+a produção anterior e o histórico. Não recrie o projeto nem repita entregas.
+Atualize o checkpoint após cada bloco, com testes, pendências e próxima tarefa.
+Continue enquanto houver trabalho seguro executável; limite de uso não encerra
+o projeto. Não prometa execução em segundo plano sem scheduler comprovado.
+
+Fase 1: SOMENTE Shopee, sem novo domínio, hospedagem ou custo fixo. Reutilize a
+infraestrutura paga. Nunca invente dados comerciais, imagens ou links afiliados.
+Link oficial exato, imagem real, preço/oferta recentes e status VALID são
+obrigatórios. Falha/expiração retira oferta do catálogo automaticamente.
+Prefira código determinístico; mantenha visita, visualização, clique, clique
+atribuído, pedido, pedido aprovado e comissão aprovada separados. Lucro líquido
+= comissão aprovada - Ads - custo variável. Não financiar Ads sem tracking validado.
+Credenciais apenas em ambiente seguro, nunca no repositório ou logs.
+
+Bloqueio humano real: usar HUMAN ACTION REQUIRED com WHAT, WHERE, WHY,
+WHAT IS ALREADY COMPLETE e EXACT NEXT STEP; continuar tarefas independentes.
+
+# AGENTS.md — Os 35 agentes registrados do AION (histórico preservado)
 
 Breaking News (hero automático) · Trend Hunter (pautas de tendências) · Google Discover (auditoria de requisitos) · Image Optimization (valida imagens oficiais) · Search Console · Revenue (custo vs receita real) · Dashboard (painel executivo) · Performance. Pipeline operacional: 30 etapas.
 
