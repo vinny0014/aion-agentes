@@ -94,6 +94,24 @@ test('technical evidence keeps tracking and publication blocked', async ({page})
   await expect(page.getByText('tracking continuam pendentes', {exact: false})).toBeVisible();
 });
 
+test('premium storefront renders only validated catalog data', async ({page}) => {
+  await page.route('**/api/commerce/catalog', route => route.fulfill({json: {items: [{
+    offer_id: 21, product_id: '1:2', title: 'Produto oficial de teste', category: 'Casa',
+    price_cents: 1990, image_url: '/og-cover.png',
+    affiliate_url: 'https://shope.ee/test-only', observed_at: 1800000000,
+    expires_at: 4102444800,
+  }]}}));
+  await page.goto('/comprapulse');
+  await expect(page.getByRole('heading', {name: 'Comprar bem começa por uma oferta que foi conferida.'})).toBeVisible();
+  await expect(page.getByText('1 oferta ativa')).toBeVisible();
+  await expect(page.getByRole('button', {name: 'Casa'})).toBeVisible();
+  await expect(page.getByText('Produto oficial de teste')).toBeVisible();
+  await expect(page.getByText(/R\$\s*19,90/)).toBeVisible();
+  await expect(page.getByRole('link', {name: 'Ver na Shopee'})).toHaveAttribute('href','https://shope.ee/test-only');
+  await page.getByPlaceholder('O que você está procurando?').fill('não existe');
+  await expect(page.getByText('Nenhuma oferta validada nesta seleção.')).toBeVisible();
+});
+
 for (const width of [360, 390, 430, 1440]) {
   test(`empty catalog fits viewport ${width}`, async ({page}) => {
     await page.setViewportSize({width, height: 900});

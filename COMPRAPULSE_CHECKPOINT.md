@@ -170,3 +170,15 @@ NEXT: aguardar CI do verificador; após export oficial fresco, salvar um único 
 - Código entregue no PR #22 em `21e3c84edb23af0c4238347b91b782ff5c1e08c2`.
 - CI107 / run `37081900125` COMPLETED/SUCCESS: dependências, 91 testes backend, build/type-check frontend, deployment-config e E2E, incluindo a jornada de evidência técnica com publicação bloqueada.
 - Branch local/remota reconciliadas; nenhum ambiente externo foi alterado e nenhuma oferta foi publicada.
+
+## Retomada 2026-10-03 — vitrine premium sem dados fictícios
+
+- Base remota confirmada em `53214aad2e588ed9a47678b4afe390f4ac60c0c0`; árvore limpa/sincronizada, PR #22 aberto e CI108 / run `37082082235` COMPLETED/SUCCESS antes das alterações.
+- A home CompraPulse foi alinhada ao mockup aprovado com identidade própria: header escuro, hero, busca central, filtro de categoria, prova visual do gate, vitrine responsiva, cards premium e disclosure de afiliado preservado.
+- Contagem, categorias, imagem, título, preço, data e destino são derivados exclusivamente das ofertas ativas retornadas pelo catálogo. Desconto, avaliação, quantidade vendida, cupom e ranking não aparecem porque ainda não há evidência desses campos.
+- Catálogo vazio permanece explicitamente vazio, inclusive em 360/390/430/1440 px; nenhum produto, imagem, preço ou CTA fictício foi criado para preencher o layout.
+- Adicionado contrato E2E para uma resposta interceptada: a vitrine exibe somente o registro validado fornecido, preserva o href Shopee exato e remove o card quando a busca não corresponde.
+- Validação local: 91 testes backend PASS, build/type-check frontend PASS e `git diff --check` PASS. O E2E local não iniciou o Chromium ausente neste ambiente; a suíte será executada pelo CI do commit.
+- Nenhuma oferta real foi persistida/publicada e nenhum ambiente externo, DNS, Render, main ou produção foi alterado. NOT READY.
+
+NEXT: aguardar CI da vitrine; após export fresco e piloto totalmente evidenciado, os mesmos cards receberão apenas os produtos reais que passarem todos os gates.
