@@ -259,3 +259,11 @@ NEXT: aguardar CI do isolamento e empacotamento; publicação continua bloqueada
 - A jornada agora serve sua própria imagem SVG controlada e continua exigindo card, título, preço e destino exatos. Nenhuma asserção ou gate foi removido; o teste não depende mais de um asset do AION News.
 
 NEXT: aguardar novo CI completo; somente depois registrar o artefato Hostinger como tecnicamente pronto para upload controlado.
+
+### Verificação final do artefato isolado
+
+- Isolamento e empacotador entregues em `409df47a828b62f170754dcbc4dcfdf8d67054c2`; fixture standalone corrigida em `2c1793d049e75562b35ed51a2b3f012d07644745`.
+- CI118 / run `37121133513` COMPLETED/SUCCESS: dependências e 91 testes backend, deployment-config, builds/smoke tests, ZIP/checksum Hostinger, 10 jornadas Playwright integradas e nove jornadas CompraPulse standalone.
+- O ZIP é tecnicamente reproduzível e isolado, mas não foi enviado. `noindex`, módulo desabilitado e todos os gates comerciais permanecem ativos.
+
+NEXT: obter export oficial fresco e comprovar imagem, preço, destino, estoque e tracking do piloto antes de qualquer upload ou publicação.
