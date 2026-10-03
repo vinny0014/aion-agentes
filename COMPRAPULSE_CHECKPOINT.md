@@ -212,4 +212,10 @@ NEXT: após export fresco e piloto totalmente evidenciado, os mesmos cards receb
 - O CI112 / run `37096920689` confirmou frontend e smoke standalone PASS, mas bloqueou o E2E porque um teste de configuração ainda exigia literalmente a expressão antiga de API same-origin.
 - O teste foi atualizado para comprovar as duas regras: AION News continua same-origin em produção e somente o build standalone explicitamente marcado usa o endpoint Render configurado. Também valida as duas variáveis do modo CompraPulse; nenhum gate foi removido ou ignorado.
 
-NEXT: aguardar CI do build standalone. Depois, somente com export fresco, validar um piloto real e manter `noindex` e publicação bloqueada até imagem, preço, destino, estoque e tracking estarem comprovados.
+### Verificação final do build standalone
+
+- Build standalone entregue em `4a01bba582c21760c6dd2b89d7d9d8d9af2dc143`; correção do contrato de teste entregue em `e85238658eb0db31bd0034529193d974ab517598`.
+- CI113 / run `37097041535` COMPLETED/SUCCESS: dependências e 91 testes backend, configuração de deploy, builds e smoke tests AION News/CompraPulse, 9 jornadas Playwright legadas e as mesmas 9 jornadas novamente no modo standalone.
+- O artefato está tecnicamente preparado para hospedagem separada, mas continua deliberadamente não publicado e `noindex`; CORS, DNS e ambiente Render só podem ser alterados no workspace confirmado e após as evidências comerciais reais.
+
+NEXT: somente com export fresco, validar um piloto real e manter `noindex` e publicação bloqueada até imagem, preço, destino, estoque e tracking estarem comprovados.
