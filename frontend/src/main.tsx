@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import "./index.css";
 import Landing from "./pages/Landing";
 import { initializeTelemetry } from "./lib/telemetry";
+import { compraPulseStandalone } from "./lib/comprapulsePaths";
 const Sobre = React.lazy(() => import("./pages/Sobre"));
 const Login = React.lazy(() => import("./pages/Login"));
 const Cadastro = React.lazy(() => import("./pages/Cadastro"));
@@ -22,8 +23,8 @@ const Categorias = React.lazy(() => import("./pages/Institucional").then(m => ({
 const TagsPage = React.lazy(() => import("./pages/Institucional").then(m => ({ default: (p: any) => m.Taxonomia({ tipo: "tags" }) })));
 
 // Commerce staging has its own explicit consent gate; preserve legacy behavior elsewhere.
-if (!window.location.pathname.startsWith('/comprapulse')) initializeTelemetry();
-if ("serviceWorker" in navigator && import.meta.env.PROD) {
+if (!compraPulseStandalone && !window.location.pathname.startsWith('/comprapulse')) initializeTelemetry();
+if (!compraPulseStandalone && "serviceWorker" in navigator && import.meta.env.PROD) {
   window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => undefined));
 }
 
@@ -31,7 +32,13 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <BrowserRouter>
       <React.Suspense fallback={<div className="p-10 font-mono text-sm text-slateui">Loading…</div>}>
-      <Routes>
+      {compraPulseStandalone ? <Routes>
+        <Route path="/" element={<CompraPulse />} />
+        <Route path="/produto/:id" element={<CompraPulse />} />
+        <Route path="/admin" element={<CompraPulseAdmin />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes> : <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/comprapulse" element={<CompraPulse />} />
         <Route path="/comprapulse/produto/:id" element={<CompraPulse />} />
@@ -50,7 +57,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <Route path="/admin" element={<Admin />} />
         <Route path="/admin/editor/:id" element={<Editor />} />
         <Route path="*" element={<NotFound />} />
-      </Routes>
+      </Routes>}
       </React.Suspense>
     </BrowserRouter>
   </React.StrictMode>

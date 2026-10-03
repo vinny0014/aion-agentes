@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test';
 
 // UI contract tests with intercepted API responses, not evidence of real Shopee attribution.
+const standalone = process.env.COMPRAPULSE_E2E_STANDALONE === 'true';
+const cp = (path = '') => `${standalone ? '' : '/comprapulse'}${path}` || '/';
+
 test('admin must preview before saving and edits invalidate approval', async ({ page }) => {
   let saves = 0;
   let previewed: unknown;
@@ -17,7 +20,7 @@ test('admin must preview before saving and edits invalidate approval', async ({ 
     saves++; saved = route.request().postDataJSON();
     await route.fulfill({status: 201, json: {offer_id: 1, created: true}});
   });
-  await page.goto('/comprapulse/admin');
+  await page.goto(cp('/admin'));
   const record = {title: 'Fixture de teste local', price_cents: 6000, category: 'Casa',
     image_url: '/og-cover.png', source_url: 'https://shopee.com.br/product/1/1',
     affiliate_url: 'https://shope.ee/test-only'};
@@ -44,7 +47,7 @@ test('rejected preview cannot save a draft', async ({page}) => {
   await page.route('**/api/commerce/admin/import/preview', route => route.fulfill({json: {
     accepted_count: 0, rejected_count: 1, rejected: [{index: 0, error_code: 'invalid_offer_fields'}],
   }}));
-  await page.goto('/comprapulse/admin');
+  await page.goto(cp('/admin'));
   await page.getByLabel('Registro JSON normalizado').fill('{}');
   await page.getByRole('button', {name: 'Conferir preview'}).click();
   await expect(page.getByText('Registro rejeitado:', {exact: false})).toBeVisible();
@@ -66,7 +69,7 @@ test('admin selects one CSV pilot without receiving commercial URLs', async ({pa
     saved = route.request().postDataJSON();
     await route.fulfill({status: 201, json: {offer_id: 1, created: true}});
   });
-  await page.goto('/comprapulse/admin');
+  await page.goto(cp('/admin'));
   await page.getByLabel('Linha do export').fill('7');
   await page.getByRole('button', {name: 'Conferir piloto'}).click();
   await expect(page.getByText('Piloto oficial')).toBeVisible();
@@ -88,7 +91,7 @@ test('technical evidence keeps tracking and publication blocked', async ({page})
     image_valid: true, stock_valid: false, tracking_verified: false,
     publishable: false, reason: 'tracking_and_stock_unconfirmed',
   }}));
-  await page.goto('/comprapulse/admin');
+  await page.goto(cp('/admin'));
   await page.getByRole('button', {name: 'Verificar destino e imagem'}).click();
   await expect(page.getByText('Destino e imagem passaram.', {exact: false})).toBeVisible();
   await expect(page.getByText('tracking continuam pendentes', {exact: false})).toBeVisible();
@@ -101,7 +104,7 @@ test('premium storefront renders only validated catalog data', async ({page}) =>
     affiliate_url: 'https://shope.ee/test-only', observed_at: 1800000000,
     expires_at: 4102444800,
   }]}}));
-  await page.goto('/comprapulse');
+  await page.goto(cp());
   await expect(page.getByRole('heading', {name: 'Comprar bem começa por uma oferta que foi conferida.'})).toBeVisible();
   await expect(page.getByText('1 oferta ativa')).toBeVisible();
   await expect(page.getByRole('button', {name: 'Casa'})).toBeVisible();
@@ -116,7 +119,7 @@ for (const width of [360, 390, 430, 1440]) {
   test(`empty catalog fits viewport ${width}`, async ({page}) => {
     await page.setViewportSize({width, height: 900});
     await page.route('**/api/commerce/catalog', route => route.fulfill({json: {items: []}}));
-    await page.goto('/comprapulse');
+    await page.goto(cp());
     await expect(page.getByText('Nenhuma oferta validada nesta seleção.')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await expect(page.getByRole('link', {name: 'Ver oferta na Shopee'})).toHaveCount(0);

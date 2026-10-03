@@ -195,3 +195,16 @@ NEXT: aguardar CI do verificador; após export oficial fresco, salvar um único 
 - O CI comprova o contrato técnico com dados de teste controlados; não comprova oferta, preço, estoque, destino ou tracking real da Shopee. Publicação continua bloqueada até todas essas evidências reais existirem.
 
 NEXT: após export fresco e piloto totalmente evidenciado, os mesmos cards receberão apenas os produtos reais que passarem todos os gates.
+
+## Retomada 2026-10-03 — build standalone preparado
+
+- Base remota confirmada em `43b4eefb81ac7ddb0b2ea331f52a5d9dd4632b82`; árvore inicialmente limpa/sincronizada, PR #22 draft/open/mergeable e CI111 / run `37093829888` COMPLETED/SUCCESS.
+- A sessão Shopee foi revalidada na rota oficial e continua exibindo o mesmo CAPTCHA deslizante. O desafio não foi tocado; autenticação atual, oferta fresca e tracking continuam não comprovados.
+- Adicionado build `npm run build:comprapulse`, separado do shell AION News: raiz própria, rotas `/produto/:id`, `/admin` e `/login`, links internos adaptáveis e telemetria/service worker editorial desativados nesse modo.
+- O artefato standalone usa metadados `pt-BR`, ícone próprio, canonical futuro `https://comprapulse.aionnews.cloud/` e permanece `noindex, nofollow` até publicação e validação reais. Nenhum DNS foi alterado.
+- O frontend standalone aponta explicitamente para o backend Render existente e requer, no deploy autorizado, incluir a origem final em `CORS_ORIGINS`; nenhuma variável ou serviço externo foi alterado neste bloco.
+- O CI passa a construir e testar os dois artefatos e a repetir as jornadas CompraPulse no modo standalone. Isso valida separação de rotas sem liberar ofertas nem afrouxar os gates comerciais.
+- Validação local: builds AION News e CompraPulse PASS, smoke HTTP standalone PASS, `npm audit --audit-level=high` sem vulnerabilidades, 91 testes backend PASS e `git diff --check` PASS. Playwright standalone aguarda o CI porque o Chromium local continua ausente.
+- Estado comercial inalterado: 0 ofertas publicadas; nenhuma atribuição, pedido ou comissão alegados; R$0 de custo recorrente novo; main, DNS, Render e produção preservados. NOT READY.
+
+NEXT: aguardar CI do build standalone. Depois, somente com export fresco, validar um piloto real e manter `noindex` e publicação bloqueada até imagem, preço, destino, estoque e tracking estarem comprovados.

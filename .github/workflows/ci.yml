@@ -59,6 +59,18 @@ jobs:
           trap 'kill "$preview_pid"' EXIT
           curl --fail --retry 10 --retry-delay 1 --retry-connrefused http://127.0.0.1:4173/
           curl --fail http://127.0.0.1:4173/articles
+      - name: Build and smoke-test standalone CompraPulse
+        working-directory: frontend
+        run: |
+          npm run build:comprapulse
+          grep -q 'CompraPulse — ofertas Shopee verificadas' dist/index.html
+          grep -q 'https://comprapulse.aionnews.cloud/' dist/index.html
+          grep -q 'noindex, nofollow' dist/index.html
+          npm run preview -- --host 127.0.0.1 > /tmp/comprapulse-vite-preview.log 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid"' EXIT
+          curl --fail --retry 10 --retry-delay 1 --retry-connrefused http://127.0.0.1:4173/
+          curl --fail http://127.0.0.1:4173/produto/1
 
   deployment-config:
     runs-on: ubuntu-latest
@@ -102,4 +114,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run browser journeys
         working-directory: frontend
-        run: npm run test:e2e
+        run: |
+          npm run test:e2e
+          npm run build:comprapulse
+          COMPRAPULSE_E2E_STANDALONE=true npm run test:e2e -- tests-e2e/comprapulse.spec.ts

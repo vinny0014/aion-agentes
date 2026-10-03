@@ -1,9 +1,10 @@
 /** Cliente da API AION com renovação automática de token. */
+import { compraPulseStandalone } from './comprapulsePaths';
+
 const configuredApi = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
-// Production always uses the official Vercel origin and its audited rewrites.
-// This prevents a stale dashboard variable from bypassing the single-domain
-// policy, Vercel edge caching and same-origin browser protections.
-export const API_BASE = import.meta.env.PROD ? "" : configuredApi;
+// AION News production stays on its audited same-origin rewrites. The explicit
+// standalone CompraPulse build uses the configured existing Render API origin.
+export const API_BASE = import.meta.env.PROD && !compraPulseStandalone ? "" : configuredApi;
 
 export function getTokens() {
   return {

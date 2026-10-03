@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:comprapulse": "tsc -b && vite build --mode comprapulse",
     "preview": "vite preview",
     "test:e2e": "playwright test"
   },
