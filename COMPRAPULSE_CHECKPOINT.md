@@ -207,4 +207,9 @@ NEXT: após export fresco e piloto totalmente evidenciado, os mesmos cards receb
 - Validação local: builds AION News e CompraPulse PASS, smoke HTTP standalone PASS, `npm audit --audit-level=high` sem vulnerabilidades, 91 testes backend PASS e `git diff --check` PASS. Playwright standalone aguarda o CI porque o Chromium local continua ausente.
 - Estado comercial inalterado: 0 ofertas publicadas; nenhuma atribuição, pedido ou comissão alegados; R$0 de custo recorrente novo; main, DNS, Render e produção preservados. NOT READY.
 
+### Correção do contrato de deployment
+
+- O CI112 / run `37096920689` confirmou frontend e smoke standalone PASS, mas bloqueou o E2E porque um teste de configuração ainda exigia literalmente a expressão antiga de API same-origin.
+- O teste foi atualizado para comprovar as duas regras: AION News continua same-origin em produção e somente o build standalone explicitamente marcado usa o endpoint Render configurado. Também valida as duas variáveis do modo CompraPulse; nenhum gate foi removido ou ignorado.
+
 NEXT: aguardar CI do build standalone. Depois, somente com export fresco, validar um piloto real e manter `noindex` e publicação bloqueada até imagem, preço, destino, estoque e tracking estarem comprovados.
