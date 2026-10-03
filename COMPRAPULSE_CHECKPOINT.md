@@ -231,4 +231,11 @@ NEXT: somente com export fresco, validar um piloto real e manter `noindex` e pub
 - Validação local: builds AION News/CompraPulse PASS, `.htaccess` exclusivo do standalone PASS, `npm audit --audit-level=high` sem vulnerabilidades, 91 testes backend PASS e `git diff --check` PASS.
 - Estado comercial inalterado: nenhuma oferta publicada e nenhum tracking, pedido ou comissão alegados. R$0 de custo recorrente novo; main, DNS, Hostinger, Render e produção preservados. NOT READY.
 
-NEXT: aguardar CI do pacote Hostinger; depois, somente um export fresco e evidências reais permitem avançar para piloto e deploy controlado.
+### Verificação final do pacote Hostinger
+
+- Pacote entregue no PR #22 em `583eb395eaa03439d1c18259bcaf580b295cc2de`.
+- CI115 / run `37098867984` COMPLETED/SUCCESS: dependências e 91 testes backend, configuração de deploy, builds e smoke tests AION News/CompraPulse, pacote `.htaccess` standalone e jornadas Playwright nos modos integrado e standalone.
+- O resultado comprova somente o artefato de hospedagem: nenhum upload, DNS, CORS, workspace Render, Hostinger ou ambiente de produção foi alterado.
+- Estado comercial permanece fail-closed: nenhuma oferta publicada e nenhum preço fresco, estoque, destino atribuído ou tracking real alegado.
+
+NEXT: somente um export oficial fresco e evidências reais permitem validar um piloto; upload e deploy controlado continuam bloqueados até imagem, preço, destino, estoque e tracking estarem comprovados.
