@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { readFileSync } from "node:fs";
 
 const backend = "http://localhost:8000";
 const proxy = {
@@ -40,6 +41,13 @@ export default defineConfig(({ mode }) => ({
     ...(mode === 'comprapulse' ? [{
       name: 'comprapulse-standalone-html',
       transformIndexHtml: compraPulseHtml,
+      generateBundle() {
+        this.emitFile({
+          type: 'asset',
+          fileName: '.htaccess',
+          source: readFileSync(new URL('./deploy/comprapulse.htaccess', import.meta.url), 'utf8'),
+        });
+      },
     }] : []),
   ],
   server: { proxy },

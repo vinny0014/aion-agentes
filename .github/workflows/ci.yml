@@ -66,6 +66,10 @@ jobs:
           grep -q 'CompraPulse — ofertas Shopee verificadas' dist/index.html
           grep -q 'https://comprapulse.aionnews.cloud/' dist/index.html
           grep -q 'noindex, nofollow' dist/index.html
+          test -f dist/.htaccess
+          grep -q 'RewriteRule \^ index.html \[L\]' dist/.htaccess
+          grep -q 'X-Robots-Tag "noindex, nofollow"' dist/.htaccess
+          grep -q 'connect-src.*https://aion-news-api.onrender.com' dist/.htaccess
           npm run preview -- --host 127.0.0.1 > /tmp/comprapulse-vite-preview.log 2>&1 &
           preview_pid=$!
           trap 'kill "$preview_pid"' EXIT

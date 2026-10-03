@@ -219,3 +219,16 @@ NEXT: após export fresco e piloto totalmente evidenciado, os mesmos cards receb
 - O artefato está tecnicamente preparado para hospedagem separada, mas continua deliberadamente não publicado e `noindex`; CORS, DNS e ambiente Render só podem ser alterados no workspace confirmado e após as evidências comerciais reais.
 
 NEXT: somente com export fresco, validar um piloto real e manter `noindex` e publicação bloqueada até imagem, preço, destino, estoque e tracking estarem comprovados.
+
+## Retomada 2026-10-03 — pacote Hostinger seguro
+
+- Base remota confirmada em `8d45c959d46a6fa2b298715233d4502449754a3a`; árvore inicialmente limpa/sincronizada, PR #22 draft/open/mergeable e CI114 / run `37097191632` COMPLETED/SUCCESS.
+- A rota oficial Shopee foi revalidada e continua no mesmo CAPTCHA deslizante. Nenhuma interação com o desafio ocorreu; sessão, oferta fresca e tracking permanecem não comprovados.
+- O build standalone agora inclui `.htaccess` somente no modo CompraPulse, com fallback SPA para `/produto/:id`, cabeçalhos de segurança, CSP limitada ao backend Render existente, `index.html` sem cache e `X-Robots-Tag: noindex, nofollow`.
+- O build normal do AION News não recebe esse arquivo, preservando a separação e a configuração editorial existente.
+- Adicionado runbook de pré-publicação Hostinger com condições fail-closed: workspace Render confirmado, CORS apenas no deploy autorizado, módulo desabilitado sem piloto fresco e proibição de retirar `noindex` antes das evidências reais.
+- O CI valida a presença e os controles essenciais do pacote, sem fazer upload, alterar DNS ou modificar ambiente externo.
+- Validação local: builds AION News/CompraPulse PASS, `.htaccess` exclusivo do standalone PASS, `npm audit --audit-level=high` sem vulnerabilidades, 91 testes backend PASS e `git diff --check` PASS.
+- Estado comercial inalterado: nenhuma oferta publicada e nenhum tracking, pedido ou comissão alegados. R$0 de custo recorrente novo; main, DNS, Hostinger, Render e produção preservados. NOT READY.
+
+NEXT: aguardar CI do pacote Hostinger; depois, somente um export fresco e evidências reais permitem avançar para piloto e deploy controlado.
