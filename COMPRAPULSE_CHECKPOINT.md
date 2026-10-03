@@ -151,3 +151,16 @@ NEXT: aguardar CI deste bloco; após um export fresco, selecionar um único pilo
 - CI105 / run `37078829145` COMPLETED/SUCCESS: dependências, 88 testes backend, build/type-check frontend, deployment-config e E2E, incluindo a nova jornada de seleção CSV → rascunho.
 - Branch local e remota reconciliadas; nenhuma oferta foi persistida ou publicada por esta execução.
 - NEXT: ação humana no CAPTCHA e novo export oficial fresco; depois validar um único piloto sem liberar publicação antes das evidências de imagem, destino, preço e tracking.
+
+## Retomada 2026-10-02 — evidência técnica fail-closed
+
+- Base remota confirmada em `152bc4dd29cbcf81a45e7427c0ac8a14c0e4a999`; árvore limpa/sincronizada, PR #22 aberto e CI106 / run `37079050532` COMPLETED/SUCCESS antes das alterações.
+- Adicionado verificador técnico opt-in para um único rascunho fresco. Ele segue no máximo cinco redirecionamentos HTTPS, aceita somente hosts Shopee/Shopee CDN, rejeita DNS privado/reservado, limita imagem a 8 MB e exige raster JPEG/PNG/WebP/AVIF decodificável com pelo menos 200×200.
+- O destino só passa quando termina no `shop_id:item_id` exato do registro oficial. Redirecionamento inseguro, loop, produto divergente, resposta inesperada, imagem falsa ou pequena falha fechado.
+- A evidência persistida é apenas um hash `cp-tech-v1`; URLs, corpo de resposta e conteúdo da imagem não entram no relatório admin nem no log.
+- Mesmo quando destino e imagem passam, o status permanece `REVIEW_REQUIRED`, com `stock_valid=false`, `tracking_verified=false` e `publishable=false`. O endpoint não pode aprovar nem publicar oferta.
+- O recurso é desativado por padrão (`COMPRAPULSE_TECHNICAL_VERIFY_ENABLED=false`) e exige administrador e ativação explícita. O painel informa separadamente que estoque/tracking continuam pendentes.
+- Cobertura adicionada para destino correto, raster real, produto divergente, redirecionamento privado, imagem falsa, recurso desativado e impossibilidade de publicação. Validação local: 91 testes backend PASS, build/type-check frontend PASS e `git diff --check` PASS.
+- Nenhum request real à Shopee foi disparado neste bloco, porque não existe rascunho fresco e a sessão continua atrás do mesmo CAPTCHA já registrado. Nenhuma oferta foi persistida/publicada; DNS, Render, main e produção preservados. NOT READY.
+
+NEXT: aguardar CI do verificador; após export oficial fresco, salvar um único rascunho, ativar o verificador técnico no ambiente autorizado e observar o destino real. Tracking, estoque e publicação continuam bloqueados até evidência oficial independente.

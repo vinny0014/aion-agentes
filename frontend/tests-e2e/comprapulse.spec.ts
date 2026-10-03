@@ -76,6 +76,24 @@ test('admin selects one CSV pilot without receiving commercial URLs', async ({pa
   expect(saved).toEqual({row_index: 7, preview_receipt: 'csv-preview-receipt'});
 });
 
+test('technical evidence keeps tracking and publication blocked', async ({page}) => {
+  await page.route('**/api/commerce/admin', route => route.fulfill({json: {
+    metrics: {events: {}, commission_feed_connected: false}, jobs: [],
+    official_adapter_connected: false, technical_verifier_enabled: true,
+    offers: [{id: 12, title: 'Piloto oficial', status: 'draft',
+      reason: 'verification_required', expires_at: 1800003600}],
+  }}));
+  await page.route('**/api/commerce/admin/offers/12/verify-technical', route => route.fulfill({json: {
+    offer_id: 12, status: 'REVIEW_REQUIRED', destination_matches: true,
+    image_valid: true, stock_valid: false, tracking_verified: false,
+    publishable: false, reason: 'tracking_and_stock_unconfirmed',
+  }}));
+  await page.goto('/comprapulse/admin');
+  await page.getByRole('button', {name: 'Verificar destino e imagem'}).click();
+  await expect(page.getByText('Destino e imagem passaram.', {exact: false})).toBeVisible();
+  await expect(page.getByText('tracking continuam pendentes', {exact: false})).toBeVisible();
+});
+
 for (const width of [360, 390, 430, 1440]) {
   test(`empty catalog fits viewport ${width}`, async ({page}) => {
     await page.setViewportSize({width, height: 900});

@@ -4,6 +4,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from app.commerce.router import router, get_store
 from app.commerce.store import CommerceStore
+from app.commerce.guardrails import LinkStatus
+from app.commerce.verification import TechnicalVerification
 from app.core.config import settings
 from app.core.security import require_admin
 
@@ -129,3 +131,29 @@ def test_csv_pilot_fails_closed_when_unconfigured_stale_or_changed(tmp_path,monk
     official_csv(tmp_path,price='20.90')
     assert c.post('/api/commerce/admin/import/csv',json={
         'row_index':0,'preview_receipt':body['preview_receipt']}).status_code==422
+
+
+def test_admin_technical_check_never_claims_tracking_or_publication(tmp_path,monkeypatch):
+    now=1800000000
+    store=CommerceStore(tmp_path/'api.db'); store.initialize()
+    offer_id=store.ingest(offer(now),now=now)['offer_id']
+    app=FastAPI(); app.include_router(router)
+    app.dependency_overrides[get_store]=lambda:store
+    app.dependency_overrides[require_admin]=lambda:{'id':1,'role':'admin'}
+    c=TestClient(app)
+
+    monkeypatch.setattr(settings,'COMPRAPULSE_TECHNICAL_VERIFY_ENABLED',False)
+    assert c.post(f'/api/commerce/admin/offers/{offer_id}/verify-technical').status_code==503
+
+    monkeypatch.setattr(settings,'COMPRAPULSE_TECHNICAL_VERIFY_ENABLED',True)
+    monkeypatch.setattr('app.commerce.router.time.time',lambda:now)
+    monkeypatch.setattr('app.commerce.router.verify_technical_evidence',lambda record,now:
+        TechnicalVerification(LinkStatus.REVIEW_REQUIRED,'1:2',True,True,False,False,
+            'tracking_and_stock_unconfirmed','cp-tech-v1:test',now))
+    response=c.post(f'/api/commerce/admin/offers/{offer_id}/verify-technical')
+    assert response.status_code==200
+    assert response.json()=={'offer_id':offer_id,'status':'REVIEW_REQUIRED',
+        'destination_matches':True,'image_valid':True,'stock_valid':False,
+        'tracking_verified':False,'publishable':False,
+        'reason':'tracking_and_stock_unconfirmed'}
+    assert store.publish(offer_id,now=now) is False

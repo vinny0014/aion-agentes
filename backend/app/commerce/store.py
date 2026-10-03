@@ -174,6 +174,19 @@ class CommerceStore:
                       ('import',str(oid),'verification_required',now))
             return {'offer_id':oid,'created':True}
 
+    def verification_candidate(self, offer_id, now=None):
+        """Return one current, unexpired internal draft without serializing it."""
+        now = int(time.time()) if now is None else now
+        integer(offer_id,'offer_id',1)
+        with self.transaction() as c:
+            row=c.execute('''SELECT o.*,p.current_hash FROM cp_offers o JOIN cp_products p
+                ON p.id=o.product_id WHERE o.id=?''',(offer_id,)).fetchone()
+            if (not row or row['input_hash'] != row['current_hash']
+                    or row['expires_at'] <= now or row['observed_at'] > now):
+                raise ValueError('unavailable_verification_candidate')
+            return {'offer_id':row['id'],'input_hash':row['input_hash'],
+                    'expires_at':row['expires_at'],'record':json.loads(row['payload'])}
+
     def record_check(self, offer_id, *, status, destination_product_id, image_valid,
                      stock_valid, official_provenance, tracking_verified, evidence_ref,
                      checked_at, expires_at, input_hash, now=None):

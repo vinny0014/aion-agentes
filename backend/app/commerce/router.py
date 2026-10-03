@@ -16,6 +16,7 @@ from .importers import (
     verify_preview_receipt,
 )
 from .store import CommerceStore
+from .verification import verify_technical_evidence
 
 
 def get_store():
@@ -96,7 +97,8 @@ def admin(store=Depends(get_store)):
         jobs=[dict(r) for r in c.execute('''SELECT id,job_type,status,attempt,available_at,error_code
             FROM cp_jobs ORDER BY id DESC LIMIT 100''')]
     return {'metrics':store.metrics(),'offers':offers,'jobs':jobs,
-            'official_adapter_connected':csv_adapter_configured()}
+            'official_adapter_connected':csv_adapter_configured(),
+            'technical_verifier_enabled':settings.COMPRAPULSE_TECHNICAL_VERIFY_ENABLED}
 
 
 @router.post('/admin/import/preview',dependencies=[Depends(require_admin)])
@@ -156,3 +158,39 @@ def import_csv_pilot(payload: CsvPilotImport,store=Depends(get_store)):
         raise
     except (AdapterUnavailable,ValueError,TypeError,KeyError):
         raise HTTPException(422,'Invalid or expired official Shopee CSV preview')
+
+
+@router.post('/admin/offers/{offer_id}/verify-technical',dependencies=[Depends(require_admin)])
+def verify_pilot_technical(offer_id: int,store=Depends(get_store)):
+    if not settings.COMPRAPULSE_TECHNICAL_VERIFY_ENABLED:
+        raise HTTPException(503,'Technical verification is not enabled')
+    now=int(time.time())
+    try:
+        candidate=store.verification_candidate(offer_id,now=now)
+        result=verify_technical_evidence(candidate['record'],now=now)
+        store.record_check(
+            offer_id,
+            status=result.status,
+            destination_product_id=result.destination_product_id,
+            image_valid=result.image_valid,
+            stock_valid=False,
+            official_provenance=True,
+            tracking_verified=False,
+            evidence_ref=result.evidence_ref,
+            checked_at=now,
+            expires_at=min(candidate['expires_at'],now+3600),
+            input_hash=candidate['input_hash'],
+            now=now,
+        )
+        return {
+            'offer_id':offer_id,
+            'status':result.status,
+            'destination_matches':result.destination_matches,
+            'image_valid':result.image_valid,
+            'stock_valid':False,
+            'tracking_verified':False,
+            'publishable':False,
+            'reason':result.reason,
+        }
+    except (ValueError,TypeError):
+        raise HTTPException(422,'Draft is unavailable for technical verification')
