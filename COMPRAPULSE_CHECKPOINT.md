@@ -181,4 +181,11 @@ NEXT: aguardar CI do verificador; após export oficial fresco, salvar um único 
 - Validação local: 91 testes backend PASS, build/type-check frontend PASS e `git diff --check` PASS. O E2E local não iniciou o Chromium ausente neste ambiente; a suíte será executada pelo CI do commit.
 - Nenhuma oferta real foi persistida/publicada e nenhum ambiente externo, DNS, Render, main ou produção foi alterado. NOT READY.
 
-NEXT: aguardar CI da vitrine; após export fresco e piloto totalmente evidenciado, os mesmos cards receberão apenas os produtos reais que passarem todos os gates.
+### Correção do gate npm da vitrine
+
+- A vitrine foi entregue em `ffc3604c88f23f8f827de970e2013b72583f675c`. O CI109 / run `37093289301` interrompeu a execução no gate de dependências por novos avisos do `npm audit`: `braces` transitivo via Tailwind 3.4.19 e React Router 6.30.6. Backend e deployment-config passaram; o E2E não foi executado porque o gate falhou antes dele.
+- React Router foi atualizado para 7.18.4 e Tailwind/PostCSS para 4.3.3. A configuração PostCSS e as composições CSS foram migradas para a sintaxe suportada, sem suprimir nem ignorar o auditor.
+- Validação local após a correção: `npm audit --audit-level=high` sem vulnerabilidades, build/type-check frontend PASS, 91 testes backend PASS e `git diff --check` PASS.
+- Esta correção altera somente dependências e CSS do frontend; nenhuma oferta, integração, ambiente externo, DNS ou produção foi alterado.
+
+NEXT: aguardar CI da correção npm e da vitrine; após export fresco e piloto totalmente evidenciado, os mesmos cards receberão apenas os produtos reais que passarem todos os gates.
