@@ -290,3 +290,18 @@ NEXT: obter export oficial fresco e comprovar imagem, preço, destino, estoque e
 ### Estado desta retomada
 
 **NOT READY.** O artefato está tecnicamente validado, mas a autenticação/feed Shopee, o backend Render isolado e o acesso à pasta Hostinger continuam sem confirmação; nenhuma produção foi alterada.
+
+### Checagem Shopee atual — CAPTCHA falhou
+
+- Na tentativa de retomar pelo Work em 2026-10-03, o painel oficial redirecionou para `/verify/captcha`. A tela exibiu “Tente Novamente Mais Tarde” e “A verificação falhou. Tente novamente em alguns minutos.”
+- A tela bloqueia o acesso ao dashboard, ofertas e export; não foi possível confirmar a sessão autenticada nem obter produto, preço, disponibilidade, imagem, destino ou tracking atual.
+- Nenhuma interação foi feita com o botão “Tentar Novamente”; o CAPTCHA não foi resolvido ou contornado. A condição foi registrada como bloqueio de CAPTCHA.
+- Estado NOT READY permanece. O export conhecido de 2026-09-29 continua fora da janela de 24 horas; não publicar produtos ou links com base nele.
+
+#### HUMAN ACTION REQUIRED — atualização
+
+- **O QUE:** aguardar alguns minutos e concluir manualmente a verificação oficial da Shopee, caso o painel a solicite; depois gerar um export oficial novo das ofertas.
+- **ONDE:** sessão oficial Shopee Afiliados, área de ofertas/feed.
+- **POR QUÊ:** a Shopee informa falha na verificação e bloqueia ofertas atuais; é necessária evidência fresca para validar o piloto e o tracking.
+- **JÁ PRONTO:** CI #120 verde, build/package standalone isolado, adapter/preview e guardrails fail-closed.
+- **PRÓXIMO PASSO EXATO:** após concluir a verificação, baixar um export oficial atualizado e disponibilizá-lo aqui. Não enviar senha, OTP, cookies ou tokens.
