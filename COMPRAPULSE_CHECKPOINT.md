@@ -267,3 +267,26 @@ NEXT: aguardar novo CI completo; somente depois registrar o artefato Hostinger c
 - O ZIP é tecnicamente reproduzível e isolado, mas não foi enviado. `noindex`, módulo desabilitado e todos os gates comerciais permanecem ativos.
 
 NEXT: obter export oficial fresco e comprovar imagem, preço, destino, estoque e tracking do piloto antes de qualquer upload ou publicação.
+
+## Retomada 2026-10-03 — validação de acessos e gates
+
+- PR #22 continua aberto, draft e mergeável na branch `codex/comprapulse-mvp`. Antes deste registro, o código estava no head `d8213ce44e8a3ebb51f732f275ada842be646a7e`; CI #119 / run `37121291044` terminou COMPLETED/SUCCESS.
+- CI #119 aprovou os quatro jobs: `deployment-config`, `backend`, `frontend` e `e2e`. O frontend fez build/type-check e smoke test do CompraPulse standalone; E2E executou as jornadas de navegador.
+- Hostinger: a navegação para hPanel no navegador em nuvem mostrou página em branco. As instruções fornecidas pelo próprio site informam que o login é bloqueado nesse navegador e proíbem nova tentativa de autenticação/takeover. Portanto, subdomínio, sessão e diretório de publicação não puderam ser inspecionados. Nenhum upload ou DNS foi alterado.
+- Render: workspace confirmado como `My Workspace` (`tea-d8opf7gg4nts7397q24g`). A lista contém `aion-news-api` (branch `codex/aion-news-render-manus-bridge`, plano Starter) e `aion-agentes-api` (branch `main`, plano Free), sem serviço dedicado CompraPulse.
+- O build standalone ainda configura `https://aion-news-api.onrender.com` como origem de API. A branch seguida por esse serviço não contém `backend/app/commerce/router.py` (HTTP 404 no GitHub); `main` também não contém esse módulo. Assim, a origem configurada não está servindo o backend CompraPulse do PR. Não alteramos branch de serviço, CORS, variáveis ou deploy para preservar AION News e serviços existentes.
+- Shopee: `https://affiliate.shopee.com.br/dashboard` abriu com o título do painel, mas a árvore acessível e a captura ficaram em branco. Nenhuma oferta, estado de sessão autorizada ou tracking pôde ser confirmado. O desafio registrado anteriormente na rota de ofertas não foi tocado nem contornado. O export conhecido de 2026-09-29 está vencido pela regra de 24 horas.
+- Gate comercial permanece FAIL-CLOSED: zero ofertas atuais validadas; imagem, preço, disponibilidade, destino e atribuição afiliada não foram comprovados. Nenhum produto/link foi publicado. `COMPRAPULSE_ENABLED=false` e `noindex,nofollow` devem permanecer até evidências frescas e completas.
+- Nenhum deploy ou upload foi feito; não houve mudança em `main`, AION News, DNS, Hostinger ou Render, nem custo fixo novo.
+
+### HUMAN ACTION REQUIRED
+
+- **O QUE:** gerar um novo export oficial de ofertas Shopee (CSV ou formato oficial disponível), com dados atualizados.
+- **ONDE:** painel Shopee Afiliados autenticado, área de ofertas/feed de produtos.
+- **POR QUÊ:** a página do painel não renderizou ofertas nesta verificação e o último export conhecido tem mais de 24 horas; sem fonte fresca não é possível validar produto, preço, estoque, destino e tracking.
+- **JÁ PRONTO:** adapter oficial CSV, preview sem publicação, recibo obrigatório, verificador técnico fail-closed, build standalone Hostinger isolado e CI #119 verde.
+- **PRÓXIMO PASSO EXATO:** disponibilizar aqui o novo export oficial; validar um piloto e só liberar qualquer publicação se destino, imagem, disponibilidade e tracking passarem. Não compartilhar senha, código ou segredo.
+
+### Estado desta retomada
+
+**NOT READY.** O artefato está tecnicamente validado, mas a autenticação/feed Shopee, o backend Render isolado e o acesso à pasta Hostinger continuam sem confirmação; nenhuma produção foi alterada.
