@@ -513,7 +513,10 @@ def test_deployment_configs_align_official_services():
                    if header["key"] == "Content-Security-Policy")
         assert "fonts.googleapis.com" not in csp and "fonts.gstatic.com" not in csp
     api_client = (ROOT / "frontend" / "src" / "lib" / "api.ts").read_text()
-    assert 'import.meta.env.PROD ? "" : configuredApi' in api_client
+    assert 'import.meta.env.PROD && !compraPulseStandalone ? "" : configuredApi' in api_client
+    standalone_env = (ROOT / "frontend" / ".env.comprapulse").read_text()
+    assert "VITE_COMPRAPULSE_STANDALONE=true" in standalone_env
+    assert "VITE_API_URL=https://aion-news-api.onrender.com" in standalone_env
 
 
 def test_no_static_feeds_or_old_public_routes_remain():

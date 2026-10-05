@@ -1,6 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../tailwind.config.js";
 
 :root {
   --ultra: #8b5cf6;
@@ -92,7 +91,9 @@ a:focus-visible, button:focus-visible {
     animation: shimmer 1.6s ease-in-out infinite;
   }
 
-  .empty-state { @apply card flex flex-col items-center gap-2 py-12 text-center text-slateui; }
+  .empty-state {
+    @apply flex w-full flex-col items-center gap-2 rounded-xl border border-line bg-surface/90 px-5 py-12 text-center text-slateui backdrop-blur-sm transition-all duration-200;
+  }
 }
 
 /* ---------- micro-animações ---------- */
@@ -144,8 +145,13 @@ a:focus-visible, button:focus-visible {
 .badge {
   @apply inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 font-mono text-[10px] font-medium uppercase tracking-widest;
 }
-.badge-feat { @apply badge text-white; background-image: var(--grad); }
-.badge-live { @apply badge border border-emerald-400/40 bg-emerald-400/10 text-emerald-300; }
+.badge-feat {
+  @apply inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 font-mono text-[10px] font-medium uppercase tracking-widest text-white;
+  background-image: var(--grad);
+}
+.badge-live {
+  @apply inline-flex items-center gap-1.5 rounded-md border border-emerald-400/40 bg-emerald-400/10 px-2.5 py-1 font-mono text-[10px] font-medium uppercase tracking-widest text-emerald-300;
+}
 
 .bottom-nav {
   @apply fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 border-t border-line px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 sm:hidden;
