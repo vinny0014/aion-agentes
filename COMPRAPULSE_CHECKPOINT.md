@@ -305,3 +305,26 @@ NEXT: obter export oficial fresco e comprovar imagem, preço, destino, estoque e
 - **POR QUÊ:** a Shopee informa falha na verificação e bloqueia ofertas atuais; é necessária evidência fresca para validar o piloto e o tracking.
 - **JÁ PRONTO:** CI #120 verde, build/package standalone isolado, adapter/preview e guardrails fail-closed.
 - **PRÓXIMO PASSO EXATO:** após concluir a verificação, baixar um export oficial atualizado e disponibilizá-lo aqui. Não enviar senha, OTP, cookies ou tokens.
+
+## Retomada 2026-10-05 — checagem de publicação
+
+- PR #22 continua aberto em draft, na branch codex/comprapulse-mvp; main permanece intacta.
+- CI #121 / run 37165491421 terminou com sucesso nos quatro jobs: backend, deployment-config, frontend e E2E. Isso valida os testes do branch, não uma oferta real nem um deploy.
+- O conector do Opera respondeu que o navegador não está conectado. Não foi possível ler as abas autenticadas da Hostinger ou Shopee nesta sessão. A última observação registrada da Shopee (2026-10-03) foi falha na verificação; o último export conhecido, de 2026-09-29, está vencido pela regra de 24 horas.
+- O workspace Render My Workspace foi confirmado. Serviços existentes: aion-crypto-api, aion-news-api e aion-agentes-api; não há serviço dedicado CompraPulse nem instância Postgres no workspace.
+- O pacote frontend standalone ainda usa VITE_API_URL=https://aion-news-api.onrender.com. Esse serviço acompanha a branch codex/aion-news-render-manus-bridge; a rota backend/app/commerce/router.py não existe nessa branch. Não alterar a branch, CORS ou variáveis do AION News para contornar isso.
+- O branch CompraPulse contém o router /api/commerce, mas backend/app/main.py também inicia o scheduler editorial e o orquestrador do AION News. Falta um entrypoint/deploy backend isolado para CompraPulse.
+- O backend atual usa SQLite. Não há banco persistente no workspace. Um serviço Render Free perde arquivos locais ao reiniciar ou sair do idle e não é apropriado para armazenar o catálogo comercial em produção; documentação: https://render.com/docs/free.
+- Hostinger ainda sem diretório de publicação confirmado; nenhum ZIP enviado, DNS ou serviço alterado. A URL pública não foi validada. Não publicar enquanto os gates permanecerem pendentes.
+
+### Estado após a checagem
+
+**NOT READY.** Falta uma sessão Opera conectada, um export Shopee oficial e fresco com destino/estoque/tracking comprovados, e um backend CompraPulse isolado com persistência adequada. Nenhum produto foi publicado; nenhum serviço pago, custo ou alteração em AION News/main foi criado.
+
+### Ação humana necessária
+
+- **O QUE:** conectar o Opera Browser Connector ao Work, ativando “Allow AI connection” no Opera e entrando na conta Opera se solicitado.
+- **ONDE:** ícone/extensão Browser Connector no Opera, com as abas Hostinger e Shopee já abertas.
+- **POR QUÊ:** a ferramenta informa “Browser not connected” e não pode observar a sessão autorizada nem concluir as validações comerciais e de publicação.
+- **JÁ PRONTO:** branch/PR preservados, CI #121 verde, pacote standalone Hostinger, guardrails fail-closed e auditoria do workspace Render concluídos.
+- **PRÓXIMO PASSO EXATO:** após conectar, dizer “conectado”; verificar as abas e, se a Shopee solicitar desafio humano, concluí-lo no site oficial e exportar ofertas atualizadas. Não enviar senha, códigos, cookies ou tokens.
