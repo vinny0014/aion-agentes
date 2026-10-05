@@ -328,3 +328,20 @@ NEXT: obter export oficial fresco e comprovar imagem, preço, destino, estoque e
 - **POR QUÊ:** a ferramenta informa “Browser not connected” e não pode observar a sessão autorizada nem concluir as validações comerciais e de publicação.
 - **JÁ PRONTO:** branch/PR preservados, CI #121 verde, pacote standalone Hostinger, guardrails fail-closed e auditoria do workspace Render concluídos.
 - **PRÓXIMO PASSO EXATO:** após conectar, dizer “conectado”; verificar as abas e, se a Shopee solicitar desafio humano, concluí-lo no site oficial e exportar ofertas atualizadas. Não enviar senha, códigos, cookies ou tokens.
+
+## 2026-10-05 — retomada com Opera conectado
+
+- O Opera Browser Connector conectou e confirmou as sessões da Hostinger, Render, Shopee Afiliados e GitHub.
+- Estado público conferido: `https://aionnews.cloud/` continua servindo AION News; `https://comprapulse.aionnews.cloud/` retorna `DNS_PROBE_FINISHED_NXDOMAIN`; `https://aion-news-api.onrender.com/api/commerce/catalog` retorna `404 Not Found`. Nenhuma alteração de DNS ou produção foi feita.
+- A Hostinger lista `aionnews.cloud` e `aioncrypto.cloud`; o plano associado a `aionnews.cloud` aparece com expiração em 2026-10-26.
+- A Shopee está autenticada. O feed oficial mostra atualizações de 2026-10-04 21:08; a tela `Oferta > Oferta de produto` apresenta cartões de produtos, imagem, preço, vendas e comissão. Nenhum link afiliado foi gerado/copiad​o nem oferta foi importada/publicada.
+- O conector do Opera disponível nesta sessão permite listar abas, navegar, ler conteúdo e capturar tela; não oferece ação para clicar em `Obter link`. A validação de oferta continua bloqueada até obter o link oficial e confirmar destino/estoque.
+- O PR #22 continua aberto em modo draft na branch `codex/comprapulse-mvp`; CI do commit `78624824e842466fd1c148fa8d2fbdff22d59484` (run #122) concluiu com sucesso. Nenhum merge ou deploy foi disparado.
+
+HUMAN ACTION REQUIRED
+
+- WHAT: gerar o primeiro link afiliado oficial da oferta escolhida.
+- WHERE: Opera, Shopee Afiliados → Oferta → Oferta de produto → botão `Obter link` no cartão escolhido.
+- WHY: o link rastreável não aparece na leitura da página e precisa ser emitido pela conta Shopee; parâmetros presumidos não são prova de atribuição.
+- WHAT IS ALREADY COMPLETE: o catálogo de candidatos da Shopee está visível com dados de oferta; o build/testes do PR passaram; AION News segue no ar; o estado do DNS e do endpoint da API foi verificado.
+- EXACT NEXT STEP: clicar em `Obter link` para uma oferta e colar aqui a URL exata que a Shopee gerar. Não enviar senha nem código de verificação. Depois disso, retomar a validação e preparar a implantação da API, subdomínio e pacote estático sem tocar no AION News.
