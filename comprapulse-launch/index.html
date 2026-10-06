@@ -33,20 +33,20 @@
     .soon{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block;margin-top:3px}
     .head-badge{border:1px solid rgba(184,255,105,.2);border-radius:99px;padding:9px 12px;color:var(--mint);font-size:11px;font-weight:750;white-space:nowrap}
     main{padding-bottom:74px}
-    .hero{position:relative;overflow:hidden;margin:20px 0 24px;padding:clamp(22px,3.2vw,40px);border:1px solid rgba(180,196,255,.15);border-radius:28px;background:linear-gradient(118deg,rgba(24,34,59,.98),rgba(18,25,43,.94) 57%,rgba(27,34,57,.9));box-shadow:0 24px 70px rgba(0,0,0,.25)}
+    .hero{position:relative;overflow:hidden;margin:13px 0 16px;padding:clamp(16px,2vw,24px);border:1px solid rgba(180,196,255,.15);border-radius:28px;background:linear-gradient(118deg,rgba(24,34,59,.98),rgba(18,25,43,.94) 57%,rgba(27,34,57,.9));box-shadow:0 24px 70px rgba(0,0,0,.25)}
     .hero:before{content:"";position:absolute;width:430px;height:430px;right:-95px;top:-175px;border-radius:50%;background:radial-gradient(circle,rgba(121,231,255,.23),rgba(152,124,255,.1) 44%,transparent 70%);pointer-events:none}
     .hero:after{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px);background-size:34px 34px;mask-image:linear-gradient(90deg,black,transparent 80%);pointer-events:none}
-    .hero-content{position:relative;z-index:1;max-width:780px}
-    .eyebrow{display:inline-flex;gap:9px;align-items:center;border:1px solid rgba(184,255,105,.2);border-radius:99px;padding:8px 12px;color:var(--mint);font-size:11px;font-weight:800;letter-spacing:.13em;text-transform:uppercase}
+    .hero-content{position:relative;z-index:1;max-width:1180px}
+    .eyebrow{display:inline-flex;gap:9px;align-items:center;border:1px solid rgba(184,255,105,.2);border-radius:99px;padding:6px 10px;color:var(--mint);font-size:10px;font-weight:800;letter-spacing:.13em;text-transform:uppercase}
     .pulse{width:7px;height:7px;border-radius:50%;background:var(--mint);box-shadow:0 0 10px var(--mint)}
-    h1{font-size:clamp(38px,6vw,70px);line-height:.98;letter-spacing:-.065em;margin:14px 0 13px;max-width:820px}
+    h1{font-size:clamp(32px,4.4vw,54px);line-height:1;letter-spacing:-.055em;margin:10px 0 8px;max-width:1180px}
     h1 em{font-style:normal;color:var(--mint)}
-    .hero p{color:#b6c0d3;font-size:16px;line-height:1.58;max-width:640px;margin:0}
-    .hero-actions{display:flex;align-items:center;gap:13px;flex-wrap:wrap;margin-top:18px}
-    .primary{background:var(--mint);color:#0b1716;padding:13px 17px;border-radius:12px;text-decoration:none;font-size:13px;font-weight:850;box-shadow:0 9px 25px rgba(184,255,105,.13)}
+    .hero p{color:#b6c0d3;font-size:14px;line-height:1.45;max-width:810px;margin:0}
+    .hero-actions{display:flex;align-items:center;gap:13px;flex-wrap:wrap;margin-top:14px}
+    .primary{background:var(--mint);color:#0b1716;padding:10px 14px;border-radius:12px;text-decoration:none;font-size:12px;font-weight:850;box-shadow:0 9px 25px rgba(184,255,105,.13)}
     .hero-note{font-size:12px;color:#a5b0c4}
-    .metrics{display:flex;gap:9px;flex-wrap:wrap;margin-top:20px}
-    .metric{display:flex;align-items:center;gap:9px;padding:10px 12px;border-radius:12px;border:1px solid rgba(180,196,255,.13);background:rgba(9,13,24,.44);color:#dfe7f7;font-size:11px}
+    .metrics{display:flex;gap:8px;flex-wrap:wrap;margin-top:13px}
+    .metric{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:12px;border:1px solid rgba(180,196,255,.13);background:rgba(9,13,24,.44);color:#dfe7f7;font-size:10px}
     .metric b{color:var(--cyan);font-size:12px}
     .section-title{display:flex;justify-content:space-between;align-items:end;gap:20px;margin:0 0 18px}
     .kicker{font-size:10px;text-transform:uppercase;letter-spacing:.18em;color:var(--cyan);font-weight:800;margin-bottom:8px}
@@ -92,7 +92,7 @@
     footer .shell{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
     footer strong{color:#c8d2e5}
     @media(max-width:1040px){.head{grid-template-columns:auto 1fr;gap:15px}.nav{justify-content:end}.head-badge{display:none}.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
-    @media(max-width:720px){.shell{width:calc(100% - 28px)}.head{min-height:68px;grid-template-columns:auto 1fr}.nav{justify-content:end;gap:2px}.nav a,.nav span{padding:8px;font-size:10px}.soon{font-size:8px}.brand-name{font-size:17px}.logo{width:34px;height:34px}.hero{margin:16px 0 22px;padding:22px 18px;border-radius:22px}.hero:before{right:-220px}.hero p{font-size:14px}.metrics{gap:7px}.metric{padding:8px 9px;font-size:10px}.section-title{display:block}.section-sub{margin-top:7px}.tools{align-items:stretch;flex-direction:column}.search{width:100%}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.card{border-radius:15px}.card-body{padding:11px}.title{font-size:12px;min-height:50px}.price{font-size:19px}.buy{font-size:9px;padding:8px}.photo img{padding:7px}}
+    @media(max-width:720px){.shell{width:calc(100% - 28px)}.head{min-height:68px;grid-template-columns:auto 1fr}.nav{justify-content:end;gap:2px}.nav a,.nav span{padding:8px;font-size:10px}.soon{font-size:8px}.brand-name{font-size:17px}.logo{width:34px;height:34px}.hero{margin:12px 0 16px;padding:18px 16px;border-radius:18px}.hero:before{right:-220px}.hero p{font-size:13px;line-height:1.5}.metrics{gap:7px}.metric{padding:8px 9px;font-size:10px}.section-title{display:block}.section-sub{margin-top:7px}.tools{align-items:stretch;flex-direction:column}.search{width:100%}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.card{border-radius:15px}.card-body{padding:11px}.title{font-size:12px;min-height:50px}.price{font-size:19px}.buy{font-size:9px;padding:8px}.photo img{padding:7px}}
     @media(max-width:390px){.nav span:nth-of-type(2){display:none}.grid{gap:8px}.bottom{align-items:stretch;flex-direction:column}.buy{min-height:36px}.price{font-size:20px}.card-body{padding:10px}}
     @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{transition:none!important}}
   </style>
@@ -100,7 +100,7 @@
 <body>
   <div class="topline">
     <div class="shell">
-      <span class="sync"><i class="sync-dot"></i><strong>Feed oficial da Shopee</strong> · consultado em <time>04/10/2026 às 21:08</time></span>
+      <span class="sync"><i class="sync-dot"></i><strong>Feed oficial da Shopee</strong> · consultado em <time>05/10/2026 às 17:54</time></span>
       <span>Preços e disponibilidade podem mudar na loja</span>
     </div>
   </div>
@@ -130,7 +130,7 @@
           <span class="hero-note">Cada botão abre o anúncio correspondente na Shopee.</span>
         </div>
         <div class="metrics">
-          <span class="metric"><b id="metric-count">12</b> produtos nesta seleção</span>
+          <span class="metric"><b id="metric-count">16</b> produtos nesta seleção</span>
           <span class="metric"><b>100%</b> imagens do feed Shopee</span>
           <span class="metric"><b>Direto</b> links de afiliado do feed</span>
         </div>
@@ -157,7 +157,7 @@
           <input id="search" type="search" placeholder="Buscar produto ou loja..." aria-label="Buscar produto ou loja">
         </label>
       </div>
-      <p class="count" id="count" aria-live="polite"><b>12</b> ofertas do feed oficial</p>
+      <p class="count" id="count" aria-live="polite"><b>16</b> ofertas do feed oficial</p>
       <div id="expired" class="expired" role="status"></div>
       <div id="grid" class="grid" aria-live="polite"></div>
       <div id="empty" class="empty">Nenhum produto encontrado com esse filtro.</div>
@@ -168,10 +168,10 @@
     </section>
   </main>
   <footer>
-    <div class="shell"><span>© 2026 <strong>CompraPulse</strong> · Curadoria de ofertas</span><span>Os produtos só aparecem quando há imagem oficial e link de afiliado no feed. Catálogo consultado em 04/10/2026 às 21:08.</span></div>
+    <div class="shell"><span>© 2026 <strong>CompraPulse</strong> · Curadoria de ofertas</span><span>Os produtos só aparecem quando há imagem oficial e link de afiliado no feed. Catálogo consultado em 05/10/2026 às 17:54.</span></div>
   </footer>
   <script>
-    const feedUpdatedAt = new Date('2026-10-04T21:08:00-03:00');
+    const feedUpdatedAt = new Date('2026-10-05T17:54:00-03:00');
     const maxAgeMs = 24 * 60 * 60 * 1000;
     const products = [
       {id:'48359800280',name:'Bancada de cozinha Ilha Gourmet Bologna, 90 cm, 2 prateleiras',category:'Casa & móveis',key:'casa',shop:'REDE | marketplace RS',rating:4.85,price:229.90,image:'https://cf.shopee.com.br/file/sg-11134201-820lo-mnlwjykbbshv23',altImage:'https://cf.shopee.com.br/file/sg-11134201-820od-mnlwjwhal7nnc7',link:'https://shope.ee/an_redir?origin_link=https%3A%2F%2Fshopee.com.br%2Fproduct%2F390327339%2F48359800280'},
@@ -186,6 +186,10 @@
       {id:'16293153491',name:'Ralador fatiador manual inox com 4 faces',category:'Cozinha',key:'cozinha',shop:'MEUSTORE.OFICIAL',rating:5.00,price:19.53,image:'https://cf.shopee.com.br/file/br-11134201-820mg-mqxaakhagydh2a',altImage:'https://cf.shopee.com.br/file/br-11134201-23030-7zd2bd2166nv49',link:'https://shope.ee/an_redir?origin_link=https%3A%2F%2Fshopee.com.br%2Fproduct%2F312703265%2F16293153491'},
       {id:'58203313256',name:'Combo Siàge Liso Intenso: shampoo, máscara e condicionador',category:'Beleza',key:'beleza',shop:'Eudora_Oficial',rating:5.00,price:143.89,image:'https://cf.shopee.com.br/file/sg-11134201-8262q-mjhrzdmkgiytb5',altImage:'',link:'https://shope.ee/an_redir?origin_link=https%3A%2F%2Fshopee.com.br%2Fproduct%2F1679511787%2F58203313256'},
       {id:'22493270726',name:'Calça legging Selene sem costura — preta',category:'Moda fitness',key:'moda',shop:'Fut Fanatics',rating:5.00,price:128.90,image:'https://cf.shopee.com.br/file/sg-11134201-7rdyx-lzxjgnibpg6k8e',altImage:'https://cf.shopee.com.br/file/sg-11134201-7rdxy-lzxjgnibquy0a4',link:'https://shope.ee/an_redir?origin_link=https%3A%2F%2Fshopee.com.br%2Fproduct%2F1337527569%2F22493270726'}
+      {id:'22894653059',name:'Mesa De Cabeceira 3 Gavetas Baiao Amendoa Clean',category:'Casa & móveis',key:'casa',shop:'LOJA EASY HOUSE',rating:5,price:279.90,image:'https://cf.shopee.com.br/file/sg-11134201-821dg-mgwgh5znkfta19',altImage:'https://cf.shopee.com.br/file/sg-11134201-821gd-mgwgh6lguqz28b',link:'https://shope.ee/an_redir?origin_link=https%3A%2F%2Fshopee.com.br%2Fproduct%2F1372644554%2F22894653059'},
+      {id:'23698465197',name:'Pote hermeticos quadrado Ou 800ml Linha Click',category:'Cozinha & organização',key:'cozinha',shop:'<OU>',rating:null,price:35.90,image:'https://cf.shopee.com.br/file/br-11134207-7r98o-mbdsqmpses9b46',altImage:'https://cf.shopee.com.br/file/br-11134207-7r98o-m9ir43prt9mq5c',link:'https://shope.ee/an_redir?origin_link=https%3A%2F%2Fshopee.com.br%2Fproduct%2F1477305422%2F23698465197'},
+      {id:'22792687734',name:'Kit Pulverizador Borrifador Spray 350ml e 580ml Azul Sanremo',category:'Casa & limpeza',key:'limpeza',shop:'Lots Home Shop',rating:null,price:28.90,image:'https://cf.shopee.com.br/file/sg-11134201-7rep0-m8evfv31yu956e',altImage:'https://cf.shopee.com.br/file/sg-11134201-7req9-m8evfv4puyl379',link:'https://shope.ee/an_redir?origin_link=https%3A%2F%2Fshopee.com.br%2Fproduct%2F816806234%2F22792687734'},
+      {id:'58255659197',name:'Armario Multiuso Sapateira 2 Portas Davi Amendoa Clean',category:'Casa & organização',key:'casa',shop:'LOJA EASY HOUSE',rating:null,price:329.90,image:'https://cf.shopee.com.br/file/sg-11134201-8261e-ml6rkc7pmj9r19',altImage:'https://cf.shopee.com.br/file/sg-11134201-825zu-ml6rkdmsstfsbc',link:'https://shope.ee/an_redir?origin_link=https%3A%2F%2Fshopee.com.br%2Fproduct%2F1372644554%2F58255659197'}
     ];
 
     const grid=document.getElementById('grid');
@@ -211,11 +215,12 @@
           '<div class="card-body"><div class="category">'+escapeHtml(p.category)+'</div>'+
           '<h3 class="title">'+escapeHtml(p.name)+'</h3>'+
           '<div class="seller">Loja: '+escapeHtml(p.shop)+'</div>'+
-          '<div class="rating"><span class="star" aria-hidden="true">★</span><strong>'+p.rating.toFixed(1)+'</strong><span>/ 5 · avaliação da oferta</span></div>'+
+          '<div class="rating">'+(p.rating===null?'<span>Sem avaliações na Shopee</span>':'<span class="star" aria-hidden="true">★</span><strong>'+p.rating.toFixed(1)+'</strong><span>/ 5 · avaliação da oferta</span>')+'</div>'+
           '<div class="bottom"><div><div class="price-label">Preço no feed</div><div class="price">'+formatPrice(p.price)+'</div></div>'+
           '<a class="buy" href="'+escapeHtml(p.link)+'" target="_blank" rel="sponsored nofollow noopener noreferrer" aria-label="Ver '+escapeHtml(p.name)+' na Shopee">Ver na Shopee <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14 5h5v5M19 5l-9 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 13v4a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></a></div></div></article>';
       }).join('');
       count.innerHTML='<b>'+visible.length+'</b> ofertas do feed oficial';
+      document.getElementById('metric-count').textContent=String(visible.length);
       empty.style.display=visible.length?'none':'block';
       grid.querySelectorAll('img').forEach(function(img){
         img.addEventListener('error',function(){
@@ -228,6 +233,7 @@
             if(card)card.remove();
             const remain=grid.querySelectorAll('.card').length;
             count.innerHTML='<b>'+remain+'</b> ofertas com imagem disponível';
+            document.getElementById('metric-count').textContent=String(remain);
             empty.style.display=remain?'none':'block';
           }
         },{once:false});
